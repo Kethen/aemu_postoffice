@@ -7,7 +7,7 @@ The goal of this project is to have reliable pdp and ptp communication between p
 - Phase 1
   - Reliable communication
   - Low processing power requirement on clients
-  - No port forwarding/dmz/upnp needed
+  - No port forwarding/dmz/upnp/offset needed
   - Rely on original aemu server implementation for adhocctl peer matching
   - Rely on original aemu match making implementation, which just uses pdp sockets
 
