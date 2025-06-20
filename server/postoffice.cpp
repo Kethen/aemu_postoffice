@@ -68,6 +68,10 @@ struct post_office_session{
 	pthread_t thread;
 	session_thread_state thread_state;
 	post_office_context *context;
+	std::string session_name;
+	std::string bond_session_name_listen;
+	std::string bond_session_name_connect;
+	std::string bond_session_name_accept;
 };
 
 struct post_office_pipe_packet{
@@ -139,6 +143,12 @@ static int write_till_done(int fd, const char *buf, uint32_t size, std::function
 }
 
 static void session_worker_pdp(post_office_session &session){
+	auto should_stop = [session] () {
+		return session.thread_state != SESSION_THREAD_RUNNING;
+	};
+
+	auto should_not_stop = [] () {return false;};
+
 	while(session.thread_state == SESSION_THREAD_RUNNING){
 		pollfd fds[2] = {0};
 		fds[0].fd = session.pipe[0];
@@ -165,10 +175,6 @@ static void session_worker_pdp(post_office_session &session){
 			LOG("%s: poll error on tcp socket, terminating\n", __func__);
 			break;
 		}
-
-		auto should_stop = [session] () {
-			return session.thread_state != SESSION_THREAD_RUNNING;
-		};
 
 		if (fds[0].revents & POLLIN){
 			char pipe_data_buffer[4096 + sizeof(aemu_postoffice_pdp)];
@@ -269,11 +275,334 @@ static void session_worker_pdp(post_office_session &session){
 
 			// Now we send, the send status doesn't really matter right now because if it fails, it doesn't concern us here, the other side is cleaning up
 			// Always send the full packet, even if we were asked to stop, only stop if the other side closes the pipe
-			auto should_not_stop = [] () {return false;};
 			int send_status = write_till_done(send_to_session->second.pipe[1], tcp_data_buffer, sizeof(tcp_packet_header) + tcp_packet_header.size, should_not_stop);
 			pthread_mutex_unlock(&send_to_session->second.pipe_in_mutex);
 		}
 	}
+}
+
+static void session_worker_ptp_listen(post_office_session &session){
+	auto should_stop = [session] () {
+		return session.thread_state != SESSION_THREAD_RUNNING;
+	};
+
+	auto should_not_stop = [] {return false;};
+
+	while(session.thread_state == SESSION_THREAD_RUNNING){
+		pollfd pfd = {0};
+		pfd.fd = session.pipe[0];
+		pfd.events = POLLIN;
+
+		int poll_status = poll(&pfd, 1, 100);
+		if (poll_status == EINTR){
+			continue;
+		}
+		if (poll_status == -1){
+			// Dead poll, critical
+			LOG("%s: Cannot poll, %s\n", __func__, get_socket_error());
+			break;
+		}
+
+		if (pfd.revents & POLLERR){
+			LOG("%s: poll error on pipe, terminating\n", __func__);
+			break;
+		}
+
+		// Test if the other side have closed the socket
+		char recv_test_buf[4];
+		int recv_status = recv(session.sock, &recv_test_buf, sizeof(recv_test_buf), MSG_DONTWAIT);
+		if (recv_status == -1){
+			int err = errno;
+			if (err != EAGAIN && err != EWOULDBLOCK){
+				// The socket died
+				LOG("%s: tcp socket died, terminating\n", __func__);
+				break;
+			}
+		}
+		if (recv_status == 0){
+			// The other side closed the socket
+			LOG("%s: client closed the socket, terminating\n", __func__);
+			break;
+		}
+
+		if (pfd.revents & POLLIN){
+			// Connect side has found the listen side, and have already prepared this packet
+			aemu_postoffice_ptp_connect connect_packet;
+			int read_status = read_till_done(session.pipe[0], (char *)&connect_packet, sizeof(connect_packet), should_not_stop);
+			// The other side has to send the packet in full
+			if (read_status <= 0){
+				// Ignore it
+				LOG("%s: bad incoming connect request on pipe, please debug this\n", __func__);
+				continue;
+			}
+
+			int write_status = write_till_done(session.sock, (char *)&connect_packet, sizeof(connect_packet), should_stop);
+			if (write_status == -1){
+				// This is critical to this thread
+				LOG("%s: failed writing connect request, %d %s\n", __func__, write_status, get_socket_error());
+				break;
+			}
+		}
+	}
+}
+
+static void session_worker_ptp(post_office_session &session){
+	bool notified = session.type == SESSION_PTP_CONNECT ? false : true;
+	bool connected = false;
+	bool device_notified = false;
+	timespec begin;
+	clock_gettime(CLOCK_BOOTTIME, &begin);
+
+	auto should_stop = [session] () {
+		return session.thread_state != SESSION_THREAD_RUNNING;
+	};
+
+	auto should_not_stop = [] {return false;};
+
+	std::string target_session_name_str = session.type == SESSION_PTP_CONNECT ? session.bond_session_name_accept : session.bond_session_name_connect;
+
+	while(session.thread_state == SESSION_THREAD_RUNNING){
+		pollfd fds[2] = {0};
+		fds[0].fd = session.pipe[0];
+		fds[0].events = POLLIN;
+		fds[1].fd = session.sock;
+		fds[1].events = POLLIN;
+
+		int poll_status = poll(fds, 2, 100);
+		if (poll_status == EINTR){
+			continue;
+		}
+		if (poll_status == -1){
+			// Dead poll, critical
+			LOG("%s: Cannot poll, %s\n", __func__, get_socket_error());
+			break;
+		}
+
+		if (fds[0].revents & POLLERR){
+			LOG("%s: poll error on pipe, terminating\n", __func__);
+			break;
+		}
+
+		if (fds[1].revents & POLLERR){
+			LOG("%s: poll error on tcp socket, terminating\n", __func__);
+			break;
+		}
+
+		if (!connected || !notified){
+			timespec now;
+			clock_gettime(CLOCK_BOOTTIME, &now);
+			if (now.tv_sec - begin.tv_sec > 20){
+				LOG("%s: the other side was not found in 20 seconds, disconnecting, notified %d connected %d\n", __func__, notified, connected);
+				break;
+			}
+
+			if (!notified){
+				int session_list_lock_status = -1;
+				while(session.thread_state == SESSION_THREAD_RUNNING){
+					session_list_lock_status = pthread_mutex_trylock(&session.context->active_sessions_mutex);
+					if (session_list_lock_status == EBUSY){
+						continue;
+					}
+					break;
+				}
+				if (session_list_lock_status != 0){
+					// This is critical
+					LOG("%s: active session lock locking error, 0x%x\n", __func__, session_list_lock_status);
+					break;
+				}
+
+				auto notify_session = session.context->active_sessions.find(session.bond_session_name_listen);
+				if (notify_session == session.context->active_sessions.end()){
+					// Target not found, try again later
+					pthread_mutex_unlock(&session.context->active_sessions_mutex);
+					continue;
+				}
+				// Target found
+				int lock_status = pthread_mutex_lock(&notify_session->second.pipe_in_mutex);
+				pthread_mutex_unlock(&session.context->active_sessions_mutex);
+
+				if (lock_status != 0){
+					// The other side is spinning down
+					LOG("%s: listen session is spinning down while trying to notify\n", __func__);
+					break;
+				}
+
+				aemu_postoffice_ptp_connect connect_packet;
+				memcpy(connect_packet.addr, session.src, 6);
+				connect_packet.port = session.sport;
+
+				int write_status = write_till_done(notify_session->second.pipe[1], (char *)&connect_packet, sizeof(connect_packet), should_not_stop);
+				if (write_status == -1){
+					LOG("%s: failed writing to listen session, %d %s\n", write_status, strerror(errno));
+					pthread_mutex_unlock(&notify_session->second.pipe_in_mutex);
+					break;
+				}
+
+				pthread_mutex_unlock(&notify_session->second.pipe_in_mutex);
+				notified = true;
+			}
+
+			if (!connected){
+				// Block progress utill the other side is found
+				int session_list_lock_status = -1;
+				while(session.thread_state == SESSION_THREAD_RUNNING){
+					session_list_lock_status = pthread_mutex_trylock(&session.context->active_sessions_mutex);
+					if (session_list_lock_status == EBUSY){
+						continue;
+					}
+					break;
+				}
+				if (session_list_lock_status != 0){
+					// This is critical
+					LOG("%s: active session lock locking error, 0x%x\n", __func__, session_list_lock_status);
+					break;
+				}
+
+				auto target_session = session.context->active_sessions.find(target_session_name_str);
+				if (target_session == session.context->active_sessions.end()){
+					// Target not found
+					pthread_mutex_unlock(&session.context->active_sessions_mutex);
+					continue;
+				}
+				pthread_mutex_unlock(&session.context->active_sessions_mutex);
+
+				// Target was found
+				connected = true;
+			}
+		}
+
+		if (!device_notified){
+			// Notify the device that after this read, it will be data
+			aemu_postoffice_ptp_connect connect_packet;
+			memcpy(connect_packet.addr, session.dst, 6);
+			connect_packet.port = session.dport;
+
+			int write_status = write_till_done(session.sock, (char *)&connect_packet, sizeof(connect_packet), should_stop);
+			if (write_status == -1){
+				// Failed writing notifiy packet to device, this is fatal
+				break;
+			}
+
+			device_notified = true;
+		}
+
+		if (fds[0].revents & POLLIN){
+			char pipe_in_buffer[4096 + sizeof(aemu_postoffice_ptp_data)];
+			aemu_postoffice_ptp_data *data_packet = (aemu_postoffice_ptp_data *)pipe_in_buffer;
+
+			int read_status = read_till_done(session.pipe[0], pipe_in_buffer, sizeof(aemu_postoffice_ptp_data), should_not_stop);
+			if (read_status <= 0){
+				// This is critical for this thread
+				LOG("%s: failed reading from pipe during header read\n", __func__);
+				break;
+			}
+
+			if (data_packet->size > 4096){
+				// This is an assertion
+				LOG("%s: data too big, please debug this\n", __func__);
+				break;
+			}
+
+			read_status = read_till_done(session.pipe[0], &pipe_in_buffer[sizeof(aemu_postoffice_ptp_data)], data_packet->size, should_not_stop);
+			if (read_status <= 0){
+				// This is critical for this thread
+				LOG("%s: failed reading from pipe during data read\n", __func__);
+				break;
+			}
+
+			// Now send to our socket
+			int write_status = write_till_done(session.sock, pipe_in_buffer, data_packet->size + sizeof(aemu_postoffice_ptp_data), should_stop);
+			if (write_status == -1){
+				// This is critical for this thread
+				LOG("%s: failed forwarding pipe data to tcp socket\n", __func__);
+				break;
+			}
+		}
+
+		if (fds[1].revents & POLLIN){
+			char tcp_data_buffer[sizeof(aemu_postoffice_ptp_data) + 4096];
+			aemu_postoffice_ptp_data *tcp_packet_header = (aemu_postoffice_ptp_data *)tcp_data_buffer;
+			int read_status = read_till_done(session.sock, tcp_data_buffer, sizeof(aemu_postoffice_ptp_data), should_stop);
+			if (read_status == 0){
+				LOG("%s: remote closed the connection during header read\n", __func__);
+				break;
+			}
+			if (read_status < 0){
+				LOG("%s: socket error during header read, %d %s\n", __func__, strerror(errno));
+				break;
+			}
+
+			if (tcp_packet_header->size > 4096){
+				// This is critical for this thread
+				LOG("%s: incoming data from tcp is too big\n", __func__);
+				break;
+			}
+
+			read_status = read_till_done(session.sock, &tcp_data_buffer[sizeof(aemu_postoffice_ptp_data)], tcp_packet_header->size, should_stop);
+			if (read_status == 0){
+				LOG("%s: remote closed the connection during header read\n", __func__);
+				break;
+			}
+			if (read_status < 0){
+				LOG("%s: socket error during header read, %d %s\n", __func__, strerror(errno));
+				break;
+			}
+
+			// Now to find the other side
+			int session_list_lock_status = -1;
+			while(session.thread_state == SESSION_THREAD_RUNNING){
+				session_list_lock_status = pthread_mutex_trylock(&session.context->active_sessions_mutex);
+				if (session_list_lock_status == EBUSY){
+					continue;
+				}
+				break;
+			}
+			if (session_list_lock_status != 0){
+				// If the global active session lock is dead, it is critical
+				LOG("%s: active session lock locking error, 0x%x\n", __func__, session_list_lock_status);
+				break;
+			}
+
+			auto send_to_session = session.context->active_sessions.find(target_session_name_str);
+			if (send_to_session == session.context->active_sessions.end()){
+				// The other side went away
+				LOG("%s: bond connection was spun down\n", __func__);
+				pthread_mutex_unlock(&session.context->active_sessions_mutex);
+				break;
+			}
+
+			int pipe_lock_status = pthread_mutex_lock(&send_to_session->second.pipe_in_mutex);
+			pthread_mutex_unlock(&session.context->active_sessions_mutex);
+
+			if (pipe_lock_status != 0){
+				// The lock is destroyed, target session is taking itself down
+				LOG("%s: bond connection is spinning down\n", __func__);
+				break;
+			}
+
+			// Now we send, the send status doesn't really matter right now because if it fails, it doesn't concern us here, the other side is cleaning up
+			// Always send the full packet, even if we were asked to stop, only stop if the other side closes the pipe
+			int send_status = write_till_done(send_to_session->second.pipe[1], tcp_data_buffer, sizeof(aemu_postoffice_ptp_data) + tcp_packet_header->size, should_not_stop);
+			pthread_mutex_unlock(&send_to_session->second.pipe_in_mutex);
+		}
+	}
+
+	// Try to bring down the other side as well
+	do{
+		int session_list_lock_status = pthread_mutex_lock(&session.context->active_sessions_mutex);
+		if (session_list_lock_status != 0){
+			// If the global active session lock is dead, it is critical
+			LOG("%s: active session lock locking error during termination, 0x%x\n", __func__, session_list_lock_status);
+			break;
+		}
+
+		auto terminate_session = session.context->active_sessions.find(target_session_name_str);
+		if (terminate_session != session.context->active_sessions.end()){
+			terminate_session->second.thread_state = SESSION_THREAD_STOPPING;
+		}
+
+		pthread_mutex_unlock(&session.context->active_sessions_mutex);
+	}while(false);
 }
 
 static void *session_worker(void *arg){
@@ -281,6 +610,15 @@ static void *session_worker(void *arg){
 	switch(session.type){
 		case SESSION_PDP:{
 			session_worker_pdp(session);
+			break;
+		}
+		case SESSION_PTP_LISTEN:{
+			session_worker_ptp_listen(session);
+			break;
+		}
+		case SESSION_PTP_ACCEPT:
+		case SESSION_PTP_CONNECT:{
+			session_worker_ptp(session);
 			break;
 		}
 	}
@@ -302,6 +640,7 @@ static void *pending_session_worker(void *arg){
 		pthread_mutex_lock(&context.active_sessions_mutex);
 		for(auto session = context.active_sessions.begin();session != context.active_sessions.end();){
 			if(session->second.thread_state == SESSION_THREAD_STOPPED){
+				LOG("%s: %s has finished\n", __func__, session->first.c_str());
 				pthread_join(session->second.thread, NULL);
 				context.active_sessions.erase(session);
 				session = context.active_sessions.begin();
@@ -419,6 +758,54 @@ static void *pending_session_worker(void *arg){
 					sprintf(session_name, "PDP %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
 					break;
 				}
+				case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
+					new_session.type = SESSION_PTP_LISTEN;
+					sprintf(session_name, "PTP LISTEN %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
+					break;
+				}
+				case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
+					new_session.type = SESSION_PTP_CONNECT;
+					sprintf(session_name, "PTP CONNECT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
+
+					// Search for the other side
+					char target_session_name[256];
+					sprintf(target_session_name, "PTP LISTEN %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport);
+					std::string target_session_name_str = std::string(target_session_name);
+					if (context.active_sessions.find(target_session_name) == context.active_sessions.end()){
+						// Target not found, close the connection
+						LOG("%s: %s wants to connect to %s, but it was not found\n", __func__, session_name, target_session_name);
+						close(session.sock);
+						context.pending_sessions.erase(context.pending_sessions.begin() + i);
+						i--;
+						pthread_mutex_unlock(&context.active_sessions_mutex);
+						continue;
+					}
+					new_session.bond_session_name_listen = target_session_name_str;
+					sprintf(target_session_name, "PTP ACCEPT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport);
+
+					new_session.bond_session_name_accept = std::string(target_session_name);
+					break;
+				}
+				case AEMU_POSTOFFICE_INIT_PTP_ACCEPT:{
+					new_session.type = SESSION_PTP_ACCEPT;
+					sprintf(session_name, "PTP ACCEPT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
+
+					// Search for the other side
+					char target_session_name[256];
+					sprintf(target_session_name, "PTP CONNECT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport);
+					std::string target_session_name_str = std::string(target_session_name);
+					if (context.active_sessions.find(target_session_name) == context.active_sessions.end()){
+						// Target not found, close the connection
+						LOG("%s: %s wants to connect to %s, but it was not found\n", __func__, session_name, target_session_name);
+						close(session.sock);
+						context.pending_sessions.erase(context.pending_sessions.begin() + i);
+						i--;
+						pthread_mutex_unlock(&context.active_sessions_mutex);
+						continue;
+					}
+					new_session.bond_session_name_connect = target_session_name_str;
+					break;
+				}
 				default:{
 					LOG("%s: %d is not yet implemented\n", __func__, init_packet->init_type);
 					close(session.sock);
@@ -430,6 +817,7 @@ static void *pending_session_worker(void *arg){
 			}
 
 			std::string session_name_str = std::string(session_name);
+			new_session.session_name = session_name_str;
 
 			auto existing_session = context.active_sessions.find(session_name_str);
 			if (existing_session != context.active_sessions.end()){
@@ -465,7 +853,7 @@ static void *pending_session_worker(void *arg){
 			pthread_mutex_unlock(&context.active_sessions_mutex);
 			context.pending_sessions.erase(context.pending_sessions.begin() + i);
 			i--;
-			LOG("%s: session for %s created\n", __func__, v6_str);
+			LOG("%s: session for %s created, %s\n", __func__, v6_str, session_name);
 		}
 
 		UNLOCK_CONTINUE();
