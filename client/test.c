@@ -10,8 +10,10 @@
 	fprintf(stderr, __VA_ARGS__); \
 }
 
+#define SERVER_PORT 27313
+
 void test_pdp(){
-	struct in_addr local_addr = {
+	const struct in_addr local_addr = {
 		.s_addr = htonl(INADDR_LOOPBACK)
 	};
 	static const char pdp_mac_a[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
@@ -21,7 +23,7 @@ void test_pdp(){
 	static const int port_b = 23456;
 	static const int port_c = 34567;
 
-	void *pdp_handle_a_replace = pdp_create_v4(local_addr, 27313, pdp_mac_a, port_a);
+	void *pdp_handle_a_replace = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a);
 	if (pdp_handle_a_replace == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -30,7 +32,7 @@ void test_pdp(){
 	// just so we know the last socket is the one gets replaced
 	sleep(1);
 
-	void *pdp_handle_a = pdp_create_v4(local_addr, 27313, pdp_mac_a, port_a);
+	void *pdp_handle_a = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a);
 	
 	if (pdp_handle_a == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
@@ -40,12 +42,12 @@ void test_pdp(){
 	sleep(1);
 	pdp_delete(pdp_handle_a_replace);
 
-	void *pdp_handle_b = pdp_create_v4(local_addr, 27313, pdp_mac_b, port_b);
+	void *pdp_handle_b = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_b, port_b);
 	if (pdp_handle_b == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
 	}
-	void *pdp_handle_c = pdp_create_v4(local_addr, 27313, pdp_mac_c, port_c);
+	void *pdp_handle_c = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_c, port_c);
 	if (pdp_handle_c == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -222,8 +224,34 @@ void test_pdp(){
 	pdp_delete(pdp_handle_c);
 }
 
+void test_ptp(){
+	const struct in_addr local_addr = {
+		.s_addr = htonl(INADDR_LOOPBACK)
+	};
+	static const char ptp_mac_a[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
+	static const char ptp_mac_b[6] = {0xbb, 0xcc, 0xdd, 0x11, 0x22, 0x33};
+	static const int port_a = 12345;
+	static const int port_b = 23456;
+
+	void *listen_handle_a = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_a, port_a);
+	if (listen_handle_a == NULL){
+		LOG("%s: failed opening listen handle for a\n", __func__);
+		exit(1);
+	}
+
+	void *listen_handle_b = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_b, port_b);
+	if (listen_handle_b == NULL){
+		LOG("%s: failed opening listen handle for b\n", __func__);
+		exit(1);
+	}
+
+	ptp_listen_close(listen_handle_a);
+	ptp_listen_close(listen_handle_b);
+};
+
 int main(){
 	test_pdp();
+	test_ptp();
 	LOG("%s: test ok\n", __func__);
 	return 0;
 }

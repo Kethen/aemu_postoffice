@@ -18,5 +18,8 @@ void *pdp_create_v4(struct in_addr addr, int port, const char *pdp_mac, int pdp_
 void pdp_delete(void *pdp_handle);
 int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *buf, int len, bool non_block);
 int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len, bool non_block);
+void *ptp_listen_v6(struct in6_addr addr, int port, const char *ptp_mac, int ptp_port);
+void *ptp_listen_v4(struct in_addr addr, int port, const char *ptp_mac, int ptp_port);
+void ptp_listen_close(void *ptp_listen_handle);
 
 #endif

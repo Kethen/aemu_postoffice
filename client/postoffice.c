@@ -25,6 +25,13 @@ struct pdp_session{
 	bool dead;
 };
 
+struct ptp_listen_session{
+	char *ptp_mac[6];
+	int16_t ptp_port;
+	int sock;
+	bool dead;
+};
+
 static int write_till_done(int fd, const char *buf, int len){
 	int write_offset = 0;
 	while(write_offset != len){
@@ -258,6 +265,84 @@ void pdp_delete(void *pdp_handle){
 		return;
 	}
 	struct pdp_session *session = (struct pdp_session *)pdp_handle;
+	close(session->sock);
+	free(session);
+}
+
+
+static void *ptp_listen(int domain, struct sockaddr *addr, socklen_t addrlen, const char *ptp_mac, int ptp_port){
+	int sock = socket(domain, SOCK_STREAM, 0);
+	if (sock == -1){
+		LOG("%s: failed creating socket, %s\n", __func__, strerror(errno));
+		return NULL;
+	}
+
+	// Set socket options
+	int sockopt = 1;
+	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, sizeof(sockopt));
+
+	// Prepare init packet
+	struct aemu_postoffice_init init_packet = {0};
+	init_packet.init_type = AEMU_POSTOFFICE_INIT_PTP_LISTEN;
+	memcpy(init_packet.src_addr, ptp_mac, 6);
+	init_packet.sport = ptp_port;
+
+	// Connect
+	int connect_status = connect(sock, addr, addrlen);
+	if (connect_status == -1){
+		LOG("%s: failed connecting, %s\n", __func__, strerror(errno));
+		close(sock);
+		return NULL;
+	}
+
+	// Send init packet
+	int write_status = write_till_done(sock, (char *)&init_packet, sizeof(init_packet));
+	if (write_status != sizeof(init_packet)){
+		LOG("%s: failed sending init packet, %s\n", __func__, strerror(errno));
+		close(sock);
+		return NULL;
+	}
+
+	// Socket ready
+	struct ptp_listen_session* session = (struct ptp_listen_session*)malloc(sizeof(struct ptp_listen_session));
+	if (session == NULL){
+		LOG("%s: failed allocating memory for ptp listen session\n", __func__);
+		close(sock);
+		return NULL;
+	}
+
+	// Memory allocated
+	memcpy(session->ptp_mac, ptp_mac, 6);
+	session->ptp_port = ptp_port;
+	session->sock = sock;
+
+	return (void *)session;
+}
+
+void *ptp_listen_v6(struct in6_addr addr, int port, const char *ptp_mac, int ptp_port){
+	struct sockaddr_in6 addrv6 = {0};
+	addrv6.sin6_family = AF_INET6;
+	addrv6.sin6_port = htons(port);
+	addrv6.sin6_addr = addr;
+
+	return ptp_listen(AF_INET6, (struct sockaddr *)&addrv6, sizeof(addrv6), ptp_mac, ptp_port);
+}
+
+void *ptp_listen_v4(struct in_addr addr, int port, const char *ptp_mac, int ptp_port){
+	struct sockaddr_in addrv4 = {0};
+	addrv4.sin_family = AF_INET;
+	addrv4.sin_port = htons(port);
+	addrv4.sin_addr = addr;
+
+	return ptp_listen(AF_INET, (struct sockaddr *)&addrv4, sizeof(addrv4), ptp_mac, ptp_port);
+}
+
+void ptp_listen_close(void *ptp_listen_handle){
+	if (ptp_listen_handle == NULL){
+		return;
+	}
+
+	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
 	close(session->sock);
 	free(session);
 }

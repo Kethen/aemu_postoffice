@@ -12,6 +12,7 @@ typedef enum{
 	AEMU_POSTOFFICE_INIT_PTP_ACCEPT
 } aemu_postoffice_init_type;
 
+// client -> server
 typedef struct __attribute__((packed)) aemu_postoffice_init{
 	int32_t init_type;
 	char src_addr[8];
@@ -20,10 +21,17 @@ typedef struct __attribute__((packed)) aemu_postoffice_init{
 	uint16_t dport;
 } aemu_postoffice_init;
 
+// client <-> server
 typedef struct __attribute__((packed)) aemu_postoffice_pdp{
 	char addr[8];
 	uint16_t port;
 	uint32_t size;
+};
+
+// server -> client
+typedef struct __attribute__((packed)) aemu_postoffice_ptp_connect{
+	char addr[8];
+	uint16_t port;
 };
 
 #endif

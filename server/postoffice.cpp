@@ -276,11 +276,79 @@ static void session_worker_pdp(post_office_session &session){
 	}
 }
 
+static void session_worker_ptp_listen(post_office_session &session){
+	while(session.thread_state == SESSION_THREAD_RUNNING){
+		pollfd pfd = {0};
+		pfd.fd = session.pipe[0];
+		pfd.events = POLLIN;
+
+		int poll_status = poll(&pfd, 1, 100);
+		if (poll_status == EINTR){
+			continue;
+		}
+		if (poll_status == -1){
+			// Dead poll, critical
+			LOG("%s: Cannot poll, %s\n", __func__, get_socket_error());
+			break;
+		}
+
+		if (pfd.revents & POLLERR){
+			LOG("%s: poll error on pipe, terminating\n", __func__);
+			break;
+		}
+
+		auto should_stop = [session] () {
+			return session.thread_state != SESSION_THREAD_RUNNING;
+		};
+
+		// Test if the other side have closed the socket
+		char recv_test_buf[4];
+		int recv_status = recv(session.sock, &recv_test_buf, sizeof(recv_test_buf), MSG_DONTWAIT);
+		if (recv_status == -1){
+			int err = errno;
+			if (err != EAGAIN && err != EWOULDBLOCK){
+				// The socket died
+				LOG("%s: tcp socket died, terminating\n", __func__);
+				break;
+			}
+		}
+		if (recv_status == 0){
+			// The other side closed the socket
+			LOG("%s: client closed the socket, terminating\n", __func__);
+			break;
+		}
+
+		if (pfd.revents & POLLIN){
+			// Connect side has found the listen side, and have already prepared this packet
+			aemu_postoffice_ptp_connect connect_packet;
+			auto should_not_stop = [] {return false;};
+			int read_status = read_till_done(session.sock, (char *)&connect_packet, sizeof(connect_packet), should_not_stop);
+			// The other side has to send the packet in full
+			if (read_status != 0){
+				// Ignore it
+				LOG("%s: bad incoming connect request on pipe, please debug this\n", __func__);
+				continue;
+			}
+
+			int write_status = write_till_done(session.sock, (char *)&connect_packet, sizeof(connect_packet), should_stop);
+			if (write_status == -1){
+				// This is critical to this thread
+				LOG("%s: failed writing connect request, %d %s\n", __func__, write_status, get_socket_error());
+				break;
+			}
+		}
+	}
+}
+
 static void *session_worker(void *arg){
 	post_office_session &session = *(post_office_session *)arg;
 	switch(session.type){
 		case SESSION_PDP:{
 			session_worker_pdp(session);
+			break;
+		}
+		case SESSION_PTP_LISTEN:{
+			session_worker_ptp_listen(session);
 			break;
 		}
 	}
@@ -302,6 +370,7 @@ static void *pending_session_worker(void *arg){
 		pthread_mutex_lock(&context.active_sessions_mutex);
 		for(auto session = context.active_sessions.begin();session != context.active_sessions.end();){
 			if(session->second.thread_state == SESSION_THREAD_STOPPED){
+				LOG("%s: %s has finished\n", __func__, session->first.c_str());
 				pthread_join(session->second.thread, NULL);
 				context.active_sessions.erase(session);
 				session = context.active_sessions.begin();
@@ -419,6 +488,11 @@ static void *pending_session_worker(void *arg){
 					sprintf(session_name, "PDP %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
 					break;
 				}
+				case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
+					new_session.type = SESSION_PTP_LISTEN;
+					sprintf(session_name, "PTP LISTEN %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
+					break;					
+				}
 				default:{
 					LOG("%s: %d is not yet implemented\n", __func__, init_packet->init_type);
 					close(session.sock);
@@ -465,7 +539,7 @@ static void *pending_session_worker(void *arg){
 			pthread_mutex_unlock(&context.active_sessions_mutex);
 			context.pending_sessions.erase(context.pending_sessions.begin() + i);
 			i--;
-			LOG("%s: session for %s created\n", __func__, v6_str);
+			LOG("%s: session for %s created, %s\n", __func__, v6_str, session_name);
 		}
 
 		UNLOCK_CONTINUE();
