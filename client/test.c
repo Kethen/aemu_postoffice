@@ -23,7 +23,8 @@ void test_pdp(){
 	static const int port_b = 23456;
 	static const int port_c = 34567;
 
-	void *pdp_handle_a_replace = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a);
+	int state;
+	void *pdp_handle_a_replace = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a, &state);
 	if (pdp_handle_a_replace == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -32,7 +33,7 @@ void test_pdp(){
 	// just so we know the last socket is the one gets replaced
 	sleep(1);
 
-	void *pdp_handle_a = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a);
+	void *pdp_handle_a = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a, &state);
 	
 	if (pdp_handle_a == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
@@ -42,12 +43,12 @@ void test_pdp(){
 	sleep(1);
 	pdp_delete(pdp_handle_a_replace);
 
-	void *pdp_handle_b = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_b, port_b);
+	void *pdp_handle_b = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_b, port_b, &state);
 	if (pdp_handle_b == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
 	}
-	void *pdp_handle_c = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_c, port_c);
+	void *pdp_handle_c = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_c, port_c, &state);
 	if (pdp_handle_c == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -233,13 +234,14 @@ void test_ptp(){
 	static const int port_a = 12345;
 	static const int port_b = 23456;
 
-	void *listen_handle_a = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_a, port_a);
+	int state;
+	void *listen_handle_a = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_a, port_a, &state);
 	if (listen_handle_a == NULL){
 		LOG("%s: failed opening listen handle for a\n", __func__);
 		exit(1);
 	}
 
-	void *listen_handle_b = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_b, port_b);
+	void *listen_handle_b = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_b, port_b, &state);
 	if (listen_handle_b == NULL){
 		LOG("%s: failed opening listen handle for b\n", __func__);
 		exit(1);
