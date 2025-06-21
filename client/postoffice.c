@@ -386,6 +386,23 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 		return NULL;
 	}
 
+	// Consume the ack packet
+	int read_status = recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false);
+	if (read_status == 0){
+		LOG("%s: remove closed the socket during initial recv\n", __func__);
+		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
+		close(sock);
+		free(new_session);
+		return NULL;
+	}
+	if (read_status == -1){
+		LOG("%s: socket error receiving initial packet, %s\n", __func__, strerror(errno));
+		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
+		close(sock);
+		free(new_session);
+		return NULL;
+	}
+
 	// Now the session is ready
 	new_session->sock = sock;
 	new_session->dead = false;
@@ -413,6 +430,24 @@ static void *ptp_connect(int domain, struct sockaddr *addr, int addrlen, const c
 
 	if (sock < 0){
 		*state = sock;
+		free(new_session);
+		return NULL;
+	}
+
+	// Consume the ack packet
+	struct aemu_postoffice_ptp_connect connect_packet;
+	int read_status = recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false);
+	if (read_status == 0){
+		LOG("%s: remove closed the socket during initial recv\n", __func__);
+		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
+		close(sock);
+		free(new_session);
+		return NULL;
+	}
+	if (read_status == -1){
+		LOG("%s: socket error receiving initial packet, %s\n", __func__, strerror(errno));
+		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
+		close(sock);
 		free(new_session);
 		return NULL;
 	}
