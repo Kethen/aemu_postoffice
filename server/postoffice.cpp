@@ -66,6 +66,7 @@ struct post_office_session{
 	char dst[6];
 	int dport;
 	pthread_t thread;
+	bool should_stop;
 	session_thread_state thread_state;
 	post_office_context *context;
 	std::string session_name;
@@ -144,12 +145,12 @@ static int write_till_done(int fd, const char *buf, uint32_t size, std::function
 
 static void session_worker_pdp(post_office_session &session){
 	auto should_stop = [session] () {
-		return session.thread_state != SESSION_THREAD_RUNNING;
+		return session.should_stop;
 	};
 
 	auto should_not_stop = [] () {return false;};
 
-	while(session.thread_state == SESSION_THREAD_RUNNING){
+	while(!session.should_stop){
 		pollfd fds[2] = {0};
 		fds[0].fd = session.pipe[0];
 		fds[0].events = POLLIN;
@@ -244,7 +245,7 @@ static void session_worker_pdp(post_office_session &session){
 
 			// Now to find the other side
 			int session_list_lock_status = -1;
-			while(session.thread_state == SESSION_THREAD_RUNNING){
+			while(!session.should_stop){
 				session_list_lock_status = pthread_mutex_trylock(&session.context->active_sessions_mutex);
 				if (session_list_lock_status == EBUSY){
 					continue;
@@ -283,12 +284,12 @@ static void session_worker_pdp(post_office_session &session){
 
 static void session_worker_ptp_listen(post_office_session &session){
 	auto should_stop = [session] () {
-		return session.thread_state != SESSION_THREAD_RUNNING;
+		return session.should_stop;
 	};
 
 	auto should_not_stop = [] {return false;};
 
-	while(session.thread_state == SESSION_THREAD_RUNNING){
+	while(!session.should_stop){
 		pollfd pfd = {0};
 		pfd.fd = session.pipe[0];
 		pfd.events = POLLIN;
@@ -354,14 +355,14 @@ static void session_worker_ptp(post_office_session &session){
 	clock_gettime(CLOCK_BOOTTIME, &begin);
 
 	auto should_stop = [session] () {
-		return session.thread_state != SESSION_THREAD_RUNNING;
+		return session.should_stop;
 	};
 
 	auto should_not_stop = [] {return false;};
 
 	std::string target_session_name_str = session.type == SESSION_PTP_CONNECT ? session.bond_session_name_accept : session.bond_session_name_connect;
 
-	while(session.thread_state == SESSION_THREAD_RUNNING){
+	while(!session.should_stop){
 		pollfd fds[2] = {0};
 		fds[0].fd = session.pipe[0];
 		fds[0].events = POLLIN;
@@ -398,7 +399,7 @@ static void session_worker_ptp(post_office_session &session){
 
 			if (!notified){
 				int session_list_lock_status = -1;
-				while(session.thread_state == SESSION_THREAD_RUNNING){
+				while(!session.should_stop){
 					session_list_lock_status = pthread_mutex_trylock(&session.context->active_sessions_mutex);
 					if (session_list_lock_status == EBUSY){
 						continue;
@@ -445,7 +446,7 @@ static void session_worker_ptp(post_office_session &session){
 			if (!connected){
 				// Block progress utill the other side is found
 				int session_list_lock_status = -1;
-				while(session.thread_state == SESSION_THREAD_RUNNING){
+				while(!session.should_stop){
 					session_list_lock_status = pthread_mutex_trylock(&session.context->active_sessions_mutex);
 					if (session_list_lock_status == EBUSY){
 						continue;
@@ -550,7 +551,7 @@ static void session_worker_ptp(post_office_session &session){
 
 			// Now to find the other side
 			int session_list_lock_status = -1;
-			while(session.thread_state == SESSION_THREAD_RUNNING){
+			while(!session.should_stop){
 				session_list_lock_status = pthread_mutex_trylock(&session.context->active_sessions_mutex);
 				if (session_list_lock_status == EBUSY){
 					continue;
@@ -598,7 +599,7 @@ static void session_worker_ptp(post_office_session &session){
 
 		auto terminate_session = session.context->active_sessions.find(target_session_name_str);
 		if (terminate_session != session.context->active_sessions.end()){
-			terminate_session->second.thread_state = SESSION_THREAD_STOPPING;
+			terminate_session->second.should_stop = true;
 		}
 
 		pthread_mutex_unlock(&session.context->active_sessions_mutex);
@@ -622,6 +623,8 @@ static void *session_worker(void *arg){
 			break;
 		}
 	}
+
+	session.thread_state = SESSION_THREAD_STOPPING;
 
 	// Common cleanup
 	close(session.pipe[0]);
@@ -823,7 +826,7 @@ static void *pending_session_worker(void *arg){
 			if (existing_session != context.active_sessions.end()){
 				// kick the previous mapping?
 				LOG("%s: kicking existing mapping with the same session name %s\n", __func__, session_name);
-				existing_session->second.thread_state = SESSION_THREAD_STOPPING;
+				existing_session->second.should_stop = true;
 				pthread_join(existing_session->second.thread, NULL);
 				context.active_sessions.erase(existing_session);
 			}
@@ -833,6 +836,7 @@ static void *pending_session_worker(void *arg){
 			auto &new_session_ref = context.active_sessions[session_name_str];
 			pthread_mutex_init(&new_session_ref.pipe_in_mutex, NULL);
 
+			new_session_ref.should_stop = false;
 			int thread_create_status = pthread_create(&new_session_ref.thread, NULL, session_worker, &new_session_ref);
 			if (thread_create_status != 0){
 				LOG("%s: failed creating thread for %s\n", __func__, v6_str);

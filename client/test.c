@@ -414,6 +414,9 @@ void test_ptp(){
 
 	ptp_close(a_to_b);
 	ptp_close(b_to_a);
+
+	sleep(2);
+
 	ptp_close(accept_handle_a);
 	ptp_close(accept_handle_b);
 	
