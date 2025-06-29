@@ -23,6 +23,7 @@ struct pdp_session{
 	int16_t pdp_port;
 	int sock;
 	bool dead;
+	char recv_buf[4096];
 };
 
 struct ptp_listen_session{
@@ -38,7 +39,7 @@ struct ptp_listen_session{
 struct ptp_session{
 	int sock;
 	bool dead;
-	char outstanding_data[2048];
+	char recv_buf[4096];
 	int outstanding_data_size;
 	int outstanding_data_offset;
 };
@@ -171,26 +172,32 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	if (len > 2048){
+	if (len > sizeof(session->recv_buf)){
 		LOG("%s: failed sending data, data too big, %d\n", __func__, len);
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
 
-	char send_buf[2048 + sizeof(struct aemu_postoffice_pdp)];
-
 	// Write header
-	struct aemu_postoffice_pdp *pdp_header = (struct aemu_postoffice_pdp *)send_buf;
-	memcpy(pdp_header->addr, pdp_mac, 6);
-	pdp_header->port = pdp_port;
-	pdp_header->size = len;
+	struct aemu_postoffice_pdp pdp_header = {
+		.port = pdp_port,
+		.size = len
+	};
+	memcpy(pdp_header.addr, pdp_mac, 6);
 
-	// Copy data into send buffer
-	memcpy(&send_buf[sizeof(struct aemu_postoffice_pdp)], buf, len);
-
-	int send_status = send_till_done(session->sock, send_buf, sizeof(struct aemu_postoffice_pdp) + len, non_block);
+	int send_status = send_till_done(session->sock, (char *)&pdp_header, sizeof(pdp_header), non_block);
 	if (send_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 	}
+
+	if (send_status < 0){
+		// Error
+		LOG("%s: failed sending header, %s\n", __func__, strerror(errno));
+		session->dead = true;
+		close(session->sock);
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	send_status = send_till_done(session->sock, buf, len, false);
 
 	if (send_status < 0){
 		// Error
@@ -199,6 +206,7 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 		close(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
+
 	return AEMU_POSTOFFICE_CLIENT_OK;
 }
 
@@ -234,7 +242,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	}
 
 	// We have a header
-	if (pdp_header.size > 2048){
+	if (pdp_header.size > sizeof(session->recv_buf)){
 		// The other side is sending packets that are too big
 		LOG("%s: failed receiving data, data too big %d\n", __func__, pdp_header.size);
 		close(session->sock);
@@ -246,8 +254,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	if (pdp_port != NULL)
 		*pdp_port = pdp_header.port;
 
-	char recv_buf[2048];
-	recv_status = recv_till_done(session->sock, recv_buf, pdp_header.size, false);
+	recv_status = recv_till_done(session->sock, session->recv_buf, pdp_header.size, false);
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
@@ -262,7 +269,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	}
 
 	// We have data
-	memcpy(buf, recv_buf, *len);
+	memcpy(buf, session->recv_buf, *len);
 	if (pdp_header.size > *len){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC;
 	}
@@ -492,7 +499,7 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	if (len > 2048){
+	if (len > sizeof(session->recv_buf)){
 		LOG("%s: failed sending data, data too big, %d\n", __func__, len);
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
@@ -534,14 +541,14 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	if (*len > 2048){
+	if (*len > sizeof(session->recv_buf)){
 		LOG("%s: failed receiving data, data too big, %d\n", __func__, len);
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
 
 	// check if we have outstanding transfer
 	if (session->outstanding_data_size != 0){
-		memcpy(buf, &session->outstanding_data[session->outstanding_data_offset], *len);
+		memcpy(buf, &session->recv_buf[session->outstanding_data_offset], *len);
 		if (session->outstanding_data_size > *len){
 			session->outstanding_data_size -= *len;
 			session->outstanding_data_offset += *len;
@@ -575,15 +582,14 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	if (header.size > 2048){
+	if (header.size > sizeof(session->recv_buf)){
 		LOG("%s: incoming data too big\n", __func__);
 		close(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	char recv_buf[2048];
-	recv_status = recv_till_done(session->sock, recv_buf, header.size, false);
+	recv_status = recv_till_done(session->sock, session->recv_buf, header.size, false);
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
@@ -599,11 +605,10 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	memcpy(buf, recv_buf, *len);
+	memcpy(buf, session->recv_buf, *len);
 	if (*len < header.size){
-		session->outstanding_data_offset = 0;
+		session->outstanding_data_offset = *len;
 		session->outstanding_data_size = header.size - *len;
-		memcpy(session->outstanding_data, &recv_buf[*len], session->outstanding_data_size);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC;
 	}
 	*len = header.size;
