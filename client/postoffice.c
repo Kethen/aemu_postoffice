@@ -409,6 +409,7 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 	// Now the session is ready
 	new_session->sock = sock;
 	new_session->dead = false;
+	new_session->outstanding_data_size = 0;
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	return new_session;
 }
@@ -458,6 +459,7 @@ static void *ptp_connect(int domain, struct sockaddr *addr, int addrlen, const c
 	// Now the session is ready
 	new_session->sock = sock;
 	new_session->dead = false;
+	new_session->outstanding_data_size = 0;
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	return new_session;
 }
