@@ -1,9 +1,3 @@
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <errno.h>
-#include <unistd.h>
-
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -62,8 +56,8 @@ static int create_and_init_socket(void *addr, int addrlen, const char *init_pack
 
 	int write_status = native_send_till_done(sock, (char *)init_packet, init_packet_len, false);
 	if (write_status == -1){
-		LOG("%s: failed sending init packet, %s\n", caller_name, strerror(errno));
-		close(sock);
+		LOG("%s: failed sending init packet\n", caller_name);
+		native_close_tcp_sock(sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
 
@@ -143,9 +137,9 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 
 	if (send_status < 0){
 		// Error
-		LOG("%s: failed sending header, %s\n", __func__, strerror(errno));
+		LOG("%s: failed sending header\n", __func__);
 		session->dead = true;
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -153,9 +147,9 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 
 	if (send_status < 0){
 		// Error
-		LOG("%s: failed sending data, %s\n", __func__, strerror(errno));
+		LOG("%s: failed sending data\n", __func__);
 		session->dead = true;
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -183,13 +177,13 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (recv_status == -1){
-		LOG("%s: failed receiving data, %s\n", __func__, strerror(errno));
-		close(session->sock);
+		LOG("%s: failed receiving data\n", __func__);
+		native_close_tcp_sock(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -197,7 +191,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	if (pdp_header.size > sizeof(session->recv_buf)){
 		// The other side is sending packets that are too big
 		LOG("%s: failed receiving data, data too big %d\n", __func__, pdp_header.size);
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -210,13 +204,13 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (recv_status == -1){
-		LOG("%s: failed receiving data, %s\n", __func__, strerror(errno));
-		close(session->sock);
+		LOG("%s: failed receiving data\n", __func__);
+		native_close_tcp_sock(session->sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -235,7 +229,7 @@ void pdp_delete(void *pdp_handle){
 	}
 	struct pdp_session *session = (struct pdp_session *)pdp_handle;
 	if (!session->dead)
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 	free(session);
 }
 
@@ -308,14 +302,14 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 	if (recv_status == 0){
 		LOG("%s: the other side closed the listen socket\n", __func__);
 		session->dead = true;
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		return NULL;
 	}
 	if (recv_status <= 0){
-		LOG("%s: socket error, %d %s\n", __func__, recv_status, strerror(errno));
+		LOG("%s: socket error, %d\n", __func__, recv_status);
 		session->dead = true;
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		return NULL;
 	}
@@ -348,14 +342,14 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 	if (read_status == 0){
 		LOG("%s: remove closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
-		close(sock);
+		native_close_tcp_sock(sock);
 		free(new_session);
 		return NULL;
 	}
 	if (read_status == -1){
-		LOG("%s: socket error receiving initial packet, %s\n", __func__, strerror(errno));
+		LOG("%s: socket error receiving initial packet\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
-		close(sock);
+		native_close_tcp_sock(sock);
 		free(new_session);
 		return NULL;
 	}
@@ -398,14 +392,14 @@ static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int p
 	if (read_status == 0){
 		LOG("%s: remove closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
-		close(sock);
+		native_close_tcp_sock(sock);
 		free(new_session);
 		return NULL;
 	}
 	if (read_status == -1){
-		LOG("%s: socket error receiving initial packet, %s\n", __func__, strerror(errno));
+		LOG("%s: socket error receiving initial packet\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
-		close(sock);
+		native_close_tcp_sock(sock);
 		free(new_session);
 		return NULL;
 	}
@@ -457,16 +451,16 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 	}
 
 	if (send_status < 0){
-		LOG("%s: failed sending header, %s\n", __func__, strerror(errno));
-		close(session->sock);
+		LOG("%s: failed sending header\n", __func__);
+		native_close_tcp_sock(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	send_status = native_send_till_done(session->sock, buf, len, false);
 	if (send_status < 0){
-		LOG("%s: failed sending data, %s\n", __func__, strerror(errno));
-		close(session->sock);
+		LOG("%s: failed sending data\n", __func__);
+		native_close_tcp_sock(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
@@ -513,21 +507,21 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (recv_status < 0){
-		LOG("%s: failed receiving header, %s\n", __func__, strerror(errno));
-		close(session->sock);
+		LOG("%s: failed receiving header\n", __func__);
+		native_close_tcp_sock(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (header.size > sizeof(session->recv_buf)){
 		LOG("%s: incoming data too big\n", __func__);
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
@@ -536,14 +530,14 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (recv_status < 0){
-		LOG("%s: failed receiving data, %s\n", __func__, strerror(errno));
-		close(session->sock);
+		LOG("%s: failed receiving data\n", __func__);
+		native_close_tcp_sock(session->sock);
 		session->dead = true;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
@@ -565,7 +559,7 @@ void ptp_close(void *ptp_handle){
 
 	struct ptp_session *session = (struct ptp_session *)ptp_handle;
 	if (!session->dead)
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 	free(session);
 }
 
@@ -576,7 +570,7 @@ void ptp_listen_close(void *ptp_listen_handle){
 
 	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
 	if (!session->dead)
-		close(session->sock);
+		native_close_tcp_sock(session->sock);
 	free(session);
 }
 

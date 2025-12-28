@@ -93,3 +93,7 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block){
 	}
 	return read_offset;
 }
+
+int native_close_tcp_sock(int sock){
+	return close(sock);
+}
