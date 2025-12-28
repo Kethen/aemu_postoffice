@@ -1,17 +1,18 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "postoffice_client.h"
+
 #ifdef __unix
 #include "log_linux.h"
 #include "sock_impl_linux.h"
+#include "mutex_impl_linux.h"
 #endif
 
 #ifdef __PSP__
 #include "sock_impl_psp.h"
+#include "log_psp.h"
 #endif
 
 #include "../aemu_postoffice_packets.h"
@@ -41,10 +42,22 @@ struct ptp_session{
 	int outstanding_data_offset;
 };
 
+// wonder if games will actually use more than this
+// we pre-allocate so that we don't have to use heap, it's kinda big, TODO test if it's too big on a psp, in theory we have plenty on slims
+struct pdp_session pdp_sessions[32];
+struct ptp_listen_session ptp_listen_sessions[sizeof(pdp_sessions) / sizeof(pdp_sessions[0])];
+struct ptp_session ptp_sessions[sizeof(pdp_sessions) / sizeof(pdp_sessions[0])];
+
 int aemu_post_office_init(){
+	for (int i = 0;i < sizeof(pdp_sessions) / sizeof(pdp_sessions[0]);i++){
+		pdp_sessions[i].sock = -1;
+		ptp_listen_sessions[i].sock = -1;
+		ptp_sessions[i].sock = -1;
+	}
+	init_sock_alloc_mutex();
 	#ifdef __unix
 	return 0;
-	#endif	
+	#endif
 }
 
 static int create_and_init_socket(void *addr, int addrlen, const char *init_packet, int init_packet_len, const char *caller_name){
@@ -65,7 +78,16 @@ static int create_and_init_socket(void *addr, int addrlen, const char *init_pack
 }
 
 static void *pdp_create(void *addr, int addrlen, const char *pdp_mac, int pdp_port, int *state){
-	struct pdp_session* session = (struct pdp_session*)malloc(sizeof(struct pdp_session));
+	struct pdp_session* session = NULL;
+	lock_sock_alloc_mutex();
+	for(int i = 0;i < sizeof(pdp_sessions) / sizeof(pdp_sessions[0]);i++){
+		if (pdp_sessions[i].sock == -1){
+			session = &pdp_sessions[i];
+			session->sock = 0;
+			break;
+		}
+	}
+	unlock_sock_alloc_mutex();
 	if (session == NULL){
 		LOG("%s: failed allocating memory for pdp session\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
@@ -82,7 +104,7 @@ static void *pdp_create(void *addr, int addrlen, const char *pdp_mac, int pdp_po
 
 	if (sock < 0){
 		*state = sock;
-		free(session);
+		session->sock = -1;
 		return NULL;
 	}
 
@@ -230,12 +252,21 @@ void pdp_delete(void *pdp_handle){
 	struct pdp_session *session = (struct pdp_session *)pdp_handle;
 	if (!session->dead)
 		native_close_tcp_sock(session->sock);
-	free(session);
+	session->sock = -1;
 }
 
 
 static void *ptp_listen(void *addr, socklen_t addrlen, const char *ptp_mac, int ptp_port, int *state){
-	struct ptp_listen_session* session = (struct ptp_listen_session*)malloc(sizeof(struct ptp_listen_session));
+	struct ptp_listen_session* session = NULL;
+	lock_sock_alloc_mutex();
+	for(int i = 0;i < sizeof(ptp_listen_sessions) / sizeof(ptp_listen_sessions[0]);i++){
+		if (ptp_listen_sessions[i].sock == -1){
+			session = &ptp_listen_sessions[i];
+			session->sock = 0;
+			break;
+		}
+	}
+	unlock_sock_alloc_mutex();
 	if (session == NULL){
 		LOG("%s: failed allocating memory for ptp listen session\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
@@ -252,7 +283,7 @@ static void *ptp_listen(void *addr, socklen_t addrlen, const char *ptp_mac, int 
 
 	if (sock < 0){
 		*state = sock;
-		free(session);
+		session->sock = -1;
 		return NULL;
 	}
 
@@ -315,7 +346,16 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 	}
 
 	// Allocate memory
-	struct ptp_session *new_session = (struct ptp_session *)malloc(sizeof(struct ptp_session));
+	struct ptp_session *new_session = NULL;
+	lock_sock_alloc_mutex();
+	for(int i = 0;i < sizeof(ptp_sessions) / sizeof(ptp_sessions[0]);i++){
+		if (ptp_sessions[i].sock == -1){
+			new_session = &ptp_sessions[i];
+			new_session->sock = 0;
+			break;
+		}
+	}
+	unlock_sock_alloc_mutex();
 	if (new_session == NULL){
 		*state = AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 		return NULL;
@@ -333,7 +373,7 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 
 	if (sock < 0){
 		*state = sock;
-		free(new_session);
+		new_session->sock = -1;
 		return NULL;
 	}
 
@@ -343,14 +383,14 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 		LOG("%s: remove closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		native_close_tcp_sock(sock);
-		free(new_session);
+		new_session->sock = -1;
 		return NULL;
 	}
 	if (read_status == -1){
 		LOG("%s: socket error receiving initial packet\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		native_close_tcp_sock(sock);
-		free(new_session);
+		new_session->sock = -1;
 		return NULL;
 	}
 
@@ -364,7 +404,16 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 
 static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int ptp_sport, const char *dst_ptp_mac, int ptp_dport, int *state){
 	// Allocate memory
-	struct ptp_session *new_session = (struct ptp_session *)malloc(sizeof(struct ptp_session));
+	struct ptp_session *new_session = NULL;
+	lock_sock_alloc_mutex();
+	for(int i = 0;i < sizeof(ptp_sessions) / sizeof(ptp_sessions[0]);i++){
+		if (ptp_sessions[i].sock == -1){
+			new_session = &ptp_sessions[i];
+			new_session->sock = 0;
+			break;
+		}
+	}
+	unlock_sock_alloc_mutex();
 	if (new_session == NULL){
 		*state = AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 		return NULL;
@@ -382,7 +431,7 @@ static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int p
 
 	if (sock < 0){
 		*state = sock;
-		free(new_session);
+		new_session->sock = -1;
 		return NULL;
 	}
 
@@ -393,14 +442,14 @@ static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int p
 		LOG("%s: remove closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		native_close_tcp_sock(sock);
-		free(new_session);
+		new_session->sock = -1;
 		return NULL;
 	}
 	if (read_status == -1){
 		LOG("%s: socket error receiving initial packet\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		native_close_tcp_sock(sock);
-		free(new_session);
+		new_session->sock = -1;
 		return NULL;
 	}
 
@@ -560,7 +609,7 @@ void ptp_close(void *ptp_handle){
 	struct ptp_session *session = (struct ptp_session *)ptp_handle;
 	if (!session->dead)
 		native_close_tcp_sock(session->sock);
-	free(session);
+	session->sock = -1;
 }
 
 void ptp_listen_close(void *ptp_listen_handle){
@@ -571,7 +620,7 @@ void ptp_listen_close(void *ptp_listen_handle){
 	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
 	if (!session->dead)
 		native_close_tcp_sock(session->sock);
-	free(session);
+	session->sock = -1;
 }
 
 int pdp_get_native_sock(void *pdp_handle){
