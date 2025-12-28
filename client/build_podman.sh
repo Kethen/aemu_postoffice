@@ -16,4 +16,8 @@ podman run \
 	-v ../:/workdir \
 	-w /workdir/client \
 	$IMAGE_NAME \
-	build_psp.sh
+	-c '
+	set -xe
+	bash build_linux.sh
+	bash build_psp.sh
+'
