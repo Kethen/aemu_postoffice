@@ -66,6 +66,7 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block){
 				continue;
 			}
 			// Other errors
+			ERR("%s: failed sending, %s\n", __func__, strerror(errno));
 			return write_status;
 		}
 		write_offset += write_status;
@@ -87,6 +88,7 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block){
 				continue;
 			}
 			// Other errors
+			ERR("%s: failed receving, %s\n", __func__, strerror(errno));
 			return recv_status;
 		}
 		read_offset += recv_status;
