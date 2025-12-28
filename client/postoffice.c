@@ -579,3 +579,18 @@ void ptp_listen_close(void *ptp_listen_handle){
 		close(session->sock);
 	free(session);
 }
+
+int pdp_get_native_sock(void *pdp_handle){
+	struct pdp_session *session = pdp_handle;
+	return session->sock;
+}
+
+int ptp_get_native_sock(void *ptp_handle){
+	struct ptp_session *session = ptp_handle;
+	return session->sock;
+}
+
+int ptp_listen_get_native_sock(void *ptp_listen_handle){
+	struct ptp_listen_session *session = ptp_listen_handle;
+	return session->sock;
+}

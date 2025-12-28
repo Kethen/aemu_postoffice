@@ -41,5 +41,8 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block);
 void ptp_close(void *ptp_handle);
 void ptp_listen_close(void *ptp_listen_handle);
 
+int pdp_get_native_sock(void *pdp_handle);
+int ptp_get_native_sock(void *ptp_handle);
+int ptp_listen_get_native_sock(void *ptp_listen_handle);
 
 #endif
