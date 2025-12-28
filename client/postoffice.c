@@ -11,8 +11,9 @@
 #endif
 
 #ifdef __PSP__
-#include "sock_impl_psp.h"
 #include "log_psp.h"
+#include "sock_impl_psp.h"
+#include "mutex_impl_psp.h"
 #endif
 
 #include "../aemu_postoffice_packets.h"
@@ -55,9 +56,7 @@ int aemu_post_office_init(){
 		ptp_sessions[i].sock = -1;
 	}
 	init_sock_alloc_mutex();
-	#ifdef __unix
 	return 0;
-	#endif
 }
 
 static int create_and_init_socket(void *addr, int addrlen, const char *init_packet, int init_packet_len, const char *caller_name){
