@@ -9,11 +9,7 @@
 
 #include "postoffice_client.h"
 #include "sock_impl_linux.h"
-
-#define ERR(...) { \
-	fprintf(stderr, __VA_ARGS__); \
-	fflush(stderr); \
-}
+#include "log_linux.h"
 
 void to_native_sock_addr(native_sock_addr *dst, const struct aemu_post_office_sock_addr *src){
 	dst->sin_family = AF_INET;
@@ -33,7 +29,7 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	native_sock_addr *native_addr = addr;
 	int sock = socket(native_addr->sin_family, SOCK_STREAM, 0);
 	if (sock == -1){
-		ERR("%s: failed creating socket, %s\n", __func__, strerror(errno));
+		LOG("%s: failed creating socket, %s\n", __func__, strerror(errno));
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
 
@@ -44,7 +40,7 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	// Connect
 	int connect_status = connect(sock, addr, addrlen);
 	if (connect_status == -1){
-		ERR("%s: failed connecting, %s\n", __func__, strerror(errno));
+		LOG("%s: failed connecting, %s\n", __func__, strerror(errno));
 		close(sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
@@ -66,7 +62,7 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block){
 				continue;
 			}
 			// Other errors
-			ERR("%s: failed sending, %s\n", __func__, strerror(errno));
+			LOG("%s: failed sending, %s\n", __func__, strerror(errno));
 			return write_status;
 		}
 		write_offset += write_status;
@@ -88,7 +84,7 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block){
 				continue;
 			}
 			// Other errors
-			ERR("%s: failed receving, %s\n", __func__, strerror(errno));
+			LOG("%s: failed receving, %s\n", __func__, strerror(errno));
 			return recv_status;
 		}
 		read_offset += recv_status;

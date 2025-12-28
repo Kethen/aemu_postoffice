@@ -6,15 +6,15 @@
 
 #include "postoffice_client.h"
 #ifdef __unix
+#include "log_linux.h"
 #include "sock_impl_linux.h"
 #endif
 
-#include "../aemu_postoffice_packets.h"
+#ifdef __PSP__
+#include "sock_impl_psp.h"
+#endif
 
-#define LOG(...){ \
-	fprintf(stderr, __VA_ARGS__); \
-	fflush(stderr); \
-}
+#include "../aemu_postoffice_packets.h"
 
 struct pdp_session{
 	char *pdp_mac[6];
