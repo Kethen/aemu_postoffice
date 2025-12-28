@@ -5,6 +5,8 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include <arpa/inet.h>
+
 #include "postoffice_client.h"
 
 #define LOG(...) { \
@@ -14,8 +16,9 @@
 #define SERVER_PORT 27313
 
 void test_pdp(){
-	const struct in_addr local_addr = {
-		.s_addr = htonl(INADDR_LOOPBACK)
+	struct aemu_post_office_sock_addr local_addr = {
+		.addr = htonl(INADDR_LOOPBACK),
+		.port = htons(SERVER_PORT)
 	};
 	static const char pdp_mac_a[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
 	static const char pdp_mac_b[6] = {0xbb, 0xcc, 0xdd, 0x11, 0x22, 0x33};
@@ -25,7 +28,7 @@ void test_pdp(){
 	static const int port_c = 34567;
 
 	int state;
-	void *pdp_handle_a_replace = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a, &state);
+	void *pdp_handle_a_replace = pdp_create_v4(&local_addr, pdp_mac_a, port_a, &state);
 	if (pdp_handle_a_replace == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -34,7 +37,7 @@ void test_pdp(){
 	// just so we know the last socket is the one gets replaced
 	sleep(1);
 
-	void *pdp_handle_a = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_a, port_a, &state);
+	void *pdp_handle_a = pdp_create_v4(&local_addr, pdp_mac_a, port_a, &state);
 	
 	if (pdp_handle_a == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
@@ -44,12 +47,12 @@ void test_pdp(){
 	sleep(1);
 	pdp_delete(pdp_handle_a_replace);
 
-	void *pdp_handle_b = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_b, port_b, &state);
+	void *pdp_handle_b = pdp_create_v4(&local_addr, pdp_mac_b, port_b, &state);
 	if (pdp_handle_b == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
 	}
-	void *pdp_handle_c = pdp_create_v4(local_addr, SERVER_PORT, pdp_mac_c, port_c, &state);
+	void *pdp_handle_c = pdp_create_v4(&local_addr, pdp_mac_c, port_c, &state);
 	if (pdp_handle_c == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -234,8 +237,9 @@ void *accept_ptp_connection(void *arg){
 }
 
 void test_ptp(){
-	const struct in_addr local_addr = {
-		.s_addr = htonl(INADDR_LOOPBACK)
+	struct aemu_post_office_sock_addr local_addr = {
+		.addr = htonl(INADDR_LOOPBACK),
+		.port = htons(SERVER_PORT)
 	};
 	static const char ptp_mac_a[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
 	static const char ptp_mac_b[6] = {0xbb, 0xcc, 0xdd, 0x11, 0x22, 0x33};
@@ -243,13 +247,13 @@ void test_ptp(){
 	static const int port_b = 23456;
 
 	int state;
-	void *listen_handle_a = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_a, port_a, &state);
+	void *listen_handle_a = ptp_listen_v4(&local_addr, ptp_mac_a, port_a, &state);
 	if (listen_handle_a == NULL){
 		LOG("%s: failed opening listen handle for a\n", __func__);
 		exit(1);
 	}
 
-	void *listen_handle_b = ptp_listen_v4(local_addr, SERVER_PORT, ptp_mac_b, port_b, &state);
+	void *listen_handle_b = ptp_listen_v4(&local_addr, ptp_mac_b, port_b, &state);
 	if (listen_handle_b == NULL){
 		LOG("%s: failed opening listen handle for b\n", __func__);
 		exit(1);
@@ -274,13 +278,13 @@ void test_ptp(){
 	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &listen_handle_a);
 	pthread_create(&accept_thread_b, NULL, accept_ptp_connection, &listen_handle_b);
 
-	void *a_to_b = ptp_connect_v4(local_addr, SERVER_PORT, ptp_mac_a, port_a, ptp_mac_b, port_b, &state);
+	void *a_to_b = ptp_connect_v4(&local_addr, ptp_mac_a, port_a, ptp_mac_b, port_b, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from a to b\n", __func__);
 		exit(1);
 	}
 
-	void *b_to_a = ptp_connect_v4(local_addr, SERVER_PORT, ptp_mac_b, port_b, ptp_mac_a, port_a, &state);
+	void *b_to_a = ptp_connect_v4(&local_addr, ptp_mac_b, port_b, ptp_mac_a, port_a, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from b to a\n", __func__);
 		exit(1);
@@ -425,6 +429,8 @@ void test_ptp(){
 };
 
 int main(){
+	aemu_post_office_init();
+
 	test_pdp();
 	test_ptp();
 	LOG("%s: test ok\n", __func__);
