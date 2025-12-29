@@ -17,4 +17,4 @@ rm exports.c
 psp-gcc $gcc_prx_args psp_main.o sock_impl_psp.o mutex_impl_psp.o postoffice.o exports.o -o postoffice.elf $gcc_prx_libs
 
 psp-fixup-imports postoffice.elf
-psp-prxgen postoffice.elf postoffice.prx
+psp-prxgen postoffice.elf aemu_postoffice.prx
