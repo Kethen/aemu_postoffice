@@ -14,7 +14,7 @@ podman run \
 	--rm -it \
 	--security-opt label=disable \
 	-v ../:/workdir \
-	-w /workdir/client \
+	-w /workdir/server \
 	$IMAGE_NAME \
 	-c '
 	set -xe

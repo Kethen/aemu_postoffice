@@ -768,7 +768,7 @@ static void *pending_session_worker(void *arg){
 				}
 				case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
 					new_session.type = SESSION_PTP_CONNECT;
-					sprintf(session_name, "PTP CONNECT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
+					sprintf(session_name, "PTP CONNECT %x:%x:%x:%x:%x:%x %d %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport, (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport);
 
 					// Search for the other side
 					char target_session_name[256];
@@ -784,18 +784,18 @@ static void *pending_session_worker(void *arg){
 						continue;
 					}
 					new_session.bond_session_name_listen = target_session_name_str;
-					sprintf(target_session_name, "PTP ACCEPT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport);
+					sprintf(target_session_name, "PTP ACCEPT %x:%x:%x:%x:%x:%x %d %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport, (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
 
 					new_session.bond_session_name_accept = std::string(target_session_name);
 					break;
 				}
 				case AEMU_POSTOFFICE_INIT_PTP_ACCEPT:{
 					new_session.type = SESSION_PTP_ACCEPT;
-					sprintf(session_name, "PTP ACCEPT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
+					sprintf(session_name, "PTP ACCEPT %x:%x:%x:%x:%x:%x %d %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport, (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport);
 
 					// Search for the other side
 					char target_session_name[256];
-					sprintf(target_session_name, "PTP CONNECT %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport);
+					sprintf(target_session_name, "PTP CONNECT %x:%x:%x:%x:%x:%x %d %x:%x:%x:%x:%x:%x %d", (uint8_t)new_session.dst[0], (uint8_t)new_session.dst[1], (uint8_t)new_session.dst[2], (uint8_t)new_session.dst[3], (uint8_t)new_session.dst[4], (uint8_t)new_session.dst[5], new_session.dport, (uint8_t)new_session.src[0], (uint8_t)new_session.src[1], (uint8_t)new_session.src[2], (uint8_t)new_session.src[3], (uint8_t)new_session.src[4], (uint8_t)new_session.src[5], new_session.sport);
 					std::string target_session_name_str = std::string(target_session_name);
 					if (context.active_sessions.find(target_session_name) == context.active_sessions.end()){
 						// Target not found, close the connection
