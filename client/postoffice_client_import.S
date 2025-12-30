@@ -2,7 +2,7 @@
 
 #include "pspstub.s"
 
-	STUB_START "aemu_postoffice_client",0x00090011,0x00020005
+	STUB_START "aemu_postoffice_client",0x00090011,0x000e0005
 	STUB_FUNC  0x1,pdp_create_v4
 	STUB_FUNC  0x2,pdp_delete
 	STUB_FUNC  0x3,pdp_send
