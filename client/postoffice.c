@@ -311,7 +311,7 @@ void *ptp_listen_v4(const struct aemu_post_office_sock_addr *addr, const char *p
 	return ptp_listen(&native_addr, sizeof(native_addr), ptp_mac, ptp_port, state);
 }
 
-void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
+void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool nonblock, int *state){
 	if (ptp_listen_handle == NULL){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		return NULL;
@@ -398,6 +398,8 @@ void *ptp_accept(void *ptp_listen_handle, bool nonblock, int *state){
 	new_session->dead = false;
 	new_session->outstanding_data_size = 0;
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
+	*ptp_port = connect_packet.port;
+	memcpy(ptp_mac, connect_packet.addr, 6);
 	return new_session;
 }
 

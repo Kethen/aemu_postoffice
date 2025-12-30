@@ -229,10 +229,30 @@ void test_pdp(){
 	pdp_delete(pdp_handle_c);
 }
 
+struct connection_accept_task{
+	int expected_port;
+	void *listen_handle;
+	char expected_mac[6];
+};
+
 void *accept_ptp_connection(void *arg){
+	struct connection_accept_task *task = (struct connection_accept_task *)arg;
 	void *listen_handle = *(void **)arg;
 	int state = 0;
-	void *accept_handle = ptp_accept(listen_handle, false, &state);
+	int port = 0;
+	char mac[6];
+	void *accept_handle = ptp_accept(task->listen_handle, mac, &port, false, &state);
+
+	if (port != task->expected_port){
+		LOG("%s: got port %d, expected %d\n", __func__, port, task->expected_port);
+		exit(1);
+	}
+
+	if (memcmp(mac, task->expected_mac, 6) != 0){
+		LOG("%s: bad mac address while accepting connection\n", __func__);
+		exit(1);
+	}
+
 	return accept_handle;
 }
 
@@ -259,13 +279,15 @@ void test_ptp(){
 		exit(1);
 	}
 
-	ptp_accept(listen_handle_a, true, &state);
+	int port;
+	char mac[6];
+	ptp_accept(listen_handle_a, mac, &port, true, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		LOG("%s: unexpected state %d on non block accept\n", __func__, state);
 		exit(1);
 	}
 
-	ptp_accept(listen_handle_b, true, &state);
+	ptp_accept(listen_handle_b, mac, &port, true, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		LOG("%s: unexpected state %d on non block accept\n", __func__, state);
 		exit(1);
@@ -275,8 +297,18 @@ void test_ptp(){
 
 	pthread_t accept_thread_a;
 	pthread_t accept_thread_b;
-	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &listen_handle_a);
-	pthread_create(&accept_thread_b, NULL, accept_ptp_connection, &listen_handle_b);
+	struct connection_accept_task task_a = {
+		.listen_handle = listen_handle_a,
+		.expected_port = port_b
+	};
+	memcpy(task_a.expected_mac, ptp_mac_b, 6);
+	struct connection_accept_task task_b = {
+		.listen_handle = listen_handle_b,
+		.expected_port = port_a
+	};
+	memcpy(task_b.expected_mac, ptp_mac_a, 6);
+	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &task_a);
+	pthread_create(&accept_thread_b, NULL, accept_ptp_connection, &task_b);
 
 	void *a_to_b = ptp_connect_v4(&local_addr, ptp_mac_a, port_a, ptp_mac_b, port_b, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
