@@ -10,11 +10,12 @@ psp-gcc $gcc_build_args -c sock_impl_psp.c -o sock_impl_psp.o
 psp-gcc $gcc_build_args -c mutex_impl_psp.c -o mutex_impl_psp.o
 psp-gcc $gcc_build_args -c postoffice.c -o postoffice.o
 psp-gcc $gcc_build_args -c psp_main.c -o psp_main.o
+psp-gcc $gcc_build_args -c ATPRO.S -o ATPRO.o
 psp-build-exports -b postoffice_client.exp > exports.c
 psp-gcc $gcc_build_args -c exports.c -o exports.o
 rm exports.c
 
-psp-gcc $gcc_prx_args psp_main.o sock_impl_psp.o mutex_impl_psp.o postoffice.o exports.o -o postoffice.elf $gcc_prx_libs
+psp-gcc $gcc_prx_args psp_main.o sock_impl_psp.o mutex_impl_psp.o postoffice.o ATPRO.o exports.o -o postoffice.elf $gcc_prx_libs
 
 psp-fixup-imports postoffice.elf
 psp-prxgen postoffice.elf aemu_postoffice.prx
