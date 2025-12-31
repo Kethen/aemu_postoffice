@@ -59,6 +59,7 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block){
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
 				// Continue block sending, either in block mode or we already received part of the message
+				sleep(0);
 				continue;
 			}
 			// Other errors
@@ -74,13 +75,17 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block){
 	int read_offset = 0;
 	while(read_offset != len){
 		int recv_status = recv(fd, &buf[read_offset], len - read_offset, MSG_DONTWAIT);
-		if (recv_status <= 0){
+		if (recv_status == 0){
+			return recv_status;
+		}
+		if (recv_status < 0){
 			int err = errno;
 			if (err == EAGAIN || err == EWOULDBLOCK){
 				if (non_block && read_offset == 0){
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
 				// Continue block receving, either in block mode or we already sent part of the message
+				sleep(0);
 				continue;
 			}
 			// Other errors
