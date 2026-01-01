@@ -24,6 +24,7 @@ jobs:
       run: |
         cd server
         bash build_podman.sh
+        bash build_cygwin.sh
         cd ../client
         bash build_podman.sh
 
@@ -33,6 +34,8 @@ jobs:
         name: aemu_postoffice_${{ env.sha_name }}
         path: |
            server/aemu_postoffice_server.out
+           server/aemu_postoffice_server.exe
+           server/cygwin1.dll
            client/postoffice_client_import.S
            client/aemu_postoffice.prx
            client/postoffice_client.h

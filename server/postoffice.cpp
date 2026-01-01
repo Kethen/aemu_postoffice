@@ -17,6 +17,10 @@
 #include "log.h"
 #include "../aemu_postoffice_packets.h"
 
+#ifndef CLOCK_BOOTTIME
+#define CLOCK_BOOTTIME CLOCK_MONOTONIC
+#endif
+
 struct pending_session{
 	int sock;
 	timespec timestamp;
@@ -850,8 +854,9 @@ static void *pending_session_worker(void *arg){
 				pthread_mutex_unlock(&context.active_sessions_mutex);
 				continue;
 			}
+			#ifndef __CYGWIN__
 			pthread_setname_np(new_session_ref.thread, "session worker");
-
+			#endif
 
 			// New session thread created at this point
 			pthread_mutex_unlock(&context.active_sessions_mutex);
@@ -924,7 +929,9 @@ int start_postoffice(int port, int max_threads, int max_pending_sessions, bool *
 		close(main_socket);
 		return -1;
 	}
+	#ifndef __CYGWIN__
 	pthread_setname_np(pending_session_thread, "pending session worker");
+	#endif
 
 	LOG("%s: accepting connections\n", __func__);
 	while(!*stop_thread){
