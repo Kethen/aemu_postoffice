@@ -899,6 +899,9 @@ int start_postoffice(int port, int max_threads, int max_pending_sessions, bool *
 	// We initiate keep alive for the client to keep client load low
 	sockopt = 1;
 	setsockopt(main_socket, SOL_SOCKET, SO_KEEPALIVE, &sockopt, sizeof(sockopt));
+	// explicitly
+	sockopt = 0;
+	setsockopt(main_socket, IPPROTO_IPV6, IPV6_V6ONLY, &sockopt, sizeof(sockopt));
 
 	// emulators can use v6
 	sockaddr_in6 addr6 = {0};
