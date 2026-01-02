@@ -206,8 +206,9 @@ let create_session = (ctx) => {
 			let listen_session_name = `PTP_LISTEN ${get_mac_str(dst_addr)} ${dport}`;
 			let listen_session = sessions[listen_session_name];
 			if (listen_session == undefined){
-				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${listen_session} not found`);
+				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${listen_session_name} not found`);
 				ctx.socket.end();
+				break;
 			}
 
 			sessions[ctx.session_name] = ctx;
