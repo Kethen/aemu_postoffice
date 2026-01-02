@@ -638,3 +638,29 @@ int ptp_listen_get_native_sock(void *ptp_listen_handle){
 	struct ptp_listen_session *session = ptp_listen_handle;
 	return session->sock;
 }
+
+int ptp_peek_next_size(void *ptp_handle){
+	struct ptp_session *session = ptp_handle;
+
+	if (session->dead = true){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	aemu_postoffice_ptp_data header = {0};
+	int peek_result = native_peek(session->sock, (char *)&header, sizeof(header));
+	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
+		return 0;
+	}
+
+	if (peek_result <= 0){
+		session->dead = true;
+		native_close_tcp_sock(session->sock);
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	if (peek_result != sizeof(header)){
+		return 0;
+	}
+
+	return header.size;
+}

@@ -385,6 +385,13 @@ void test_ptp(){
 			exit(1);
 		}
 
+
+		sleep(1);
+		int next_size = ptp_peek_next_size(accept_handle_a);
+		if (next_size != sizeof(recv_buf)){
+			LOG("%s: failed peeking ptp size, expected %d, got %d\n, __func__", sizeof(recv_buf), next_size);
+		}
+
 		recv_size = sizeof(recv_buf);
 		recv_status = ptp_recv(accept_handle_a, recv_buf, &recv_size, false);
 		if (recv_status != 0){

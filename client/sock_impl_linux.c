@@ -100,3 +100,19 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block){
 int native_close_tcp_sock(int sock){
 	return close(sock);
 }
+
+int native_peek(int fd, char *buf, int len){
+	int read_result = recv(fd, buf, len, MSG_DONTWAIT | MSG_PEEK);
+	if (read_result == 0){
+		return 0;
+	}
+	if (read_result == -1){
+		int err = errno;
+		if (err == EAGAIN || err == EWOULDBLOCK){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+		LOG("%s: failed peeking, %s\n", __func__, strerror(errno));
+		return -1;
+	}
+	return read_result;
+}
