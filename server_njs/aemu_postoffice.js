@@ -271,6 +271,31 @@ let on_connection = (socket) => {
 		state:"init"
 	};
 
+	socket.on("error", (err) => {
+		switch(ctx.state){
+			case "init":
+				log(`${get_sock_addr_str(ctx.socket)} errored during init, ${err}`);
+				ctx.socket.end();
+				break;
+			case "pdp":
+				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
+				ctx.socket.end();
+				break;
+			case "ptp_listen":
+				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
+				ctx.socket.end();
+				break;
+			case "ptp_accept":
+			case "ptp_connect":
+				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
+				close_ptp(ctx);
+				break;
+			default:
+				log(`bad state ${ctx.state} on end, debug this`);
+				process.exit(1);
+		}
+	})
+
 	socket.on("end", () => {
 		switch(ctx.state){
 			case "init":
