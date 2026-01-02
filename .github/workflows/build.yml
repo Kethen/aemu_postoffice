@@ -22,10 +22,7 @@ jobs:
 
     - name: Build
       run: |
-        cd server
-        bash build_podman.sh
-        bash build_cygwin.sh
-        cd ../client
+        cd client
         bash build_podman.sh
 
     - name: Push package artifact
@@ -33,9 +30,7 @@ jobs:
       with:
         name: aemu_postoffice_${{ env.sha_name }}
         path: |
-           server/aemu_postoffice_server.out
-           server/aemu_postoffice_server.exe
-           server/cygwin1.dll
+           server_njs/aemu_postoffice.js
            client/postoffice_client_import.S
            client/aemu_postoffice.prx
            client/postoffice_client.h

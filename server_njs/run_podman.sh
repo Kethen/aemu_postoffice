@@ -9,6 +9,6 @@ podman run \
 	--rm -it \
 	-p 27313:27313 \
 	--entrypoint "/usr/bin/node" \
-	-v ./postoffice.js:/postoffice.js:ro \
+	-v ./aemu_postoffice.js:/aemu_postoffice.js:ro \
 	$IMAGE \
-	postoffice.js
+	aemu_postoffice.js
