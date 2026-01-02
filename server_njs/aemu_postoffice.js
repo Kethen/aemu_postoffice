@@ -28,8 +28,7 @@ let get_mac_str = (mac) => {
 }
 
 let get_sock_addr_str = (sock) => {
-	let address = sock.address()
-	return `${address.address}:${address.port}`
+	return `${sock.remoteAddress}:${sock.remotePort}`
 }
 
 let server = net.createServer();
