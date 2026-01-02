@@ -23,7 +23,7 @@ struct pdp_session{
 	int16_t pdp_port;
 	int sock;
 	bool dead;
-	char recv_buf[4096];
+	char recv_buf[2048];
 };
 
 struct ptp_listen_session{
@@ -38,7 +38,7 @@ struct ptp_listen_session{
 struct ptp_session{
 	int sock;
 	bool dead;
-	char recv_buf[4096];
+	char recv_buf[50 * 1024];
 	int outstanding_data_size;
 	int outstanding_data_offset;
 };

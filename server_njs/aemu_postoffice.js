@@ -129,7 +129,7 @@ let ptp_tick = (ctx) => {
 					ctx.ptp_data = ctx.ptp_data.slice(4);
 
 					let size = cur_data.readUInt32LE();
-					if (size > 4096){
+					if (size > 50 * 1024 * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
 						close_ptp(ctx);
 						return;
