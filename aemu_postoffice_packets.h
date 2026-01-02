@@ -15,17 +15,17 @@ typedef enum{
 // client -> server
 typedef struct __attribute__((packed)) aemu_postoffice_init{
 	int32_t init_type;
-	// 2 byes on padding on the end, only 6 bytes are used
+	// 2 bytes on padding on the end, only 6 bytes are used
 	char src_addr[8];
 	uint16_t sport;
-	// 2 byes on padding on the end
+	// 2 bytes on padding on the end
 	char dst_addr[8];
 	uint16_t dport;
 } aemu_postoffice_init;
 
 // client <-> server
 typedef struct __attribute__((packed)) aemu_postoffice_pdp{
-	// 2 byes on padding on the end
+	// 2 bytes on padding on the end
 	char addr[8];
 	uint16_t port;
 	uint32_t size;
@@ -33,7 +33,7 @@ typedef struct __attribute__((packed)) aemu_postoffice_pdp{
 
 // server -> client
 typedef struct __attribute__((packed)) aemu_postoffice_ptp_connect{
-	// 2 byes on padding on the end
+	// 2 bytes on padding on the end
 	char addr[8];
 	uint16_t port;
 } aemu_postoffice_ptp_connect;
