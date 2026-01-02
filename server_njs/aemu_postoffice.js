@@ -69,6 +69,7 @@ let pdp_tick = (ctx) => {
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
 						ctx.socket.end();
 						delete sessions[ctx.session_name];
+						return;
 					}
 
 					ctx.target_session_name = `PDP ${get_mac_str(addr)} ${port}`;
@@ -292,7 +293,7 @@ let on_connection = (socket) => {
 				close_ptp(ctx);
 				break;
 			default:
-				log(`bad state ${ctx.state} on end, debug this`);
+				log(`bad state ${ctx.state} on socket error, debug this`);
 				process.exit(1);
 		}
 	})
@@ -317,7 +318,7 @@ let on_connection = (socket) => {
 				close_ptp(ctx);
 				break;
 			default:
-				log(`bad state ${ctx.state} on end, debug this`);
+				log(`bad state ${ctx.state} on socket end, debug this`);
 				process.exit(1);
 		}
 	})
