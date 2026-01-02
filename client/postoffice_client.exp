@@ -12,6 +12,7 @@ PSP_EXPORT_FUNC_NID(pdp_delete, 0x2)
 PSP_EXPORT_FUNC_NID(pdp_send, 0x3)
 PSP_EXPORT_FUNC_NID(pdp_recv, 0x4)
 PSP_EXPORT_FUNC_NID(pdp_get_native_sock, 0x5)
+PSP_EXPORT_FUNC_NID(pdp_peek_next_size, 0x6)
 
 PSP_EXPORT_FUNC_NID(ptp_listen_v4, 0x101)
 PSP_EXPORT_FUNC_NID(ptp_accept, 0x102)

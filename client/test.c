@@ -73,6 +73,15 @@ void test_pdp(){
 		exit(1);
 	}
 
+	/*
+	sleep(1);
+	int next_size = pdp_peek_next_size(pdp_handle_b);
+	if (next_size != sizeof(test_data)){
+		LOG("%s: failed peeking pdp size, expected %d, got %d\n", __func__, sizeof(test_data), next_size);
+		exit(1);
+	}
+	*/
+
 	char recv_buf[sizeof(test_data)];
 	char incoming_mac[6];
 	int incoming_port;
@@ -389,7 +398,8 @@ void test_ptp(){
 		sleep(1);
 		int next_size = ptp_peek_next_size(accept_handle_a);
 		if (next_size != sizeof(recv_buf)){
-			LOG("%s: failed peeking ptp size, expected %d, got %d\n, __func__", sizeof(recv_buf), next_size);
+			LOG("%s: failed peeking ptp size, expected %d, got %d\n", __func__, sizeof(recv_buf), next_size);
+			exit(1);
 		}
 
 		recv_size = sizeof(recv_buf);
