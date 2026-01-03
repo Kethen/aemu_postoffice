@@ -73,14 +73,12 @@ void test_pdp(){
 		exit(1);
 	}
 
-	/*
 	sleep(1);
 	int next_size = pdp_peek_next_size(pdp_handle_b);
 	if (next_size != sizeof(test_data)){
 		LOG("%s: failed peeking pdp size, expected %d, got %d\n", __func__, sizeof(test_data), next_size);
 		exit(1);
 	}
-	*/
 
 	char recv_buf[sizeof(test_data)];
 	char incoming_mac[6];
