@@ -20,4 +20,5 @@ podman run \
 	set -xe
 	bash build_linux.sh
 	bash build_psp.sh
+	bash build_windows.sh
 '

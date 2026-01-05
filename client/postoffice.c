@@ -16,6 +16,12 @@
 #include "mutex_impl_psp.h"
 #endif
 
+#ifdef _WIN32
+#include "log_windows.h"
+#include "sock_impl_windows.h"
+#include "mutex_impl_windows.h"
+#endif
+
 #include "../aemu_postoffice_packets.h"
 
 struct pdp_session{
@@ -280,7 +286,7 @@ int pdp_peek_next_size(void *pdp_handle){
 	return header.size;
 }
 
-static void *ptp_listen(void *addr, socklen_t addrlen, const char *ptp_mac, int ptp_port, int *state){
+static void *ptp_listen(void *addr, int addrlen, const char *ptp_mac, int ptp_port, int *state){
 	struct ptp_listen_session* session = NULL;
 	lock_sock_alloc_mutex();
 	for(int i = 0;i < sizeof(ptp_listen_sessions) / sizeof(ptp_listen_sessions[0]);i++){

@@ -35,4 +35,5 @@ jobs:
            client/aemu_postoffice.prx
            client/postoffice_client.h
            client/libaemu_postoffice_client.so
+           client/libaemu_postoffice_client.dll
         if-no-files-found: error

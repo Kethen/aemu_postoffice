@@ -1,11 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include <pthread.h>
 #include <unistd.h>
-
-#include <arpa/inet.h>
 
 #include "postoffice_client.h"
 
@@ -14,6 +13,31 @@
 }
 
 #define SERVER_PORT 27313
+#define INADDR_LOOPBACK 0x7f000001
+
+uint32_t htonl(uint32_t host){
+	uint32_t ret;
+	uint8_t *_ret = (uint8_t *)&ret;
+	uint8_t *_host = (uint8_t *)&host;
+
+	_ret[0] = _host[3];
+	_ret[1] = _host[2];
+	_ret[2] = _host[1];
+	_ret[3] = _host[0];
+
+	return ret;
+}
+
+uint16_t htons(uint16_t host){
+	uint16_t ret;
+	uint8_t *_ret = (uint8_t *)&ret;
+	uint8_t *_host = (uint8_t *)&host;
+
+	_ret[0] = _host[1];
+	_ret[1] = _host[0];
+
+	return ret;
+}
 
 void test_pdp(){
 	struct aemu_post_office_sock_addr local_addr = {
