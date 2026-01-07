@@ -48,9 +48,12 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	return sock;
 }
 
-int native_send_till_done(int fd, const char *buf, int len, bool non_block){
+int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool *abort){
 	int write_offset = 0;
 	while(write_offset != len){
+		if (*abort){
+			return NATIVE_SOCK_ABORTED;
+		}
 		int write_status = send(fd, &buf[write_offset], len - write_offset, MSG_DONTWAIT);
 		if (write_status == -1){
 			int err = errno;
@@ -71,9 +74,12 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block){
 	return write_offset;
 }
 
-int native_recv_till_done(int fd, char *buf, int len, bool non_block){
+int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abort){
 	int read_offset = 0;
 	while(read_offset != len){
+		if (*abort){
+			return NATIVE_SOCK_ABORTED;
+		}
 		int recv_status = recv(fd, &buf[read_offset], len - read_offset, MSG_DONTWAIT);
 		if (recv_status == 0){
 			return recv_status;

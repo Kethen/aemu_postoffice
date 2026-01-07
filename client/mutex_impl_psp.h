@@ -5,4 +5,6 @@ void init_sock_alloc_mutex();
 void lock_sock_alloc_mutex();
 void unlock_sock_alloc_mutex();
 
+void delay(int ms);
+
 #endif

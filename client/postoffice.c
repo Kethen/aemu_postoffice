@@ -29,7 +29,10 @@ struct pdp_session{
 	int16_t pdp_port;
 	int sock;
 	bool dead;
+	bool abort;
 	char recv_buf[2048];
+	bool recving;
+	bool sending;
 };
 
 struct ptp_listen_session{
@@ -37,16 +40,21 @@ struct ptp_listen_session{
 	int16_t ptp_port;
 	int sock;
 	bool dead;
+	bool abort;
 	char addr[sizeof(native_sock6_addr) > sizeof(native_sock_addr) ? sizeof(native_sock6_addr) : sizeof(native_sock_addr)];
 	int addrlen;
+	bool accepting;
 };
 
 struct ptp_session{
 	int sock;
 	bool dead;
+	bool abort;
 	char recv_buf[50 * 1024];
 	int outstanding_data_size;
 	int outstanding_data_offset;
+	bool recving;
+	bool sending;
 };
 
 // wonder if games will actually use more than this
@@ -72,7 +80,8 @@ static int create_and_init_socket(void *addr, int addrlen, const char *init_pack
 		return sock;
 	}
 
-	int write_status = native_send_till_done(sock, (char *)init_packet, init_packet_len, false);
+	bool abort = false;
+	int write_status = native_send_till_done(sock, (char *)init_packet, init_packet_len, false, &abort);
 	if (write_status == -1){
 		LOG("%s: failed sending init packet\n", caller_name);
 		native_close_tcp_sock(sock);
@@ -117,6 +126,9 @@ static void *pdp_create(void *addr, int addrlen, const char *pdp_mac, int pdp_po
 	session->pdp_port = pdp_port;
 	session->sock = sock;
 	session->dead = false;
+	session->abort = false;
+	session->recving = false;
+	session->sending = false;
 
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	return session;
@@ -141,7 +153,7 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 		return -1;
 	}
 	struct pdp_session *session = (struct pdp_session *)pdp_handle;
-	if (session->dead){
+	if (session->dead || session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -157,9 +169,15 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 	};
 	memcpy(pdp_header.addr, pdp_mac, 6);
 
-	int send_status = native_send_till_done(session->sock, (char *)&pdp_header, sizeof(pdp_header), non_block);
+	session->sending = true;
+	int send_status = native_send_till_done(session->sock, (char *)&pdp_header, sizeof(pdp_header), non_block, &session->abort);
+	session->sending = false;
 	if (send_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+	}
+	if (send_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (send_status < 0){
@@ -170,7 +188,13 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	send_status = native_send_till_done(session->sock, buf, len, false);
+	session->sending = true;
+	send_status = native_send_till_done(session->sock, buf, len, false, &session->abort);
+	session->sending = false;
+	if (send_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
 
 	if (send_status < 0){
 		// Error
@@ -188,7 +212,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 		return -1;
 	}
 	struct pdp_session *session = (struct pdp_session *)pdp_handle;
-	if (session->dead){
+	if (session->dead || session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}	
 
@@ -197,9 +221,15 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	}
 
 	struct aemu_postoffice_pdp pdp_header;
-	int recv_status = native_recv_till_done(session->sock, (char *)&pdp_header, sizeof(pdp_header), non_block);
+	session->recving = true;
+	int recv_status = native_recv_till_done(session->sock, (char *)&pdp_header, sizeof(pdp_header), non_block, &session->abort);
+	session->recving = false;
 	if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+	}
+	if (recv_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (recv_status == 0){
@@ -227,7 +257,13 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	if (pdp_port != NULL)
 		*pdp_port = pdp_header.port;
 
-	recv_status = native_recv_till_done(session->sock, session->recv_buf, pdp_header.size, false);
+	session->recving = true;
+	recv_status = native_recv_till_done(session->sock, session->recv_buf, pdp_header.size, false, &session->abort);
+	session->recving = false;
+	if (recv_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
@@ -255,6 +291,15 @@ void pdp_delete(void *pdp_handle){
 		return;
 	}
 	struct pdp_session *session = (struct pdp_session *)pdp_handle;
+
+	// abort on-going ops
+	session->abort = true;
+
+	// make sure we are clear of send/recv operations
+	do{
+		delay(50);
+	}while(session->sending || session->recving);
+
 	if (!session->dead)
 		native_close_tcp_sock(session->sock);
 	session->sock = -1;
@@ -263,14 +308,19 @@ void pdp_delete(void *pdp_handle){
 int pdp_peek_next_size(void *pdp_handle){
 	struct pdp_session *session = pdp_handle;
 
-	if (session->dead == true){
+	if (session->dead || session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	aemu_postoffice_pdp header = {0};
+	session->recving = true;
 	int peek_result = native_peek(session->sock, (char *)&header, sizeof(header));
+	session->recving = false;
 	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return 0;
+	}
+	if (session->abort){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (peek_result <= 0){
@@ -323,6 +373,8 @@ static void *ptp_listen(void *addr, int addrlen, const char *ptp_mac, int ptp_po
 	memcpy(session->addr, addr, addrlen);
 	session->addrlen = addrlen;
 	session->dead = false;
+	session->abort = false;
+	session->accepting = false;
 
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	return session;
@@ -355,7 +407,14 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	}
 
 	struct aemu_postoffice_ptp_connect connect_packet;
-	int recv_status = native_recv_till_done(session->sock, (char *)&connect_packet, sizeof(connect_packet), nonblock);
+	session->accepting = true;
+	int recv_status = native_recv_till_done(session->sock, (char *)&connect_packet, sizeof(connect_packet), nonblock, &session->abort);
+	session->accepting = false;
+	if (recv_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		*state = AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+		return NULL;
+	}
 	if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 		return NULL;
@@ -408,7 +467,8 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	}
 
 	// Consume the ack packet
-	int read_status = native_recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false);
+	bool abort = false;
+	int read_status = native_recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false, &abort);
 	if (read_status == 0){
 		LOG("%s: remove closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
@@ -427,6 +487,9 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	// Now the session is ready
 	new_session->sock = sock;
 	new_session->dead = false;
+	new_session->abort = false;
+	new_session->sending = false;
+	new_session->recving = false;
 	new_session->outstanding_data_size = 0;
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	*ptp_port = connect_packet.port;
@@ -469,7 +532,8 @@ static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int p
 
 	// Consume the ack packet
 	struct aemu_postoffice_ptp_connect connect_packet;
-	int read_status = native_recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false);
+	bool abort = false;
+	int read_status = native_recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false, &abort);
 	if (read_status == 0){
 		LOG("%s: remove closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
@@ -488,6 +552,9 @@ static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int p
 	// Now the session is ready
 	new_session->sock = sock;
 	new_session->dead = false;
+	new_session->abort = false;
+	new_session->sending = false;
+	new_session->recving = false;
 	new_session->outstanding_data_size = 0;
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	return new_session;
@@ -513,7 +580,7 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 	}
 
 	struct ptp_session *session = (struct ptp_session *)ptp_handle;
-	if (session->dead){
+	if (session->dead || session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -526,7 +593,13 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 		.size = len
 	};
 
-	int send_status = native_send_till_done(session->sock, (char *)&header, sizeof(header), non_block);
+	session->sending = true;
+	int send_status = native_send_till_done(session->sock, (char *)&header, sizeof(header), non_block, &session->abort);
+	session->sending = false;
+	if (send_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
 	if (send_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 	}
@@ -538,7 +611,13 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	send_status = native_send_till_done(session->sock, buf, len, false);
+	session->sending = true;
+	send_status = native_send_till_done(session->sock, buf, len, false, &session->abort);
+	session->sending = false;
+	if (send_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
 	if (send_status < 0){
 		LOG("%s: failed sending data\n", __func__);
 		native_close_tcp_sock(session->sock);
@@ -555,7 +634,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	struct ptp_session *session = (struct ptp_session *)ptp_handle;
-	if (session->dead){
+	if (session->dead || session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
@@ -579,9 +658,14 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	struct aemu_postoffice_ptp_data header = {0};
-	
 
-	int recv_status = native_recv_till_done(session->sock, (char *)&header, sizeof(header), non_block);
+	session->recving = true;
+	int recv_status = native_recv_till_done(session->sock, (char *)&header, sizeof(header), non_block, &session->abort);
+	session->recving = false;
+	if (recv_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
 	if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 	}
@@ -607,7 +691,13 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	recv_status = native_recv_till_done(session->sock, session->recv_buf, header.size, false);
+	session->recving = true;
+	recv_status = native_recv_till_done(session->sock, session->recv_buf, header.size, false, &session->abort);
+	session->recving = false;
+	if (recv_status == NATIVE_SOCK_ABORTED){
+		// getting aborted
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
 
 	if (recv_status == 0){
 		LOG("%s: remote closed the socket\n", __func__);
@@ -639,6 +729,15 @@ void ptp_close(void *ptp_handle){
 	}
 
 	struct ptp_session *session = (struct ptp_session *)ptp_handle;
+
+	// abort on-going ops
+	session->abort = true;
+
+	// make sure we are clear of send/recv operations
+	do{
+		delay(50);
+	}while(session->sending || session->recving);
+
 	if (!session->dead)
 		native_close_tcp_sock(session->sock);
 	session->sock = -1;
@@ -650,6 +749,15 @@ void ptp_listen_close(void *ptp_listen_handle){
 	}
 
 	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
+
+	// abort on-going ops
+	session->abort = true;
+
+	// make sure we are clear of send/recv operations
+	do{
+		delay(50);
+	}while(session->accepting);
+
 	if (!session->dead)
 		native_close_tcp_sock(session->sock);
 	session->sock = -1;

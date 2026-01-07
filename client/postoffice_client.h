@@ -26,6 +26,17 @@ struct aemu_post_office_sock6_addr{
 
 int aemu_post_office_init();
 
+/*
+ * Thread safety:
+ * multiple threads can perform create/listen/connect
+ * only one thread at a time can accept on a created socket
+ * only one thread at a time can send on a created socket
+ * only one thread at a time can recv/peek on a created socket
+ * only one thread at a time can close a created socket
+ *
+ * violating the above yields undefined results
+ */
+
 void *pdp_create_v6(const struct aemu_post_office_sock6_addr *addr, const char *pdp_mac, int pdp_port, int *state);
 void *pdp_create_v4(const struct aemu_post_office_sock_addr *addr, const char *pdp_mac, int pdp_port, int *state);
 void pdp_delete(void *pdp_handle);

@@ -10,3 +10,7 @@ void lock_sock_alloc_mutex(){
 void unlock_sock_alloc_mutex(){
 	sceKernelUnlockLwMutex(&sock_alloc_mutex, 1);
 }
+
+void delay(int ms){
+	sceKernelDelayThread(ms * 1000);
+}
