@@ -68,6 +68,13 @@ void test_pdp(){
 		exit(1);
 	}
 
+	int dead_len = 0;
+	int dead_status = pdp_recv(pdp_handle_a_replace, NULL, NULL, NULL, &dead_len, false);
+	if (dead_status != AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
+		LOG("%s: expected dead session is not dead!\n", __func__);
+		exit(1);
+	}
+
 	sleep(1);
 	pdp_delete(pdp_handle_a_replace);
 
