@@ -426,15 +426,15 @@ status_server.on("request", (request, response) => {
 
 		switch(ctx.state){
 			case "pdp":
-				ret.pdp_state = ctx.pdp_state;
+				ret_entry.pdp_state = ctx.pdp_state;
 				break;
 			case "ptp_listen":
 				break;
 			case "ptp_accept":
 			case "ptp_connect":
-				ret.ptp_state = ctx.ptp_state;
-				ret.dst_addr = ctx.dst_addr_str;
-				ret.dst_port = ctx.dst_port;
+				ret_entry.ptp_state = ctx.ptp_state;
+				ret_entry.dst_addr = ctx.dst_addr_str;
+				ret_entry.dst_port = ctx.dst_port;
 				break;
 			default:
 				log(`bad state ${ctx.state} on status query, debug this`);
