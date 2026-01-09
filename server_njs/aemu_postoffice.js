@@ -421,7 +421,7 @@ status_server.on("request", (request, response) => {
 		ret_entry = {
 			state:ctx.state,
 			src_addr:ctx.src_addr_str,
-			src_port:ctx.src_port
+			sport:ctx.sport
 		};
 
 		switch(ctx.state){
@@ -434,7 +434,7 @@ status_server.on("request", (request, response) => {
 			case "ptp_connect":
 				ret_entry.ptp_state = ctx.ptp_state;
 				ret_entry.dst_addr = ctx.dst_addr_str;
-				ret_entry.dst_port = ctx.dst_port;
+				ret_entry.dport = ctx.dport;
 				break;
 			default:
 				log(`bad state ${ctx.state} on status query, debug this`);
