@@ -21,7 +21,3 @@ void unlock_sock_alloc_mutex(){
 		ReleaseMutex(sock_alloc_mutex);
 	}
 }
-
-void delay(int ms){
-	Sleep(ms);
-}
