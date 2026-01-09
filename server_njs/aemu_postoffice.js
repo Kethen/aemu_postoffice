@@ -447,7 +447,7 @@ status_server.on("request", (request, response) => {
 		ret[entry[1].src_addr_str].push(ret_entry);
 	}
 
-	response.writeHead(200, {"Content-Type": "application/json"});
+	response.writeHead(200, {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
 	response.end(JSON.stringify(ret));
 });
 
