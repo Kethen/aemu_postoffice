@@ -1,5 +1,7 @@
 const net = require('node:net');
+const http = require('node:http');
 const port = 27313
+const status_port = 27314;
 
 const AEMU_POSTOFFICE_INIT_PDP = 0;
 const AEMU_POSTOFFICE_INIT_PTP_LISTEN = 1;
@@ -207,6 +209,9 @@ let create_session = (ctx) => {
 	ctx.dst_addr = dst_addr;
 	ctx.dport = dport;
 
+	ctx.src_addr_str = get_mac_str(ctx.src_addr);
+	ctx.dst_addr_str = get_mac_str(ctx.dst_addr);
+
 	delete ctx.init_data;
 
 	switch(type){
@@ -315,6 +320,7 @@ let on_connection = (socket) => {
 			case "ptp_listen":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
 				ctx.socket.destroy();
+				delete sessions[ctx.session_name];
 				break;
 			case "ptp_accept":
 			case "ptp_connect":
@@ -337,7 +343,8 @@ let on_connection = (socket) => {
 			case "ptp_listen":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
 				ctx.socket.destroy();
-				break;				
+				delete sessions[ctx.session_name];
+				break;
 			case "ptp_accept":
 			case "ptp_connect":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
@@ -399,5 +406,54 @@ log(`begin listening on port ${port}`);
 
 server.listen({
 	port:port,
+	backlog:1000
+});
+
+let status_server = http.createServer();
+status_server.on("error", (err) => {
+	throw err;
+});
+
+status_server.on("request", (request, response) => {
+	let ret = {};
+	for (let entry of Object.entries(sessions)){
+		let ctx = entry[1];
+		ret_entry = {
+			state:ctx.state,
+			src_addr:ctx.src_addr_str,
+			src_port:ctx.src_port
+		};
+
+		switch(ctx.state){
+			case "pdp":
+				ret.pdp_state = ctx.pdp_state;
+				break;
+			case "ptp_listen":
+				break;
+			case "ptp_accept":
+			case "ptp_connect":
+				ret.ptp_state = ctx.ptp_state;
+				ret.dst_addr = ctx.dst_addr_str;
+				ret.dst_port = ctx.dst_port;
+				break;
+			default:
+				log(`bad state ${ctx.state} on status query, debug this`);
+				process.exit(1);
+		}
+
+		if (ret[entry[1].src_addr_str] == undefined){
+			ret[entry[1].src_addr_str] = [];
+		}
+		ret[entry[1].src_addr_str].push(ret_entry);
+	}
+
+	response.writeHead(200, {"Content-Type": "application/json"});
+	response.end(JSON.stringify(ret));
+});
+
+log(`begin listening on port ${status_port} for server status`)
+
+status_server.listen({
+	port:status_port,
 	backlog:1000
 });
