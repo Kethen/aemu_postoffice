@@ -24,6 +24,10 @@ struct aemu_post_office_sock6_addr{
 	uint16_t port; // network order
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int aemu_post_office_init();
 
 /*
@@ -57,5 +61,9 @@ int ptp_peek_next_size(void *ptp_handle);
 int pdp_get_native_sock(void *pdp_handle);
 int ptp_get_native_sock(void *ptp_handle);
 int ptp_listen_get_native_sock(void *ptp_listen_handle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
