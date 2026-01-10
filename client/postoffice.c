@@ -656,7 +656,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	if (*len > sizeof(session->recv_buf)){
-		LOG("%s: failed receiving data, data too big, %d\n", __func__, len);
+		LOG("%s: failed receiving data, data too big, %d\n", __func__, *len);
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
 
@@ -798,14 +798,19 @@ int ptp_listen_get_native_sock(void *ptp_listen_handle){
 int ptp_peek_next_size(void *ptp_handle){
 	struct ptp_session *session = ptp_handle;
 
-	if (session->dead == true){
+	if (session->dead || session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	aemu_postoffice_ptp_data header = {0};
+	session->recving = true;
 	int peek_result = native_peek(session->sock, (char *)&header, sizeof(header));
+	session->recving = false;
 	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return 0;
+	}
+	if (session->abort){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (peek_result <= 0){
