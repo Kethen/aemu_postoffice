@@ -40,14 +40,14 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	native_sock_addr *native_addr = addr;
 	int sock = socket(native_addr->sin_family, SOCK_STREAM, 0);
 	if (sock == -1){
-		LOG("%s: failed creating socket, %d\n", __func__, GetLastError());
+		LOG("%s: failed creating socket, %d\n", __func__, WSAGetLastError());
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
 
 	// Connect
 	int connect_status = connect(sock, addr, addrlen);
 	if (connect_status == -1){
-		LOG("%s: failed connecting, %d\n", __func__, GetLastError());
+		LOG("%s: failed connecting, %d\n", __func__, WSAGetLastError());
 		closesocket(sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
@@ -69,8 +69,8 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool
 		}
 		int write_status = send(fd, &buf[write_offset], len - write_offset, 0);
 		if (write_status == -1){
-			int err = GetLastError();
-			if (err == WSAEWOULDBLOCK){
+			int err = WSAGetLastError();
+			if (err == WSAEWOULDBLOCK || err == WSAEINPROGRESS){
 				if (non_block && write_offset == 0){
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
@@ -98,8 +98,8 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abor
 			return recv_status;
 		}
 		if (recv_status < 0){
-			int err = GetLastError();
-			if (err == WSAEWOULDBLOCK){
+			int err = WSAGetLastError();
+			if (err == WSAEWOULDBLOCK || err == WSAEINPROGRESS){
 				if (non_block && read_offset == 0){
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
@@ -126,11 +126,11 @@ int native_peek(int fd, char *buf, int len){
 		return 0;
 	}
 	if (read_result == -1){
-		int err = errno;
-		if (err == EAGAIN || err == EWOULDBLOCK){
+		int err = WSAGetLastError();
+		if (err == WSAEWOULDBLOCK || err == WSAEINPROGRESS){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 		}
-		LOG("%s: failed peeking, %d\n", __func__, GetLastError());
+		LOG("%s: failed peeking, %d\n", __func__, WSAGetLastError());
 		return -1;
 	}
 	return read_result;
