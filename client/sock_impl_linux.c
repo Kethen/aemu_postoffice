@@ -3,6 +3,7 @@
 #include <sys/socket.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -33,10 +34,6 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
 
-	// Set socket options
-	int sockopt = 1;
-	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, sizeof(sockopt));
-
 	// Connect
 	int connect_status = connect(sock, addr, addrlen);
 	if (connect_status == -1){
@@ -44,6 +41,13 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 		close(sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
+
+	// Set socket options
+	int sockopt = 1;
+	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, sizeof(sockopt));
+	int flags = fcntl(sock, F_GETFL, 0);
+	flags |= O_NONBLOCK;
+	fcntl(sock, F_SETFL, flags);
 
 	return sock;
 }
@@ -54,7 +58,7 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool
 		if (*abort){
 			return NATIVE_SOCK_ABORTED;
 		}
-		int write_status = send(fd, &buf[write_offset], len - write_offset, MSG_DONTWAIT);
+		int write_status = send(fd, &buf[write_offset], len - write_offset, 0);
 		if (write_status == -1){
 			int err = errno;
 			if (err == EAGAIN || err == EWOULDBLOCK){
@@ -80,7 +84,7 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abor
 		if (*abort){
 			return NATIVE_SOCK_ABORTED;
 		}
-		int recv_status = recv(fd, &buf[read_offset], len - read_offset, MSG_DONTWAIT);
+		int recv_status = recv(fd, &buf[read_offset], len - read_offset, 0);
 		if (recv_status == 0){
 			return recv_status;
 		}
@@ -108,7 +112,7 @@ int native_close_tcp_sock(int sock){
 }
 
 int native_peek(int fd, char *buf, int len){
-	int read_result = recv(fd, buf, len, MSG_DONTWAIT | MSG_PEEK);
+	int read_result = recv(fd, buf, len, MSG_PEEK);
 	if (read_result == 0){
 		return 0;
 	}
