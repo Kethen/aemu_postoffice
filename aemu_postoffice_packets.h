@@ -12,8 +12,10 @@ typedef enum{
 	AEMU_POSTOFFICE_INIT_PTP_ACCEPT
 } aemu_postoffice_init_type;
 
+#pragma pack(push, 1)
+
 // client -> server
-typedef struct __attribute__((packed)) aemu_postoffice_init{
+typedef struct aemu_postoffice_init{
 	int32_t init_type;
 	// 2 bytes on padding on the end, only 6 bytes are used
 	char src_addr[8];
@@ -24,7 +26,7 @@ typedef struct __attribute__((packed)) aemu_postoffice_init{
 } aemu_postoffice_init;
 
 // client <-> server
-typedef struct __attribute__((packed)) aemu_postoffice_pdp{
+typedef struct aemu_postoffice_pdp{
 	// 2 bytes on padding on the end
 	char addr[8];
 	uint16_t port;
@@ -32,14 +34,16 @@ typedef struct __attribute__((packed)) aemu_postoffice_pdp{
 } aemu_postoffice_pdp;
 
 // server -> client
-typedef struct __attribute__((packed)) aemu_postoffice_ptp_connect{
+typedef struct aemu_postoffice_ptp_connect{
 	// 2 bytes on padding on the end
 	char addr[8];
 	uint16_t port;
 } aemu_postoffice_ptp_connect;
 
-typedef struct __attribute__((packed)) aemu_postoffice_ptp_data{
+typedef struct aemu_postoffice_ptp_data{
 	uint32_t size;
 } aemu_postoffice_ptp_data;
+
+#pragma pack(pop)
 
 #endif

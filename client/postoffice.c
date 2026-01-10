@@ -4,7 +4,7 @@
 
 #include "postoffice_client.h"
 
-#ifdef __unix
+#if defined(__unix) || defined(__APPLE__)
 #include "log_linux.h"
 #include "sock_impl_linux.h"
 #include "mutex_impl_linux.h"
