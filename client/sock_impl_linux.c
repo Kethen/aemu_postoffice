@@ -10,7 +10,7 @@
 
 #include "postoffice_client.h"
 #include "sock_impl.h"
-#include "log_stdc.h"
+#include "log_impl.h"
 
 void to_native_sock_addr(native_sock_addr *dst, const struct aemu_post_office_sock_addr *src){
 	dst->sin_family = AF_INET;

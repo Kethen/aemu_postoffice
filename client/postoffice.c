@@ -4,14 +4,7 @@
 
 #include "postoffice_client.h"
 
-#ifdef __PSP__
-#include "log_psp.h"
-#endif
-
-#ifndef LOG
-#include "log_stdc.h"
-#endif
-
+#include "log_impl.h"
 #include "sock_impl.h"
 #include "mutex_impl.h"
 #include "delay_impl.h"

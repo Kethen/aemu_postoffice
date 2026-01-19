@@ -2,9 +2,7 @@
 
 #include <stdint.h>
 
-#include "log_psp.h"
 #include "postoffice_client.h"
-
 
 #define MODULE_NAME "aemu_postoffice_client"
 
