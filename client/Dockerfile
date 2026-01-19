@@ -1,6 +1,6 @@
 FROM ubuntu:24.04
 RUN export noninteractive; apt update; apt install -y wget libreadline8 libusb-0.1-4 tmux make libmpc3
-RUN export noninteractive; apt update; apt install -y gcc libsqlite3-dev gcc-mingw-w64-x86-64-win32
+RUN export noninteractive; apt update; apt install -y gcc libsqlite3-dev gcc-mingw-w64-x86-64-win32 g++-mingw-w64-x86-64-win32
 
 # for compiling prxtool
 RUN export noninteractive; apt update; apt install -y automake autoconf g++ git

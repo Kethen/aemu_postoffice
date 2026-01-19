@@ -5,22 +5,24 @@
 #include "postoffice_client.h"
 
 #if defined(__unix) || defined(__APPLE__)
-#include "log_linux.h"
 #include "sock_impl_linux.h"
-#include "mutex_impl_linux.h"
 #endif
 
 #ifdef __PSP__
 #include "log_psp.h"
 #include "sock_impl_psp.h"
-#include "mutex_impl_psp.h"
 #endif
 
 #ifdef _WIN32
-#include "log_windows.h"
 #include "sock_impl_windows.h"
-#include "mutex_impl_windows.h"
 #endif
+
+#ifndef LOG
+#include "log_stdc.h"
+#endif
+
+#include "mutex_impl.h"
+#include "delay_impl.h"
 
 #include "../aemu_postoffice_packets.h"
 
