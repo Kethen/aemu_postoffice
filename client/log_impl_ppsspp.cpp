@@ -16,4 +16,8 @@ static int log_impl(const char *format, ...){
 	return 0;
 }
 
+extern "C" {
+
 int (*log_func)(const char *format, ...) = log_impl;
+
+}
