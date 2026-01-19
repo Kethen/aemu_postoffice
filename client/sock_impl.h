@@ -1,16 +1,29 @@
-#ifndef __SOCK_IMPL_WINDOWS_H
-#define __SOCK_IMPL_WINDOWS_H
+#ifndef __SOCK_IMPL_COMMON_H
+#define __SOCK_IMPL_COMMON_H
 
+#include <stdbool.h>
+
+#if defined(__unix) || defined(__APPLE__) || defined(__PSP__)
+#include <netinet/in.h>
+#endif
+
+#ifdef _WIN32
 #include <winsock2.h>
 #include <ws2ipdef.h>
-#include <stdbool.h>
+#include <windows.h>
+#endif
 
 #include "postoffice_client.h"
 
-#define NATIVE_SOCK_ABORTED -100
-
 typedef struct sockaddr_in native_sock_addr;
+
+#ifdef __PSP__
+typedef int native_sock6_addr;
+#else
 typedef struct sockaddr_in6 native_sock6_addr;
+#endif
+
+#define NATIVE_SOCK_ABORTED -100
 
 void to_native_sock_addr(native_sock_addr *dst, const struct aemu_post_office_sock_addr *src);
 void to_native_sock6_addr(native_sock6_addr *dst, const struct aemu_post_office_sock6_addr *src);

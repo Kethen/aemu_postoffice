@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "postoffice_client.h"
-#include "sock_impl_psp.h"
+#include "sock_impl.h"
 #include "log_psp.h"
 
 void to_native_sock_addr(native_sock_addr *dst, const struct aemu_post_office_sock_addr *src){
