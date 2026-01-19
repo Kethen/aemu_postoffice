@@ -45,20 +45,28 @@ struct ptp_session{
 };
 
 // wonder if games will actually use more than this
-// we pre-allocate so that we don't have to use heap, it's kinda big, TODO test if it's too big on a psp, in theory we have plenty on slims
-struct pdp_session pdp_sessions[32];
-struct ptp_listen_session ptp_listen_sessions[sizeof(pdp_sessions) / sizeof(pdp_sessions[0])];
-struct ptp_session ptp_sessions[sizeof(pdp_sessions) / sizeof(pdp_sessions[0])];
+#define NUM_PDP_SESSIONS 32
+#define NUM_PTP_LISTEN_SESSIONS NUM_PDP_SESSIONS
+#define NUM_PTP_SESSIONS NUM_PDP_SESSIONS
+
+struct pdp_session pdp_sessions[NUM_PDP_SESSIONS];
+struct ptp_listen_session ptp_listen_sessions[NUM_PTP_LISTEN_SESSIONS];
+struct ptp_session ptp_sessions[NUM_PTP_SESSIONS];
 
 int aemu_post_office_init(){
 	static bool first_run = true;
 	if (first_run){
 		first_run = false;
-		for (int i = 0;i < sizeof(pdp_sessions) / sizeof(pdp_sessions[0]);i++){
+		for (int i = 0;i < NUM_PDP_SESSIONS;i++){
 			pdp_sessions[i].sock = -1;
+		}
+		for (int i = 0;i < NUM_PTP_LISTEN_SESSIONS;i++){
 			ptp_listen_sessions[i].sock = -1;
+		}
+		for (int i = 0;i < NUM_PTP_SESSIONS;i++){
 			ptp_sessions[i].sock = -1;
 		}
+
 		init_sock_alloc_mutex();
 	}else{
 		// re-run, close all opened sessions
@@ -98,7 +106,7 @@ static int create_and_init_socket(void *addr, int addrlen, const char *init_pack
 static void *pdp_create(void *addr, int addrlen, const char *pdp_mac, int pdp_port, int *state){
 	struct pdp_session* session = NULL;
 	lock_sock_alloc_mutex();
-	for(int i = 0;i < sizeof(pdp_sessions) / sizeof(pdp_sessions[0]);i++){
+	for(int i = 0;i < NUM_PDP_SESSIONS;i++){
 		if (pdp_sessions[i].sock == -1){
 			session = &pdp_sessions[i];
 			session->sock = 0;
@@ -343,7 +351,7 @@ int pdp_peek_next_size(void *pdp_handle){
 static void *ptp_listen(void *addr, int addrlen, const char *ptp_mac, int ptp_port, int *state){
 	struct ptp_listen_session* session = NULL;
 	lock_sock_alloc_mutex();
-	for(int i = 0;i < sizeof(ptp_listen_sessions) / sizeof(ptp_listen_sessions[0]);i++){
+	for(int i = 0;i < NUM_PTP_LISTEN_SESSIONS;i++){
 		if (ptp_listen_sessions[i].sock == -1){
 			session = &ptp_listen_sessions[i];
 			session->sock = 0;
@@ -441,7 +449,7 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	// Allocate memory
 	struct ptp_session *new_session = NULL;
 	lock_sock_alloc_mutex();
-	for(int i = 0;i < sizeof(ptp_sessions) / sizeof(ptp_sessions[0]);i++){
+	for(int i = 0;i < NUM_PTP_SESSIONS;i++){
 		if (ptp_sessions[i].sock == -1){
 			new_session = &ptp_sessions[i];
 			new_session->sock = 0;
@@ -505,7 +513,7 @@ static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int p
 	// Allocate memory
 	struct ptp_session *new_session = NULL;
 	lock_sock_alloc_mutex();
-	for(int i = 0;i < sizeof(ptp_sessions) / sizeof(ptp_sessions[0]);i++){
+	for(int i = 0;i < NUM_PTP_SESSIONS;i++){
 		if (ptp_sessions[i].sock == -1){
 			new_session = &ptp_sessions[i];
 			new_session->sock = 0;
