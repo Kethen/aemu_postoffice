@@ -2,8 +2,10 @@ source /etc/profile.d/pspsdk.sh
 
 set -xe
 
-gcc_build_args="-Os -fno-builtin -G0 -Wall -fno-pic -I/usr/local/pspdev/psp/sdk/include -D_PSP_FW_VERSION=600"
-gcc_prx_args="-L/usr/local/pspdev/psp/sdk/lib -specs=/usr/local/pspdev/psp/sdk/lib/prxspecs -Wl,-q,-T/usr/local/pspdev/psp/sdk/lib/linkfile.prx -nostartfiles -Wl,-zmax-page-size=128"
+PSPDEV=${PSPDEV:-/usr/local/pspdev}
+
+gcc_build_args="-Os -fno-builtin -G0 -Wall -fno-pic -I$PSPDEV/psp/sdk/include -D_PSP_FW_VERSION=600"
+gcc_prx_args="-L$PSPDEV/psp/sdk/lib -specs=$PSPDEV/psp/sdk/lib/prxspecs -Wl,-q,-T$PSPDEV/psp/sdk/lib/linkfile.prx -nostartfiles -Wl,-zmax-page-size=128"
 gcc_prx_libs="-nostdlib -lpspuser -lpspsdk -lpspmodinfo -lpspnet_inet"
 
 psp-gcc $gcc_build_args -c log_impl_psp.c -o log_impl_psp.o
