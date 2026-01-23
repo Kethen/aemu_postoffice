@@ -113,11 +113,16 @@ let track_bandwidth = (ip, is_ptp, is_tx, size) => {
 
 // don't pull statistics into a scope with arrow function
 function output_statistics(){
+	let entries = Object.entries(statistics);
+	if (entries.length == 0){
+		return;
+	}
+
 	console.log(`--- usage statistics ${new Date()} of the last ${statistic_interval_ms / 1000 / 60} minutes ---`);
 
 	let interval_s = statistic_interval_ms / 1000;
 
-	for (let entry of Object.entries(statistics)){
+	for (let entry of entries){
 		let ip = entry[0];
 		let obj = entry[1];
 		console.log(`${ip}:`);
