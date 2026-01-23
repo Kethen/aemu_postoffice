@@ -2,6 +2,7 @@ const net = require('node:net');
 const http = require('node:http');
 const port = 27313
 const status_port = 27314;
+const statistic_interval_ms = 1000 * 60 * 2;
 
 const AEMU_POSTOFFICE_INIT_PDP = 0;
 const AEMU_POSTOFFICE_INIT_PTP_LISTEN = 1;
@@ -50,6 +51,113 @@ server.on("drop", (drop) => {
 	log(drop);
 });
 
+// simple tracking per interval statistics for now, a better picture requires a database
+let statistics = {};
+
+// don't pull statistics into a scope with arrow function
+function get_statistics_obj(ip){
+	let existing_obj = statistics[ip];
+	if (existing_obj != undefined){
+		return existing_obj;
+	}
+	let new_obj = {
+		ptp_connects:0,
+		ptp_listen_connects:0,
+		ptp_tx:0,
+		ptp_tx_ops:0,
+		ptp_rx:0,
+		ptp_rx_ops:0,
+		pdp_connects:0,
+		pdp_tx:0,
+		pdp_tx_ops:0,
+		pdp_rx:0,
+		pdp_rx_ops:0
+	};
+	statistics[ip] = new_obj;
+	return new_obj;
+}
+
+let track_connect = (ip, is_ptp, is_listen) => {
+	let statistics_obj = get_statistics_obj(ip);
+	if (is_ptp){
+		if (is_listen){
+			statistics_obj.ptp_listen_connects++;
+		}else{
+			statistics_obj.ptp_connects++;
+		}
+	}else{
+		statistics_obj.pdp_connects++;
+	}
+}
+
+let track_bandwidth = (ip, is_ptp, is_tx, size) => {
+	let statistics_obj = get_statistics_obj(ip);
+	if (is_ptp){
+		if (is_tx){
+			statistics_obj.ptp_tx += size;
+			statistics_obj.ptp_tx_ops++;
+		}else{
+			statistics_obj.ptp_rx += size;
+			statistics_obj.ptp_rx_ops++;
+		}
+	}else{
+		if (is_tx){
+			statistics_obj.pdp_tx += size;
+			statistics_obj.pdp_tx_ops++;
+		}else{
+			statistics_obj.pdp_rx += size;
+			statistics_obj.pdp_rx_ops++;
+		}
+	}
+}
+
+// don't pull statistics into a scope with arrow function
+function output_statistics(){
+	console.log(`--- usage statistics ${new Date()} of the last ${statistic_interval_ms / 1000 / 60} minutes ---`);
+
+	let interval_s = statistic_interval_ms / 1000;
+
+	for (let entry of Object.entries(statistics)){
+		let ip = entry[0];
+		let obj = entry[1];
+		console.log(`${ip}:`);
+
+		console.log(`  pdp connects ${obj.pdp_connects} avg ${obj.pdp_connects / interval_s}/s`);
+
+		console.log(`  pdp tx ops ${obj.pdp_tx_ops} avg ${obj.pdp_tx_ops / interval_s}/s`);
+		console.log(`  pdp tx ${obj.pdp_tx} bytes avg ${obj.pdp_tx / interval_s} bytes/s`);
+		console.log(`  pdp rx ops ${obj.pdp_rx_ops} avg ${obj.pdp_rx_ops / interval_s}/s`);
+		console.log(`  pdp rx ${obj.pdp_rx} bytes avg ${obj.pdp_rx / interval_s} bytes/s`);
+
+		console.log(`  ptp connects ${obj.ptp_connects} avg ${obj.ptp_connects / interval_s}/s`);
+		console.log(`  ptp listen connects ${obj.ptp_listen_connects} avg ${obj.ptp_listen_connects / interval_s}/s`);
+
+		console.log(`  ptp tx ops ${obj.ptp_tx_ops} avg ${obj.ptp_tx_ops / interval_s}/s`);
+		console.log(`  ptp tx ${obj.ptp_tx} bytes avg ${obj.ptp_tx / interval_s} bytes/s`);
+		console.log(`  ptp rx ops ${obj.ptp_rx_ops} avg ${obj.ptp_rx_ops / interval_s}/s`);
+		console.log(`  ptp rx ${obj.ptp_rx} bytes avg ${obj.ptp_rx / interval_s} bytes/s`);
+
+		total_connects = obj.pdp_connects + obj.ptp_connects + obj.ptp_listen_connects;
+		total_tx_ops = obj.pdp_tx_ops + obj.ptp_tx_ops;
+		total_rx_ops = obj.pdp_rx_ops + obj.ptp_rx_ops;
+		total_ops = total_tx_ops + total_rx_ops;
+		total_tx = obj.pdp_tx + obj.ptp_tx;
+		total_rx = obj.pdp_rx + obj.ptp_rx;
+		total_data = total_tx + total_rx;
+
+		console.log(`  total connects: ${total_connects} avg ${total_connects / interval_s}/s`);
+		console.log(`  total tx ops: ${total_tx_ops} avg ${total_tx_ops / interval_s}/s`);
+		console.log(`  total rx ops: ${total_rx_ops} avg ${total_rx_ops / interval_s}/s`);
+		console.log(`  total ops: ${total_ops} avg ${total_ops / interval_s}/s`);
+		console.log(`  total tx: ${total_tx} avg ${total_tx / interval_s} bytes/s`);
+		console.log(`  total rx: ${total_rx} avg ${total_rx / interval_s} bytes/s`);
+		console.log(`  total data: ${total_data} avg ${total_data / interval_s} bytes/s`);
+	}
+	statistics = {};
+}
+
+setInterval(output_statistics, statistic_interval_ms);
+
 let pdp_tick = (ctx) => {
 	let no_data = false;
 	while(!no_data){
@@ -97,7 +205,9 @@ let pdp_tick = (ctx) => {
 						size.writeUInt32LE(cur_data.length);
 
 						target_session.socket.write(Buffer.concat([addr, port, size, cur_data]));
+						track_bandwidth(target_session.ip, false, false, ctx.pdp_data_size);
 					}
+					track_bandwidth(ctx.ip, false, true, ctx.pdp_data_size);
 
 					ctx.pdp_state = "header";
 				}else{
@@ -154,6 +264,9 @@ let ptp_tick = (ctx) => {
 					size.writeUInt32LE(ctx.ptp_data_size);
 
 					ctx.peer_session.socket.write(Buffer.concat([size, cur_data]));
+					track_bandwidth(ctx.peer_session.ip, true, false, ctx.ptp_data_size);
+					track_bandwidth(ctx.ip, true, true, ctx.ptp_data_size);
+
 					ctx.ptp_state = "header";
 				}else{
 					no_data = true;
@@ -223,6 +336,7 @@ let create_session = (ctx) => {
 			ctx.pdp_state = "header";
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			track_connect(ctx.ip, false, false);
 			pdp_tick(ctx);
 			break;
 		}
@@ -232,6 +346,7 @@ let create_session = (ctx) => {
 			delete ctx.outstanding_data;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			track_connect(ctx.ip, true, true);
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
@@ -254,6 +369,7 @@ let create_session = (ctx) => {
 			delete ctx.outstanding_data;
 			listen_session.socket.write(Buffer.concat([src_addr, port]));
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			track_connect(ctx.ip, true, false);
 
 			setTimeout(() => {
 				if (ctx.ptp_state == "waiting"){
@@ -289,6 +405,8 @@ let create_session = (ctx) => {
 			connect_session.socket.write(Buffer.concat([ctx.src_addr, port]));
 			port.writeUInt16LE(dport);
 			ctx.socket.write(Buffer.concat([ctx.dst_addr, port]));
+			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			track_connect(ctx.ip, true, false);
 
 			ptp_tick(ctx);
 			ptp_tick(connect_session);
@@ -307,7 +425,8 @@ let on_connection = (socket) => {
 	let ctx = {
 		socket:socket,
 		init_data:Buffer.alloc(0),
-		state:"init"
+		state:"init",
+		ip:socket.remoteAddress
 	};
 
 	socket.on("error", (err) => {
