@@ -482,7 +482,7 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	bool abort = false;
 	int read_status = native_recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false, &abort);
 	if (read_status == 0){
-		LOG("%s: remove closed the socket during initial recv\n", __func__);
+		LOG("%s: remote closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		native_close_tcp_sock(sock);
 		new_session->sock = -1;
@@ -547,7 +547,7 @@ static void *ptp_connect(void *addr, int addrlen, const char *src_ptp_mac, int p
 	bool abort = false;
 	int read_status = native_recv_till_done(sock, (char *)&connect_packet, sizeof(connect_packet), false, &abort);
 	if (read_status == 0){
-		LOG("%s: remove closed the socket during initial recv\n", __func__);
+		LOG("%s: remote closed the socket during initial recv\n", __func__);
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		native_close_tcp_sock(sock);
 		new_session->sock = -1;

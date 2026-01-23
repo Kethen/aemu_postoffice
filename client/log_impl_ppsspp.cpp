@@ -8,10 +8,14 @@ static int log_impl(const char *format, ...){
 	char log_buf[2048] = {0};
 
 	va_start(args, format);
-	vsnprintf(log_buf, sizeof(log_buf), format, args);
+	int len = vsnprintf(log_buf, sizeof(log_buf), format, args);
 	va_end(args);
 
-	ERROR_LOG(Log::sceNet, "%s", log_buf);
+	if (len > 0){
+		// chew off the ending '\n' which is a standard in this project, but not in PPSSPP
+		log_buf[len - 1] = '\0';
+		ERROR_LOG(Log::sceNet, "%s", log_buf);
+	}
 
 	return 0;
 }
