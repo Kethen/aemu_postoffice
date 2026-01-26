@@ -290,7 +290,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	}
 
 	// We have data
-	memcpy(buf, session->recv_buf, *len);
+	memcpy(buf, session->recv_buf, pdp_header.size > *len ? *len : pdp_header.size);
 	if (pdp_header.size > *len){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC;
 	}
@@ -657,7 +657,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 
 	// check if we have outstanding transfer
 	if (session->outstanding_data_size != 0){
-		memcpy(buf, &session->recv_buf[session->outstanding_data_offset], *len);
+		memcpy(buf, &session->recv_buf[session->outstanding_data_offset], session->outstanding_data_size > *len ? *len : session->outstanding_data_size);
 		if (session->outstanding_data_size > *len){
 			session->outstanding_data_size -= *len;
 			session->outstanding_data_offset += *len;
@@ -725,7 +725,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	memcpy(buf, session->recv_buf, *len);
+	memcpy(buf, session->recv_buf, header.size > *len ? *len : header.size);
 	if (*len < header.size){
 		session->outstanding_data_offset = *len;
 		session->outstanding_data_size = header.size - *len;
