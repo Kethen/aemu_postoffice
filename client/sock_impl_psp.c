@@ -56,6 +56,7 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool
 			int err = sceNetInetGetErrno();
 			if (err == EAGAIN || err == EWOULDBLOCK){
 				if (non_block && write_offset == 0){
+					sceKernelDelayThread(0);
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
 				// Continue block sending, either in block mode or we already received part of the message
@@ -85,6 +86,7 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abor
 			int err = sceNetInetGetErrno();
 			if (err == EAGAIN || err == EWOULDBLOCK){
 				if (non_block && read_offset == 0){
+					sceKernelDelayThread(0);
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
 				// Continue block receving, either in block mode or we already received part of the message
