@@ -8,55 +8,16 @@
 #include "sock_impl.h"
 #include "mutex_impl.h"
 #include "delay_impl.h"
+#include "postoffice_mem.h"
 
 #include "../aemu_postoffice_packets.h"
-
-struct pdp_session{
-	char *pdp_mac[6];
-	int16_t pdp_port;
-	int sock;
-	bool dead;
-	bool abort;
-	char recv_buf[2048];
-	bool recving;
-	bool sending;
-};
-
-struct ptp_listen_session{
-	char *ptp_mac[6];
-	int16_t ptp_port;
-	int sock;
-	bool dead;
-	bool abort;
-	char addr[sizeof(native_sock6_addr) > sizeof(native_sock_addr) ? sizeof(native_sock6_addr) : sizeof(native_sock_addr)];
-	int addrlen;
-	bool accepting;
-};
-
-struct ptp_session{
-	int sock;
-	bool dead;
-	bool abort;
-	char recv_buf[50 * 1024];
-	int outstanding_data_size;
-	int outstanding_data_offset;
-	bool recving;
-	bool sending;
-};
-
-// wonder if games will actually use more than this
-#define NUM_PDP_SESSIONS 32
-#define NUM_PTP_LISTEN_SESSIONS NUM_PDP_SESSIONS
-#define NUM_PTP_SESSIONS NUM_PDP_SESSIONS
-
-struct pdp_session pdp_sessions[NUM_PDP_SESSIONS];
-struct ptp_listen_session ptp_listen_sessions[NUM_PTP_LISTEN_SESSIONS];
-struct ptp_session ptp_sessions[NUM_PTP_SESSIONS];
 
 int aemu_post_office_init(){
 	static bool first_run = true;
 	if (first_run){
 		first_run = false;
+		init_postoffice_mem();
+
 		for (int i = 0;i < NUM_PDP_SESSIONS;i++){
 			pdp_sessions[i].sock = -1;
 		}
