@@ -4,8 +4,7 @@
 #include <stdint.h>
 #include "sock_impl.h"
 
-#define PDP_BLOCK_MAX (10 * 1024)
-#define PTP_BLOCK_MAX (50 * 1024)
+#include "postoffice_client.h"
 
 struct pdp_session{
 	char *pdp_mac[6];
@@ -13,7 +12,7 @@ struct pdp_session{
 	int sock;
 	bool dead;
 	bool abort;
-	char recv_buf[PDP_BLOCK_MAX];
+	char recv_buf[AEMU_POSTOFFICE_PDP_BLOCK_MAX];
 	bool recving;
 	bool sending;
 };
@@ -33,7 +32,7 @@ struct ptp_session{
 	int sock;
 	bool dead;
 	bool abort;
-	char recv_buf[PTP_BLOCK_MAX];
+	char recv_buf[AEMU_POSTOFFICE_PTP_BLOCK_MAX];
 	int outstanding_data_size;
 	int outstanding_data_offset;
 	bool recving;

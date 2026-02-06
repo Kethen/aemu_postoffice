@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+// current limits on send/recv calls
+#define AEMU_POSTOFFICE_PDP_BLOCK_MAX (10 * 1024)
+#define AEMU_POSTOFFICE_PTP_BLOCK_MAX (50 * 1024)
+
 enum aemu_postoffice_client_errors {
 	AEMU_POSTOFFICE_CLIENT_OK = 0,
 	AEMU_POSTOFFICE_CLIENT_UNKNOWN = -1,
