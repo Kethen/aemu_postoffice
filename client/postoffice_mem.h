@@ -40,6 +40,10 @@ struct ptp_session{
 	bool sending;
 };
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern int NUM_PDP_SESSIONS;
 extern int NUM_PTP_LISTEN_SESSIONS;
 extern int NUM_PTP_SESSIONS;
@@ -49,5 +53,9 @@ extern struct ptp_listen_session *ptp_listen_sessions;
 extern struct ptp_session *ptp_sessions;
 
 void init_postoffice_mem();
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
