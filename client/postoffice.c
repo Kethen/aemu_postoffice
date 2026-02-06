@@ -189,7 +189,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}	
 
-	if (*len > 2048){
+	if (*len > sizeof(session->recv_buf)){
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
 

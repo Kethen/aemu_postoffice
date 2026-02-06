@@ -4,13 +4,16 @@
 #include <stdint.h>
 #include "sock_impl.h"
 
+#define PDP_BLOCK_MAX (10 * 1024)
+#define PTP_BLOCK_MAX (50 * 1024)
+
 struct pdp_session{
 	char *pdp_mac[6];
 	int16_t pdp_port;
 	int sock;
 	bool dead;
 	bool abort;
-	char recv_buf[2048];
+	char recv_buf[PDP_BLOCK_MAX];
 	bool recving;
 	bool sending;
 };
@@ -30,7 +33,7 @@ struct ptp_session{
 	int sock;
 	bool dead;
 	bool abort;
-	char recv_buf[50 * 1024];
+	char recv_buf[PTP_BLOCK_MAX];
 	int outstanding_data_size;
 	int outstanding_data_offset;
 	bool recving;

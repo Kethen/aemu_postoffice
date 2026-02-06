@@ -9,6 +9,9 @@ const AEMU_POSTOFFICE_INIT_PTP_LISTEN = 1;
 const AEMU_POSTOFFICE_INIT_PTP_CONNECT = 2;
 const AEMU_POSTOFFICE_INIT_PTP_ACCEPT = 3;
 
+const PDP_BLOCK_MAX = 10 * 1024;
+const PTP_BLOCK_MAX = 50 * 1024;
+
 process.on('SIGTERM', () => {
    process.exit(1); 
 });
@@ -180,7 +183,7 @@ let pdp_tick = (ctx) => {
 					port = port.readUInt16LE();
 					size = size.readUInt32LE();
 
-					if (size >= 4096){
+					if (size > PDP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
 						ctx.socket.destroy();
 						delete sessions[ctx.session_name];
@@ -247,7 +250,7 @@ let ptp_tick = (ctx) => {
 					ctx.ptp_data = ctx.ptp_data.slice(4);
 
 					let size = cur_data.readUInt32LE();
-					if (size > 50 * 1024 * 2){
+					if (size > PTP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
 						close_ptp(ctx);
 						return;
