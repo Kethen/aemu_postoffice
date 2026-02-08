@@ -31,14 +31,18 @@ int aemu_post_office_init(){
 		init_sock_alloc_mutex();
 	}else{
 		// re-run, close all opened sessions
-		for (int i = 0;i < sizeof(pdp_sessions) / sizeof(pdp_sessions[0]);i++){
-			if (pdp_sessions[i].sock != -1){
+		for (int i = 0;i < NUM_PDP_SESSIONS;i++){
+			if(pdp_sessions[i].sock != -1){
 				pdp_delete(&pdp_sessions[i]);
 			}
-			if (ptp_listen_sessions[i].sock != -1){
+		}
+		for (int i = 0;i < NUM_PTP_LISTEN_SESSIONS;i++){
+			if(ptp_listen_sessions[i].sock != -1){
 				ptp_listen_close(&ptp_listen_sessions[i]);
 			}
-			if (ptp_sessions[i].sock != -1){
+		}
+		for (int i = 0;i < NUM_PTP_SESSIONS;i++){
+			if(ptp_sessions[i].sock != -1){
 				ptp_close(&ptp_sessions[i]);
 			}
 		}
