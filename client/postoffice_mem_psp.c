@@ -3,7 +3,7 @@
 
 #include <pspsysmem.h>
 
-#define SESSIONS_PER_TYPE 4
+#define SESSIONS_PER_TYPE 8
 #define SESSIONS_PER_TYPE_HIGHMEM 32
 
 int NUM_PDP_SESSIONS = 0;
@@ -15,6 +15,7 @@ struct ptp_listen_session *ptp_listen_sessions = NULL;
 struct ptp_session *ptp_sessions = NULL;
 
 int has_high_mem();
+int partition_to_use();
 
 void init_postoffice_mem(){
 	int sessions_per_type = SESSIONS_PER_TYPE_HIGHMEM;
@@ -23,9 +24,9 @@ void init_postoffice_mem(){
 	}
 	LOG("%s: allocating for %d sessions per type\n", __func__, sessions_per_type);
 
-	SceUID uid_pdp = sceKernelAllocPartitionMemory(2, "postoffice_pdp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct pdp_session), (void *)4 /* alignment */);
-	SceUID uid_ptp_listen = sceKernelAllocPartitionMemory(2, "postoffice_ptp_listen_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_listen_session), (void *)4 /* alignment */);
-	SceUID uid_ptp = sceKernelAllocPartitionMemory(2, "postoffice_ptp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_session), (void *)4 /* alignment */);
+	SceUID uid_pdp = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_pdp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct pdp_session), (void *)4 /* alignment */);
+	SceUID uid_ptp_listen = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_ptp_listen_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_listen_session), (void *)4 /* alignment */);
+	SceUID uid_ptp = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_ptp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_session), (void *)4 /* alignment */);
 
 	if (uid_pdp >= 0){
 		pdp_sessions = sceKernelGetBlockHeadAddr(uid_pdp);
