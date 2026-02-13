@@ -3,7 +3,7 @@
 
 #include <pspsysmem.h>
 
-#define SESSIONS_PER_TYPE 8
+#define SESSIONS_PER_TYPE 4
 #define SESSIONS_PER_TYPE_HIGHMEM 32
 
 int NUM_PDP_SESSIONS = 0;
