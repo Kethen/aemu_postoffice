@@ -191,13 +191,40 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 	struct pdp_session *session = (struct pdp_session *)pdp_handle;
 	if (session->dead || session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}	
+	}
 
 	if (*len > sizeof(session->recv_buf)){
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
 
 	struct aemu_postoffice_pdp pdp_header;
+
+	if (non_block){
+		// take a peek at the message
+		int peek_len = native_peek(session->sock, (char *)&pdp_header, sizeof(pdp_header));
+		if (peek_len == -1){
+			native_close_tcp_sock(session->sock);
+			session->dead = true;
+			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+		}
+		if (peek_len != sizeof(pdp_header)){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+
+		int full_message_len = pdp_header.size + sizeof(pdp_header);
+		int min_len = full_message_len > 2048 ? 2048 : full_message_len;
+
+		peek_len = native_peek(session->sock, session->recv_buf, min_len);
+		if (peek_len == -1){
+			native_close_tcp_sock(session->sock);
+			session->dead = true;
+			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+		}
+		if (peek_len != min_len){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+	}
+
 	session->recving = true;
 	int recv_status = native_recv_till_done(session->sock, (char *)&pdp_header, sizeof(pdp_header), non_block, &session->abort);
 	session->recving = false;
@@ -635,6 +662,32 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	struct aemu_postoffice_ptp_data header = {0};
+
+	if (non_block){
+		// take a peek at the message
+		int peek_len = native_peek(session->sock, (char *)&header, sizeof(header));
+		if (peek_len == -1){
+			native_close_tcp_sock(session->sock);
+			session->dead = true;
+			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+		}
+		if (peek_len != sizeof(header)){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+
+		int full_message_len = header.size + sizeof(header);
+		int min_len = full_message_len > 2048 ? 2048 : full_message_len;
+
+		peek_len = native_peek(session->sock, session->recv_buf, min_len);
+		if (peek_len == -1){
+			native_close_tcp_sock(session->sock);
+			session->dead = true;
+			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+		}
+		if (peek_len != min_len){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+	}
 
 	session->recving = true;
 	int recv_status = native_recv_till_done(session->sock, (char *)&header, sizeof(header), non_block, &session->abort);
