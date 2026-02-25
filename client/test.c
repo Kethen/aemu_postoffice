@@ -13,7 +13,7 @@
 }
 
 #define SERVER_PORT 27313
-#define INADDR_LOOPBACK 0x7f000001
+#define TARGET_INADDR (127 << 24 | 0 << 16 | 0 << 8 | 1)
 
 uint32_t htonl(uint32_t host){
 	uint32_t ret;
@@ -41,7 +41,7 @@ uint16_t htons(uint16_t host){
 
 void test_pdp(){
 	struct aemu_post_office_sock_addr local_addr = {
-		.addr = htonl(INADDR_LOOPBACK),
+		.addr = htonl(TARGET_INADDR),
 		.port = htons(SERVER_PORT)
 	};
 	static const char pdp_mac_a[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
@@ -296,7 +296,7 @@ void *accept_ptp_connection(void *arg){
 
 void test_ptp(){
 	struct aemu_post_office_sock_addr local_addr = {
-		.addr = htonl(INADDR_LOOPBACK),
+		.addr = htonl(TARGET_INADDR),
 		.port = htons(SERVER_PORT)
 	};
 	static const char ptp_mac_a[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
