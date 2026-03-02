@@ -20,6 +20,8 @@ void to_native_sock6_addr(native_sock6_addr *dst, const struct aemu_post_office_
 	// cannot do this on psp
 }
 
+int has_high_mem();
+
 int native_connect_tcp_sock(void *addr, int addrlen){
 	native_sock_addr *native_addr = addr;
 	int sock = sceNetInetSocket(native_addr->sin_family, SOCK_STREAM, 0);
@@ -31,7 +33,17 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 
 	// Set socket options
 	int sockopt = 1;
-	sceNetInetSetsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, sizeof(sockopt));
+	int set_status = sceNetInetSetsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, sizeof(sockopt));
+	//LOG("%s: IPPROTO_TCP TCP_NODELAY %d, 0x%x\n", __func__, sockopt, set_status);
+	if (has_high_mem()){
+		// we have enlarged network heap!
+		sockopt = 16384;
+		set_status = sceNetInetSetsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sockopt, sizeof(sockopt));
+		//LOG("%s: SOL_SOCKET SO_SNDBUF %d, 0x%x\n", __func__, sockopt, set_status);
+		sockopt = 65535;
+		set_status = sceNetInetSetsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, sizeof(sockopt));
+		//LOG("%s: SOL_SOCKET SO_RCVBUF %d, 0x%x\n", __func__, sockopt, set_status);
+	}
 
 	// Connect
 	int connect_status = sceNetInetConnect(sock, addr, addrlen);
