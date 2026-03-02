@@ -37,10 +37,10 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	//LOG("%s: IPPROTO_TCP TCP_NODELAY %d, 0x%x\n", __func__, sockopt, set_status);
 	if (has_high_mem()){
 		// we have enlarged network heap!
-		sockopt = 16384;
+		sockopt = 1024 * 64;
 		set_status = sceNetInetSetsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sockopt, sizeof(sockopt));
 		//LOG("%s: SOL_SOCKET SO_SNDBUF %d, 0x%x\n", __func__, sockopt, set_status);
-		sockopt = 65535;
+		sockopt = 1024 * 64;
 		set_status = sceNetInetSetsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, sizeof(sockopt));
 		//LOG("%s: SOL_SOCKET SO_RCVBUF %d, 0x%x\n", __func__, sockopt, set_status);
 	}
