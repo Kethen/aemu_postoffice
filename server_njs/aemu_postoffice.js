@@ -1,5 +1,6 @@
 const net = require('node:net');
 const http = require('node:http');
+
 const port = 27313
 const status_port = 27314;
 const statistic_interval_ms = 1000 * 60 * 2;
@@ -21,6 +22,11 @@ process.on('SIGINT', () => {
 });
 
 let sessions = {};
+let sessions_by_mac = {};
+
+let adhocctl_data = {};
+let adhocctl_groups_by_mac = {};
+let adhocctl_players_by_mac = {};
 
 let get_mac_str = (mac) => {
 	let ret = ""
@@ -166,6 +172,24 @@ function output_statistics(){
 
 setInterval(output_statistics, statistic_interval_ms);
 
+function close_pdp_or_ptp_listen(ctx){
+	ctx.socket.destroy();
+	delete sessions[ctx.session_name];
+	let sessions_of_this_mac = sessions_by_mac[ctx.src_addr_str];
+	delete sessions_of_this_mac[ctx.session_name];
+	if (Object.keys(sessions_of_this_mac).length == 0){
+		delete sessions_by_mac[ctx.src_addr_str];
+	}
+}
+
+function close_ptp(ctx){
+	close_pdp_or_ptp_listen(ctx);
+
+	if (ctx.peer_session != undefined){
+		close_pdp_or_ptp_listen(ctx.peer_session);
+	}
+}
+
 let pdp_tick = (ctx) => {
 	let no_data = false;
 	while(!no_data){
@@ -185,8 +209,7 @@ let pdp_tick = (ctx) => {
 
 					if (size > PDP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						ctx.socket.destroy();
-						delete sessions[ctx.session_name];
+						close_pdp_or_ptp_listen(ctx);
 						return;
 					}
 
@@ -227,16 +250,6 @@ let pdp_tick = (ctx) => {
 				log(`bad state ${ctx.pdp_state} in pdp tick, debug this`);
 				process.exit(1);
 		}
-	}
-}
-
-let close_ptp = (ctx) => {
-	ctx.socket.destroy();
-	delete sessions[ctx.session_name];
-	if (ctx.peer_session != undefined){
-		log(`bringing peer session ${ctx.peer_session.session_name} of ${get_sock_addr_str(ctx.peer_session.socket)} down as well`);
-		ctx.peer_session.socket.destroy();
-		delete sessions[ctx.peer_session.session_name];
 	}
 }
 
@@ -288,15 +301,14 @@ let ptp_tick = (ctx) => {
 	}
 }
 
-let remove_existing_and_insert_session = (ctx, name) => {
-	let existing_session = sessions[name];
+function remove_existing_and_insert_session(ctx, name){
+	const existing_session = sessions[name];
 	if (existing_session != undefined){
 		log(`dropping session ${existing_session.session_name} ${get_sock_addr_str(existing_session.socket)} for new session`);
 		switch(existing_session.state){
 			case "pdp":
 			case "ptp_listen":{
-				existing_session.socket.destroy();
-				delete sessions[name];
+				close_pdp_or_ptp_listen(existing_session);
 				break;
 			}
 			case "ptp_connect":
@@ -311,6 +323,12 @@ let remove_existing_and_insert_session = (ctx, name) => {
 	}
 
 	sessions[name] = ctx;
+	let sessions_of_this_mac = sessions_by_mac[ctx.src_addr_str];
+	if (sessions_of_this_mac == undefined){
+		sessions_of_this_mac = {};
+		sessions_by_mac[ctx.src_addr_str] = sessions_of_this_mac;
+	}
+	sessions_of_this_mac[name] = ctx;
 }
 
 let create_session = (ctx) => {
@@ -382,8 +400,7 @@ let create_session = (ctx) => {
 			setTimeout(() => {
 				if (ctx.ptp_state == "waiting"){
 					log(`the other side did not accept the connection request in 20 seconds, killing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
-					ctx.socket.destroy();
-					delete sessions[ctx.session_name];
+					close_ptp(ctx);
 				}
 			}, 20000);
 			break;
@@ -446,8 +463,7 @@ let on_connection = (socket) => {
 			case "pdp":
 			case "ptp_listen":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
-				ctx.socket.destroy();
-				delete sessions[ctx.session_name];
+				close_pdp_or_ptp_listen(ctx);
 				break;
 			case "ptp_accept":
 			case "ptp_connect":
@@ -469,8 +485,7 @@ let on_connection = (socket) => {
 			case "pdp":
 			case "ptp_listen":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
-				ctx.socket.destroy();
-				delete sessions[ctx.session_name];
+				close_pdp_or_ptp_listen(ctx);
 				break;
 			case "ptp_accept":
 			case "ptp_connect":
@@ -541,8 +556,131 @@ status_server.on("error", (err) => {
 	throw err;
 });
 
+function game_list_sync(request, response){
+	let ctx = {buf:Buffer.alloc(0)};
+	request.on("data", (chunk) => {
+		ctx.buf = Buffer.concat([ctx.buf, chunk]);
+	});
+	request.on("end", () => {
+		const decoded_string = ctx.buf.toString("utf8");
+		let parsed_data = {};
+		try{
+			parsed_data = JSON.parse(decoded_string)
+		}catch(e){
+			log(`failed parsing game list update from ${request.socket.remoteAddress}`);
+			response.writeHeader(400);
+			response.end("bad data");
+			return;
+		}
+
+		const games = parsed_data["games"];
+		if (games == undefined){
+			log(`incoming game list has no game array..`);
+			response.writeHeader(400);
+			response.end("bad data");
+			return;
+		}
+
+		let processed_data = {
+			games:[]
+		};
+
+		let processed_groups_by_mac = {};
+		let processed_players_by_mac = {};
+
+		for (const game of games){
+			const groups = game["groups"];
+			if (groups == undefined){
+				continue;
+			}
+			let processed_game = {
+				groups:[]
+			};
+			processed_data.games.push(processed_game);
+			for (const group of groups){
+				const players = group["players"];
+				if (players == undefined){
+					continue;
+				}
+				let processed_group = {
+					players:[]
+				};
+				processed_game.groups.push(processed_group);
+				for (const player of players){
+					let processed_player = {
+						mac_addr:player["mac_addr"],
+						ip_addr:player["ip_addr"],
+					}
+					processed_groups_by_mac[processed_player.mac_addr] = processed_group;
+					processed_players_by_mac[processed_player.mac_addr] = processed_player;
+					processed_group.players.push(processed_player);
+				}
+			}
+		}
+		adhocctl_data = processed_data;
+		adhocctl_groups_by_mac = processed_groups_by_mac;
+		adhocctl_players_by_mac = processed_players_by_mac;
+		response.writeHeader(200);
+		response.end("data accepted");
+	});
+}
+
+function data_debug(request, response){
+	let response_obj = {
+		adhocctl_data:adhocctl_data,
+		adhocctl_groups_by_mac:adhocctl_groups_by_mac,
+		adhocctl_players_by_mac:adhocctl_players_by_mac,
+	};
+
+	let response_sessions_by_mac = {};
+
+	for (const [mac, sessions] of Object.entries(sessions_by_mac)){
+		let response_sessions_of_this_mac = [];
+		response_sessions_by_mac[mac] = response_sessions_of_this_mac;
+		for(const session of Object.values(sessions)){
+			let response_session = {
+				session_name:session.session_name,
+				ip:session.ip,
+			};
+			response_sessions_of_this_mac.push(response_session);
+
+			switch(session.state){
+				case "pdp":
+					response_session.pdp_state = session.pdp_state;
+					break;
+				case "ptp_listen":
+					break;
+				case "ptp_accept":
+				case "ptp_connect":
+					response_session.ptp_state = session.ptp_state;
+					response_session.dst_addr = session.dst_addr_str;
+					response_session.dport = session.dport;
+					break;
+				default:
+					log(`bad state ${session.state} on data debug, debug this`);
+					process.exit(1);
+			}
+		}
+	}
+
+	response_obj["sessions_by_mac"] = response_sessions_by_mac;
+
+	response.writeHeader(200, {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
+	response.end(JSON.stringify(response_obj));
+}
+
+const routes = {
+	"/game_list_sync":game_list_sync,
+	"/data_debug":data_debug,
+};
+
 status_server.on("request", (request, response) => {
 	let ret = {};
+	const route = routes[request.url];
+	if (route != undefined){
+		route(request, response);
+		return;
+	}
 	for (let entry of Object.entries(sessions)){
 		let ctx = entry[1];
 		ret_entry = {
