@@ -15,6 +15,7 @@
 #define SERVER_PORT 27313
 #define TARGET_INADDR (127 << 24 | 0 << 16 | 0 << 8 | 1)
 
+#ifndef htonl
 uint32_t htonl(uint32_t host){
 	uint32_t ret;
 	uint8_t *_ret = (uint8_t *)&ret;
@@ -27,7 +28,9 @@ uint32_t htonl(uint32_t host){
 
 	return ret;
 }
+#endif
 
+#ifndef htons
 uint16_t htons(uint16_t host){
 	uint16_t ret;
 	uint8_t *_ret = (uint8_t *)&ret;
@@ -38,6 +41,7 @@ uint16_t htons(uint16_t host){
 
 	return ret;
 }
+#endif
 
 void test_pdp(){
 	struct aemu_post_office_sock_addr local_addr = {
