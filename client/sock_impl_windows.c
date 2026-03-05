@@ -119,14 +119,17 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 
 	// Show some socket options
 	int opt_len = sizeof(sockopt);
+	sockopt = 0;
 	int get_ret = getsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, &opt_len);
 	LOG("%s: TCP_NODELAY is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	opt_len = sizeof(sockopt);
+	sockopt = 0;
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sockopt, &opt_len);
 	LOG("%s: SO_SNDBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	opt_len = sizeof(sockopt);
+	sockopt = 0;
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, &opt_len);
 	LOG("%s: SO_RCVBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
