@@ -98,7 +98,7 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 
 	// Connect
 	int error = 0;
-	int connect_status = connect_with_timeout(sock, addr, addrlen, 500, &error);
+	int connect_status = connect_with_timeout(sock, addr, addrlen, 5000, &error);
 	if (connect_status == -1){
 		LOG("%s: failed connecting, %s\n", __func__, strerror(error));
 		close(sock);
