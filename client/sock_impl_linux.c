@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -26,6 +27,65 @@ void to_native_sock6_addr(native_sock6_addr *dst, const struct aemu_post_office_
 	dst->sin6_scope_id = 0;
 }
 
+// SO_SNDTIMEO can be used on linux, but no idea if it can be used on other unix likes
+static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_ms, int *error){
+	int flags = fcntl(sock, F_GETFL, 0);
+	flags |= O_NONBLOCK;
+	fcntl(sock, F_SETFL, flags);
+
+	int ret = 0;
+
+	struct timespec begin = {0};
+	clock_gettime(CLOCK_MONOTONIC, &begin);
+
+	while(1){
+		int result = connect(sock, addr, addrlen);
+		if (result == 0){
+			ret = 0;
+			break;
+		}
+		if (result == -1){
+			*error = errno;
+
+			struct timespec now = {0};
+			clock_gettime(CLOCK_MONOTONIC, &now);
+
+			int ms_since_begin = (now.tv_sec - begin.tv_sec) * 1000 + (now.tv_nsec - begin.tv_nsec) / 1000000;
+			if (ms_since_begin > timeout_ms){
+				*error = ETIMEDOUT;
+				ret = -1;
+				break;
+			}
+
+			if (*error == EAGAIN || *error == EALREADY || *error == EINPROGRESS){
+				// in progress
+				struct timespec sleep_time = {
+					.tv_sec = 0,
+					.tv_nsec = 1000000,
+				};
+				nanosleep(&sleep_time, NULL);
+				continue;
+			}
+			if (*error == EISCONN){
+				// connected
+				*error = 0;
+				ret = 0;
+				break;
+			}
+			ret = -1;
+			break;
+		}
+	}
+
+	// just for completness, NBIO is used on the socket after connection anyway
+	flags = fcntl(sock, F_GETFL, 0);
+	flags &= ~O_NONBLOCK;
+	fcntl(sock, F_SETFL, flags);
+
+	return ret;
+}
+
+
 int native_connect_tcp_sock(void *addr, int addrlen){
 	native_sock_addr *native_addr = addr;
 	int sock = socket(native_addr->sin_family, SOCK_STREAM, 0);
@@ -34,10 +94,13 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
 
+	// XXX this restricts latency to 500ms, if a server is even further away, connection won't be possible
+
 	// Connect
-	int connect_status = connect(sock, addr, addrlen);
+	int error = 0;
+	int connect_status = connect_with_timeout(sock, addr, addrlen, 500, &error);
 	if (connect_status == -1){
-		LOG("%s: failed connecting, %s\n", __func__, strerror(errno));
+		LOG("%s: failed connecting, %s\n", __func__, strerror(error));
 		close(sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}

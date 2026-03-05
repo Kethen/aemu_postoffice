@@ -1,5 +1,6 @@
 #include <winsock2.h>
 #include <windows.h>
+#include <profileapi.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -34,6 +35,56 @@ static void init_winsock2(){
 	}
 }
 
+static int connect_with_timeout(int sock, native_sock_addr *addr, int addrlen, int timeout_ms, int *error){
+	u_long ioctlopt = 1;
+	ioctlsocket(sock, FIONBIO, &ioctlopt);
+
+	int ret = 0;
+
+	LARGE_INTEGER begin = {0};
+	QueryPerformanceCounter(&begin);
+	LARGE_INTEGER ticks_per_seconds = {0};
+	QueryPerformanceFrequency(&ticks_per_seconds);
+
+	while(1){
+		int result = connect(sock, addr, addrlen);
+		if (result == 0){
+			ret = 0;
+			break;
+		}
+		if (result == -1){
+			LARGE_INTEGER now = {0};
+			QueryPerformanceCounter(&now);
+			int ms_since_begin = (now.QuadPart - begin.QuadPart) * 1000 / ticks_per_seconds.QuadPart;
+			if (ms_since_begin > timeout_ms){
+				*error = WSAETIMEDOUT;
+				ret = -1;
+				break;
+			}
+
+			*error = WSAGetLastError();
+			if (*error == WSAEWOULDBLOCK || *error == WSAEALREADY){
+				// in progress
+				Sleep(1);
+				continue;
+			}
+			if (*error == WSAEISCONN){
+				// connected
+				*error = 0;
+				ret = 0;
+				break;
+			}
+			ret = -1;
+			break;
+		}
+	}
+
+	// just for completness, NBIO is used on the socket after connection anyway
+	ioctlopt = 0;
+	ioctlsocket(sock, FIONBIO, &ioctlopt);
+	return ret;
+}
+
 int native_connect_tcp_sock(void *addr, int addrlen){
 	init_winsock2();
 
@@ -44,10 +95,14 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
 
+	// XXX need to simulate timeout on windows, there's no sockopt for that
+	// this also restricts latency to 500ms, if a server is even further away, connection won't be possible
+
 	// Connect
-	int connect_status = connect(sock, addr, addrlen);
+	int error = 0;
+	int connect_status = connect_with_timeout(sock, addr, addrlen, 500, &error);
 	if (connect_status == -1){
-		LOG("%s: failed connecting, %d\n", __func__, WSAGetLastError());
+		LOG("%s: failed connecting, %d\n", __func__, error);
 		closesocket(sock);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
@@ -65,15 +120,15 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	// Show some socket options
 	int opt_len = sizeof(sockopt);
 	int get_ret = getsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, &opt_len);
-	LOG("%s: TCP_NODELAY is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? errno : 0);
+	LOG("%s: TCP_NODELAY is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	opt_len = sizeof(sockopt);
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sockopt, &opt_len);
-	LOG("%s: SO_SNDBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? errno : 0);
+	LOG("%s: SO_SNDBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	opt_len = sizeof(sockopt);
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, &opt_len);
-	LOG("%s: SO_RCVBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? errno : 0);
+	LOG("%s: SO_RCVBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	return sock;
 }
