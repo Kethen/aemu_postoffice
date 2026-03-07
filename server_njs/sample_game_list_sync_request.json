@@ -33,6 +33,22 @@
 							"ip_addr":"::ffff:127.0.0.1"
 						}
 					]
+				},
+				{
+					"players":[
+						{
+							"mac_addr":"aa:bb:cc:11:22:33",
+							"ip_addr":"::ffff:127.0.0.1"
+						},
+						{
+							"mac_addr":"bb:cc:dd:11:22:33",
+							"ip_addr":"::ffff:127.0.0.1"
+						},
+						{
+							"mac_addr":"cc:dd:ee:11:22:33",
+							"ip_addr":"::ffff:127.0.0.1"
+						}
+					]
 				}
 			]
 		}

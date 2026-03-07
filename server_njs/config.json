@@ -1,4 +1,5 @@
 {
-	"strict_mode":false,
+	"connection_strict_mode":false,
+	"forwarding_strict_mode":false,
 	"max_data_rate_per_ip_byte":0
 }
