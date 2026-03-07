@@ -11,5 +11,6 @@ podman run \
 	-p 27314:27314 \
 	--entrypoint "/usr/bin/node" \
 	-v ./aemu_postoffice.js:/aemu_postoffice.js:ro \
+	-v ./config.json:/config.json:ro \
 	$IMAGE \
 	aemu_postoffice.js

@@ -1,5 +1,6 @@
 const net = require('node:net');
 const http = require('node:http');
+const fs = require('node:fs');
 
 const port = 27313
 const status_port = 27314;
@@ -28,6 +29,33 @@ let adhocctl_data = {};
 let adhocctl_groups_by_mac = {};
 let adhocctl_players_by_mac = {};
 
+let config = {
+	strict_mode:false,
+	max_data_rate_per_ip_byte:0,
+};
+
+let log = (str) => {
+	console.log(`${new Date()}: ${str}`)
+};
+
+function load_config(){
+	try{
+		const file_str = fs.readFileSync("./config.json", {encoding:"utf8"});
+
+		let parsed_data = JSON.parse(file_str);
+		for(const [key, value] of Object.entries(parsed_data)){
+			config[key] = value;
+		}
+	}catch(e){
+		log(`failed parsing config.json, ${e}`);
+		process.exit(1);
+	}
+
+	log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
+}
+
+load_config();
+
 let get_mac_str = (mac) => {
 	let ret = ""
 	for (i = 0;i < 6;i++){
@@ -50,10 +78,6 @@ server.maxConnections = 1000;
 server.on("error", (err) => {
 	throw err;
 });
-
-let log = (str) => {
-	console.log(`${new Date()}: ${str}`)
-};
 
 server.on("drop", (drop) => {
 	log(`connection dropped as we have reached ${server.maxConnections} connections:`);
@@ -331,7 +355,23 @@ function remove_existing_and_insert_session(ctx, name){
 	sessions_of_this_mac[name] = ctx;
 }
 
-let create_session = (ctx) => {
+function strict_mode_verify_ip_addr(mac_addr, ip_addr){
+	if (!config.strict_mode){
+		return true;
+	}
+	const player = adhocctl_players_by_mac[mac_addr];
+	if (player == undefined){
+		log(`strict mode: player with mac address ${mac_addr} not found, rejecting`);
+		return false;
+	}
+	if (ip_addr != player.ip_addr){
+		log(`strict mode: player with mac address ${mac_addr} should have ip addres ${player.ip_addr} instead of ${ip_addr}, rejecting`);
+		return false;
+	}
+	return true;
+}
+
+function create_session(ctx){
 	let type = ctx.init_data.slice(0, 4);
 	let src_addr = ctx.init_data.slice(4, 12);
 	let sport = ctx.init_data.slice(12, 14);
@@ -352,6 +392,12 @@ let create_session = (ctx) => {
 	ctx.dst_addr_str = get_mac_str(ctx.dst_addr);
 
 	delete ctx.init_data;
+
+	if (!strict_mode_verify_ip_addr(ctx.src_addr_str, ctx.ip)){
+		ctx.socket.destroy();
+		clearTimeout(ctx.init_timeout);
+		return;
+	}
 
 	switch(type){
 		case AEMU_POSTOFFICE_INIT_PDP:{
@@ -440,6 +486,7 @@ let create_session = (ctx) => {
 		default:
 			log(`${get_sock_addr_str(ctx.socket)} has bad init type ${type}, dropping connection`);
 			ctx.socket.destroy();
+			clearTimeout(ctx.init_timeout);
 	}
 }
 
@@ -534,7 +581,7 @@ let on_connection = (socket) => {
 		}
 	});
 
-	setTimeout(() => {
+	ctx.init_timeout = setTimeout(() => {
 		if (ctx.state == "init"){
 			log(`removing stale connection ${get_sock_addr_str(ctx.socket)}`);
 			ctx.socket.destroy();
