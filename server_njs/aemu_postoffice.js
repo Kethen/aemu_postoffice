@@ -197,7 +197,7 @@ function output_statistics(){
 
 setInterval(output_statistics, statistic_interval_ms);
 
-function close_pdp_or_ptp_listen(ctx){
+function close_one_session(ctx){
 	ctx.socket.destroy();
 	delete sessions[ctx.session_name];
 	let sessions_of_this_mac = sessions_by_mac[ctx.src_addr_str];
@@ -207,11 +207,11 @@ function close_pdp_or_ptp_listen(ctx){
 	}
 }
 
-function close_ptp(ctx){
-	close_pdp_or_ptp_listen(ctx);
+function close_session(ctx){
+	close_one_session(ctx);
 
 	if (ctx.peer_session != undefined){
-		close_pdp_or_ptp_listen(ctx.peer_session);
+		close_one_session(ctx.peer_session);
 	}
 }
 
@@ -265,7 +265,7 @@ let pdp_tick = (ctx) => {
 
 					if (size > PDP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						close_pdp_or_ptp_listen(ctx);
+						close_session(ctx);
 						return;
 					}
 
@@ -321,7 +321,7 @@ let ptp_tick = (ctx) => {
 					let size = cur_data.readUInt32LE();
 					if (size > PTP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						close_ptp(ctx);
+						close_session(ctx);
 						return;
 					}
 
@@ -364,12 +364,12 @@ function remove_existing_and_insert_session(ctx, name){
 		switch(existing_session.state){
 			case "pdp":
 			case "ptp_listen":{
-				close_pdp_or_ptp_listen(existing_session);
+				close_session(existing_session);
 				break;
 			}
 			case "ptp_connect":
 			case "ptp_accept":{
-				close_ptp(existing_session);
+				close_session(existing_session);
 				break;
 			}
 			default:
@@ -477,7 +477,7 @@ function create_session(ctx){
 			setTimeout(() => {
 				if (ctx.ptp_state == "waiting"){
 					log(`the other side did not accept the connection request in 20 seconds, killing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
-					close_ptp(ctx);
+					close_session(ctx);
 				}
 			}, 20000);
 			break;
@@ -540,12 +540,12 @@ let on_connection = (socket) => {
 			case "pdp":
 			case "ptp_listen":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
-				close_pdp_or_ptp_listen(ctx);
+				close_session(ctx);
 				break;
 			case "ptp_accept":
 			case "ptp_connect":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
-				close_ptp(ctx);
+				close_session(ctx);
 				break;
 			default:
 				log(`bad state ${ctx.state} on socket error, debug this`);
@@ -562,12 +562,12 @@ let on_connection = (socket) => {
 			case "pdp":
 			case "ptp_listen":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
-				close_pdp_or_ptp_listen(ctx);
+				close_session(ctx);
 				break;
 			case "ptp_accept":
 			case "ptp_connect":
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
-				close_ptp(ctx);
+				close_session(ctx);
 				break;
 			default:
 				log(`bad state ${ctx.state} on socket end, debug this`);
