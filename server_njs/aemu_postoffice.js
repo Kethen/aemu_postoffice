@@ -30,7 +30,8 @@ let adhocctl_groups_by_mac = {};
 let adhocctl_players_by_mac = {};
 
 let config = {
-	strict_mode:false,
+	connection_strict_mode:false,
+	forwarding_strict_mode:false,
 	max_data_rate_per_ip_byte:0,
 };
 
@@ -214,6 +215,37 @@ function close_ptp(ctx){
 	}
 }
 
+function find_target_session(mode, my_mac, mac, sport, dport){
+	if (config.forwarding_strict_mode){
+		const adhocctl_group = adhocctl_groups_by_mac[my_mac];
+		if (adhocctl_group == undefined){
+			return undefined;
+		}
+		let found = adhocctl_group[mac] != undefined;
+		if (!found){
+			return undefined;
+		}
+	}
+
+	let target_session_name = "";
+	switch(mode){
+		case "pdp":
+			target_session_name = `PDP ${mac} ${dport}`;
+			break;
+		case "ptp_listen":
+			target_session_name = `PTP_LISTEN ${mac} ${dport}`;
+			break;
+		case "ptp_connect":
+			target_session_name = `PTP_CONNECT ${mac} ${dport} ${my_mac} ${sport}`;
+			break;
+		default:
+			log(`bad mode ${mode}, debug this`);
+			process.exit(1);
+	}
+
+	return sessions_by_mac[mac][target_session_name];
+}
+
 let pdp_tick = (ctx) => {
 	let no_data = false;
 	while(!no_data){
@@ -237,7 +269,7 @@ let pdp_tick = (ctx) => {
 						return;
 					}
 
-					ctx.target_session_name = `PDP ${get_mac_str(addr)} ${port}`;
+					ctx.target_session = find_target_session("pdp", ctx.src_addr_str, get_mac_str(addr), 0, port);
 					ctx.pdp_data_size = size;
 
 					ctx.pdp_state = "data";
@@ -251,7 +283,7 @@ let pdp_tick = (ctx) => {
 					let cur_data = ctx.pdp_data.slice(0, ctx.pdp_data_size);
 					ctx.pdp_data = ctx.pdp_data.slice(ctx.pdp_data_size);
 
-					let target_session = sessions[ctx.target_session_name];
+					let target_session = ctx.target_session;
 					if (target_session != undefined){
 						let addr = ctx.src_addr;
 						let port = Buffer.alloc(2);
@@ -356,7 +388,7 @@ function remove_existing_and_insert_session(ctx, name){
 }
 
 function strict_mode_verify_ip_addr(mac_addr, ip_addr){
-	if (!config.strict_mode){
+	if (!config.connection_strict_mode){
 		return true;
 	}
 	const player = adhocctl_players_by_mac[mac_addr];
@@ -425,8 +457,7 @@ function create_session(ctx){
 			ctx.state = "ptp_connect";
 			ctx.session_name = `PTP_CONNECT ${get_mac_str(src_addr)} ${sport} ${get_mac_str(dst_addr)} ${dport}`;
 
-			let listen_session_name = `PTP_LISTEN ${get_mac_str(dst_addr)} ${dport}`;
-			let listen_session = sessions[listen_session_name];
+			let listen_session = find_target_session("ptp_listen", ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 			if (listen_session == undefined){
 				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${listen_session_name} not found`);
 				ctx.socket.destroy();
@@ -455,8 +486,7 @@ function create_session(ctx){
 			ctx.state = "ptp_accept";
 			ctx.session_name = `PTP_ACCEPT ${get_mac_str(src_addr)} ${sport} ${get_mac_str(dst_addr)} ${dport}`
 
-			let connect_session_name = `PTP_CONNECT ${get_mac_str(dst_addr)} ${dport} ${get_mac_str(src_addr)} ${sport}`;
-			let connect_session = sessions[connect_session_name];
+			let connect_session = find_target_session("ptp_connect", ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
 			if (connect_session == undefined){
 				log(`${connect_session_name} not found, closing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
 				ctx.socket.destroy();
@@ -650,17 +680,16 @@ function game_list_sync(request, response){
 					continue;
 				}
 				let processed_group = {
-					players:[]
 				};
 				processed_game.groups.push(processed_group);
 				for (const player of players){
 					let processed_player = {
-						mac_addr:player["mac_addr"],
+						mac_addr:player["mac_addr"].toLowerCase(),
 						ip_addr:player["ip_addr"],
 					}
 					processed_groups_by_mac[processed_player.mac_addr] = processed_group;
 					processed_players_by_mac[processed_player.mac_addr] = processed_player;
-					processed_group.players.push(processed_player);
+					processed_group[processed_player.mac_addr] = processed_player;
 				}
 			}
 		}
