@@ -4,7 +4,7 @@ const fs = require('node:fs');
 
 const port = 27313
 const status_port = 27314;
-const statistic_interval_ms = 1000 * 60 * 2;
+const statistic_interval_ms = 1000 * 30;
 
 const AEMU_POSTOFFICE_INIT_PDP = 0;
 const AEMU_POSTOFFICE_INIT_PTP_LISTEN = 1;
@@ -24,6 +24,7 @@ process.on('SIGINT', () => {
 
 let sessions = {};
 let sessions_by_mac = {};
+let sessions_by_ip = {};
 
 let adhocctl_data = {};
 let adhocctl_groups_by_mac = {};
@@ -32,7 +33,8 @@ let adhocctl_players_by_mac = {};
 let config = {
 	connection_strict_mode:false,
 	forwarding_strict_mode:false,
-	max_data_rate_per_ip_byte:0,
+	max_per_second_data_rate_byte:0,
+	max_tx_op_rate:0,
 };
 
 let log = (str) => {
@@ -192,18 +194,22 @@ function output_statistics(){
 		console.log(`  total rx: ${total_rx} avg ${total_rx / interval_s} bytes/s`);
 		console.log(`  total data: ${total_data} avg ${total_data / interval_s} bytes/s`);
 	}
-	statistics = {};
 }
 
-setInterval(output_statistics, statistic_interval_ms);
-
 function close_one_session(ctx){
+	log(`closing ${ctx.session_name}`);
 	ctx.socket.destroy();
 	delete sessions[ctx.session_name];
 	let sessions_of_this_mac = sessions_by_mac[ctx.src_addr_str];
 	delete sessions_of_this_mac[ctx.session_name];
 	if (Object.keys(sessions_of_this_mac).length == 0){
 		delete sessions_by_mac[ctx.src_addr_str];
+	}
+
+	let sessions_of_this_ip = sessions_by_ip[ctx.ip];
+	delete sessions_of_this_ip[ctx.session_name];
+	if (Object.keys(sessions_of_this_ip).length == 0){
+		delete sessions_by_ip[ctx.ip];
 	}
 }
 
@@ -214,6 +220,48 @@ function close_session(ctx){
 		close_one_session(ctx.peer_session);
 	}
 }
+
+function check_bandwidth_limit(){
+	if (config.max_per_second_data_rate_byte == 0 && config.max_tx_op_rate == 0){
+		return;
+	}
+
+	for (const [ip, usage] of Object.entries(statistics)){
+		const interval_s = statistic_interval_ms / 1000;
+		const total_tx = usage.pdp_tx + usage.ptp_tx;
+		const total_tx_ops = usage.pdp_tx_ops + usage.ptp_tx_ops;
+		const tx_per_second = total_tx / interval_s;
+		const tx_ops_per_second = total_tx_ops / interval_s;
+
+		if (config.max_per_second_data_rate_byte != 0 && tx_per_second > config.max_per_second_data_rate_byte){
+			log(`ip address ${ip} is sending more than ${config.max_per_second_data_rate_byte} bytes per second (${tx_per_second}), purging sessions`);
+			const sessions_of_this_ip = sessions_by_ip[ip];
+			if (sessions_of_this_ip != undefined){
+				for (const session of Object.values(sessions_of_this_ip)){
+					close_session(session);
+				}
+			}
+		}
+
+		if (config.max_tx_op_rate != 0 && tx_ops_per_second > config.max_tx_op_rate){
+			log(`ip address ${ip} is doing more than ${config.max_tx_op_rate} tx ops per second (${tx_ops_per_second}), purging sessions`);
+			const sessions_of_this_ip = sessions_by_ip[ip];
+			if (sessions_of_this_ip != undefined){
+				for (const session of Object.values(sessions_of_this_ip)){
+					close_session(session);
+				}
+			}
+		}
+	}
+}
+
+function process_statistics(){
+	output_statistics();
+	check_bandwidth_limit();
+	statistics = {};
+}
+
+setInterval(process_statistics, statistic_interval_ms);
 
 function find_target_session(mode, my_mac, mac, sport, dport){
 	if (config.forwarding_strict_mode){
@@ -243,7 +291,11 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 			process.exit(1);
 	}
 
-	return sessions_by_mac[mac][target_session_name];
+	const sessions_of_this_mac = sessions_by_mac[mac];
+	if (sessions_of_this_mac == undefined){
+		return undefined;
+	}
+	return sessions_of_this_mac[target_session_name];
 }
 
 let pdp_tick = (ctx) => {
@@ -385,6 +437,13 @@ function remove_existing_and_insert_session(ctx, name){
 		sessions_by_mac[ctx.src_addr_str] = sessions_of_this_mac;
 	}
 	sessions_of_this_mac[name] = ctx;
+
+	let sessions_of_this_ip = sessions_by_ip[ctx.ip];
+	if (sessions_of_this_ip == undefined){
+		sessions_of_this_ip = {};
+		sessions_by_ip[ctx.ip] = sessions_of_this_ip;
+	}
+	sessions_of_this_ip[name] = ctx;
 }
 
 function strict_mode_verify_ip_addr(mac_addr, ip_addr){
@@ -708,38 +767,41 @@ function data_debug(request, response){
 		adhocctl_players_by_mac:adhocctl_players_by_mac,
 	};
 
-	let response_sessions_by_mac = {};
+	let convert_session_list = (from_list) => {
+		let to_list = {}
+		for (const [key, sessions] of Object.entries(from_list)){
+			let response_sessions = [];
+			to_list[key] = response_sessions;
+			for(const session of Object.values(sessions)){
+				let response_session = {
+					session_name:session.session_name,
+					ip:session.ip,
+				};
+				response_sessions.push(response_session);
 
-	for (const [mac, sessions] of Object.entries(sessions_by_mac)){
-		let response_sessions_of_this_mac = [];
-		response_sessions_by_mac[mac] = response_sessions_of_this_mac;
-		for(const session of Object.values(sessions)){
-			let response_session = {
-				session_name:session.session_name,
-				ip:session.ip,
-			};
-			response_sessions_of_this_mac.push(response_session);
-
-			switch(session.state){
-				case "pdp":
-					response_session.pdp_state = session.pdp_state;
-					break;
-				case "ptp_listen":
-					break;
-				case "ptp_accept":
-				case "ptp_connect":
-					response_session.ptp_state = session.ptp_state;
-					response_session.dst_addr = session.dst_addr_str;
-					response_session.dport = session.dport;
-					break;
-				default:
-					log(`bad state ${session.state} on data debug, debug this`);
-					process.exit(1);
+				switch(session.state){
+					case "pdp":
+						response_session.pdp_state = session.pdp_state;
+						break;
+					case "ptp_listen":
+						break;
+					case "ptp_accept":
+					case "ptp_connect":
+						response_session.ptp_state = session.ptp_state;
+						response_session.dst_addr = session.dst_addr_str;
+						response_session.dport = session.dport;
+						break;
+					default:
+						log(`bad state ${session.state} on data debug, debug this`);
+						process.exit(1);
+				}
 			}
 		}
-	}
+		return to_list;
+	};
 
-	response_obj["sessions_by_mac"] = response_sessions_by_mac;
+	response_obj["sessions_by_mac"] = convert_session_list(sessions_by_mac);
+	response_obj["sessions_by_ip"] = convert_session_list(sessions_by_ip);
 
 	response.writeHeader(200, {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
 	response.end(JSON.stringify(response_obj));
