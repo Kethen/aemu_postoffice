@@ -14,6 +14,12 @@ const AEMU_POSTOFFICE_INIT_PTP_ACCEPT = 3;
 const PDP_BLOCK_MAX = 10 * 1024;
 const PTP_BLOCK_MAX = 50 * 1024;
 
+const SESSION_MODE_INIT = -1;
+const SESSION_MODE_PDP = 0;
+const SESSION_MODE_PTP_LISTEN = 1;
+const SESSION_MODE_PTP_CONNECT = 2;
+const SESSION_MODE_PTP_ACCEPT = 3;
+
 process.on('SIGTERM', () => {
    process.exit(1); 
 });
@@ -277,13 +283,13 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 
 	let target_session_name = "";
 	switch(mode){
-		case "pdp":
+		case SESSION_MODE_PDP:
 			target_session_name = `PDP ${mac} ${dport}`;
 			break;
-		case "ptp_listen":
+		case SESSION_MODE_PTP_LISTEN:
 			target_session_name = `PTP_LISTEN ${mac} ${dport}`;
 			break;
-		case "ptp_connect":
+		case SESSION_MODE_PTP_CONNECT:
 			target_session_name = `PTP_CONNECT ${mac} ${dport} ${my_mac} ${sport}`;
 			break;
 		default:
@@ -321,7 +327,7 @@ let pdp_tick = (ctx) => {
 						return;
 					}
 
-					ctx.target_session = find_target_session("pdp", ctx.src_addr_str, get_mac_str(addr), 0, port);
+					ctx.target_session = find_target_session(SESSION_MODE_PDP, ctx.src_addr_str, get_mac_str(addr), 0, port);
 					ctx.pdp_data_size = size;
 
 					ctx.pdp_state = "data";
@@ -414,13 +420,13 @@ function remove_existing_and_insert_session(ctx, name){
 	if (existing_session != undefined){
 		log(`dropping session ${existing_session.session_name} ${get_sock_addr_str(existing_session.socket)} for new session`);
 		switch(existing_session.state){
-			case "pdp":
-			case "ptp_listen":{
+			case SESSION_MODE_PDP:
+			case SESSION_MODE_PTP_LISTEN:{
 				close_session(existing_session);
 				break;
 			}
-			case "ptp_connect":
-			case "ptp_accept":{
+			case SESSION_MODE_PTP_CONNECT:
+			case SESSION_MODE_PTP_ACCEPT:{
 				close_session(existing_session);
 				break;
 			}
@@ -492,7 +498,7 @@ function create_session(ctx){
 
 	switch(type){
 		case AEMU_POSTOFFICE_INIT_PDP:{
-			ctx.state = "pdp";
+			ctx.state = SESSION_MODE_PDP;
 			ctx.session_name = `PDP ${get_mac_str(src_addr)} ${sport}`;
 			ctx.pdp_data = ctx.outstanding_data;
 			delete ctx.outstanding_data;
@@ -504,7 +510,7 @@ function create_session(ctx){
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
-			ctx.state = "ptp_listen";
+			ctx.state = SESSION_MODE_PTP_LISTEN;
 			ctx.session_name = `PTP_LISTEN ${get_mac_str(src_addr)} ${sport}`;
 			delete ctx.outstanding_data;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
@@ -513,10 +519,10 @@ function create_session(ctx){
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
-			ctx.state = "ptp_connect";
+			ctx.state = SESSION_MODE_PTP_CONNECT;
 			ctx.session_name = `PTP_CONNECT ${get_mac_str(src_addr)} ${sport} ${get_mac_str(dst_addr)} ${dport}`;
 
-			let listen_session = find_target_session("ptp_listen", ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
+			let listen_session = find_target_session(SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 			if (listen_session == undefined){
 				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${listen_session_name} not found`);
 				ctx.socket.destroy();
@@ -542,10 +548,10 @@ function create_session(ctx){
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_ACCEPT:{
-			ctx.state = "ptp_accept";
+			ctx.state = SESSION_MODE_PTP_ACCEPT;
 			ctx.session_name = `PTP_ACCEPT ${get_mac_str(src_addr)} ${sport} ${get_mac_str(dst_addr)} ${dport}`
 
-			let connect_session = find_target_session("ptp_connect", ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
+			let connect_session = find_target_session(SESSION_MODE_PTP_CONNECT, ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
 			if (connect_session == undefined){
 				log(`${connect_session_name} not found, closing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
 				ctx.socket.destroy();
@@ -586,23 +592,23 @@ let on_connection = (socket) => {
 	let ctx = {
 		socket:socket,
 		init_data:Buffer.alloc(0),
-		state:"init",
+		state:SESSION_MODE_INIT,
 		ip:socket.remoteAddress
 	};
 
 	socket.on("error", (err) => {
 		switch(ctx.state){
-			case "init":
+			case SESSION_MODE_INIT:
 				log(`${get_sock_addr_str(ctx.socket)} errored during init, ${err}`);
 				ctx.socket.destroy();
 				break;
-			case "pdp":
-			case "ptp_listen":
+			case SESSION_MODE_PDP:
+			case SESSION_MODE_PTP_LISTEN:
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
 				close_session(ctx);
 				break;
-			case "ptp_accept":
-			case "ptp_connect":
+			case SESSION_MODE_PTP_CONNECT:
+			case SESSION_MODE_PTP_ACCEPT:
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
 				close_session(ctx);
 				break;
@@ -614,17 +620,17 @@ let on_connection = (socket) => {
 
 	socket.on("end", () => {
 		switch(ctx.state){
-			case "init":
+			case SESSION_MODE_INIT:
 				log(`${get_sock_addr_str(ctx.socket)} closed during init`);
 				ctx.socket.destroy();
 				break;
-			case "pdp":
-			case "ptp_listen":
+			case SESSION_MODE_PDP:
+			case SESSION_MODE_PTP_LISTEN:
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
 				close_session(ctx);
 				break;
-			case "ptp_accept":
-			case "ptp_connect":
+			case SESSION_MODE_PTP_CONNECT:
+			case SESSION_MODE_PTP_ACCEPT:
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
 				close_session(ctx);
 				break;
@@ -636,7 +642,7 @@ let on_connection = (socket) => {
 
 	socket.on("data", (new_data) => {
 		switch(ctx.state){
-			case "init":{
+			case SESSION_MODE_INIT:{
 				let new_buffer = Buffer.concat([ctx.init_data, new_data]);
 				
 				if (new_buffer.length >= 24){
@@ -648,17 +654,17 @@ let on_connection = (socket) => {
 				ctx.init_data = new_buffer;
 				break;
 			}
-			case "pdp":{
+			case SESSION_MODE_PDP:{
 				ctx.pdp_data = Buffer.concat([ctx.pdp_data, new_data]);
 				pdp_tick(ctx);
 				break;
 			}
-			case "ptp_listen":{
+			case SESSION_MODE_PTP_LISTEN:{
 				// we just discard incoming data for ptp_listen
 				break;
 			}
-			case "ptp_connect":
-			case "ptp_accept":{
+			case SESSION_MODE_PTP_CONNECT:
+			case SESSION_MODE_PTP_ACCEPT:{
 				ctx.ptp_data = Buffer.concat([ctx.ptp_data, new_data]);
 				ptp_tick(ctx);
 				break;
@@ -671,7 +677,7 @@ let on_connection = (socket) => {
 	});
 
 	ctx.init_timeout = setTimeout(() => {
-		if (ctx.state == "init"){
+		if (ctx.state == SESSION_MODE_INIT){
 			log(`removing stale connection ${get_sock_addr_str(ctx.socket)}`);
 			ctx.socket.destroy();
 		}
@@ -780,13 +786,13 @@ function data_debug(request, response){
 				response_sessions.push(response_session);
 
 				switch(session.state){
-					case "pdp":
+					case SESSION_MODE_PDP:
 						response_session.pdp_state = session.pdp_state;
 						break;
-					case "ptp_listen":
+					case SESSION_MODE_PTP_LISTEN:
 						break;
-					case "ptp_accept":
-					case "ptp_connect":
+					case SESSION_MODE_PTP_CONNECT:
+					case SESSION_MODE_PTP_ACCEPT:
 						response_session.ptp_state = session.ptp_state;
 						response_session.dst_addr = session.dst_addr_str;
 						response_session.dport = session.dport;
@@ -828,13 +834,13 @@ status_server.on("request", (request, response) => {
 		};
 
 		switch(ctx.state){
-			case "pdp":
+			case SESSION_MODE_PDP:
 				ret_entry.pdp_state = ctx.pdp_state;
 				break;
-			case "ptp_listen":
+			case SESSION_MODE_PTP_LISTEN:
 				break;
-			case "ptp_accept":
-			case "ptp_connect":
+			case SESSION_MODE_PTP_CONNECT:
+			case SESSION_MODE_PTP_ACCEPT:
 				ret_entry.ptp_state = ctx.ptp_state;
 				ret_entry.dst_addr = ctx.dst_addr_str;
 				ret_entry.dport = ctx.dport;
