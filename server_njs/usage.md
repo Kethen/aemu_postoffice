@@ -1,3 +1,10 @@
+## Index
+
+- [Prerequisite](#prerequisite)
+- [Starting server](#starting-server)
+- [`config.json` configuration file](#configjson-configuration-file)
+- [Viewing server status internally](#viewing-server-status-internally)
+
 ### Prerequisite
 
 Clients expects the relay server on TCP port 27313, and HTTP port 27314 is used for internal API calls. You'll have to make sure your clients can reach 27313, and you can internally reach 27314 for future integrations with adhocctl server.
@@ -8,7 +15,7 @@ A 10 years old x86_64 xeon with ~500MB of ram just for the program should be eno
 
 https://github.com/Kethen/aemu_postoffice/releases
 
-### Start server
+### Starting server
 
 #### Linux/WSL with podman installed:
 
