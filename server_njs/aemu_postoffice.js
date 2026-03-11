@@ -49,6 +49,7 @@ let config = {
 	forwarding_strict_mode:false,
 	max_per_second_data_rate_byte:0,
 	max_tx_op_rate:0,
+	max_write_buffer_byte:512000,
 };
 
 function log(str){
@@ -64,14 +65,12 @@ function load_config(){
 			config[key] = value;
 		}
 	}catch(e){
-		log(`failed parsing config.json, ${e}`);
-		process.exit(1);
+		log(`warning: failed parsing config.json, ${e}`);
 	}
-
-	log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
 }
 
 load_config();
+log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
 
 function get_mac_str(mac){
 	let ret = ""
@@ -356,6 +355,8 @@ function pdp_tick(ctx){
 					let cur_data = ctx.pdp_data.slice(0, ctx.pdp_data_size);
 					ctx.pdp_data = ctx.pdp_data.slice(ctx.pdp_data_size);
 
+					track_bandwidth(ctx.ip, false, true, ctx.pdp_data_size);
+
 					let target_session = ctx.target_session;
 					if (target_session != undefined){
 						let addr = ctx.src_addr;
@@ -365,9 +366,14 @@ function pdp_tick(ctx){
 						size.writeUInt32LE(cur_data.length);
 
 						target_session.socket.write(Buffer.concat([addr, port, size, cur_data]));
+						const max_buffer_size = config.max_write_buffer_byte;
+						if (max_buffer_size != 0 && target_session.socket.writableLength >= max_buffer_size){
+							log(`killing session ${target_session.session_name} as write buffer has reached ${target_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
+							close_session(target_session);
+						}
 						track_bandwidth(target_session.ip, false, false, ctx.pdp_data_size);
+						delete ctx.target_session;
 					}
-					track_bandwidth(ctx.ip, false, true, ctx.pdp_data_size);
 
 					ctx.pdp_state = PDP_STATE_HEADER;
 				}else{
@@ -414,6 +420,12 @@ function ptp_tick(ctx){
 					size.writeUInt32LE(ctx.ptp_data_size);
 
 					ctx.peer_session.socket.write(Buffer.concat([size, cur_data]));
+					const max_buffer_size = config.max_write_buffer_byte;
+					if (max_buffer_size != 0 && ctx.peer_session.socket.writableLength >= max_buffer_size){
+						log(`killing session ${ctx.peer_session.session_name} as write buffer has reached ${ctx.peer_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
+						close_session(ctx.peer_session);
+					}
+
 					track_bandwidth(ctx.peer_session.ip, true, false, ctx.ptp_data_size);
 					track_bandwidth(ctx.ip, true, true, ctx.ptp_data_size);
 

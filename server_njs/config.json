@@ -2,5 +2,6 @@
 	"connection_strict_mode":false,
 	"forwarding_strict_mode":false,
 	"max_per_second_data_rate_byte":0,
-	"max_tx_op_rate":0
+	"max_tx_op_rate":0,
+	"max_write_buffer_byte":512000,
 }
