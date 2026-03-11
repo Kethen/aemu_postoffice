@@ -4,7 +4,6 @@ const fs = require('node:fs');
 
 const port = 27313
 const status_port = 27314;
-const statistic_interval_ms = 1000 * 30;
 const memory_usage_log_interval_ms =  1000 * 60 * 2;
 
 const AEMU_POSTOFFICE_INIT_PDP = 0;
@@ -49,6 +48,7 @@ let config = {
 	forwarding_strict_mode:false,
 	max_per_second_data_rate_byte:0,
 	max_tx_op_rate:0,
+	accounting_interval_ms:30000,
 	max_write_buffer_byte:512000,
 };
 
@@ -174,9 +174,9 @@ function output_statistics(){
 		return;
 	}
 
-	console.log(`--- usage statistics ${new Date()} of the last ${statistic_interval_ms / 1000 / 60} minutes ---`);
+	console.log(`--- usage statistics ${new Date()} of the last ${config.accounting_interval_ms / 1000 / 60} minutes ---`);
 
-	let interval_s = statistic_interval_ms / 1000;
+	let interval_s = config.accounting_interval_ms / 1000;
 
 	for (let entry of entries){
 		let ip = entry[0];
@@ -247,7 +247,7 @@ function check_bandwidth_limit(){
 	}
 
 	for (const [ip, usage] of Object.entries(statistics)){
-		const interval_s = statistic_interval_ms / 1000;
+		const interval_s = config.accounting_interval_ms / 1000;
 		const total_tx = usage.pdp_tx + usage.ptp_tx;
 		const total_tx_ops = usage.pdp_tx_ops + usage.ptp_tx_ops;
 		const tx_per_second = total_tx / interval_s;
@@ -281,7 +281,7 @@ function process_statistics(){
 	statistics = {};
 }
 
-setInterval(process_statistics, statistic_interval_ms);
+setInterval(process_statistics, config.accounting_interval_ms);
 
 function find_target_session(mode, my_mac, mac, sport, dport){
 	if (config.forwarding_strict_mode){
@@ -836,6 +836,7 @@ function data_debug(request, response){
 
 	response_obj["sessions_by_mac"] = convert_session_list(sessions_by_mac);
 	response_obj["sessions_by_ip"] = convert_session_list(sessions_by_ip);
+	response_obj["memory_usage"] = process.memoryUsage();
 
 	response.writeHeader(200, {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
 	response.end(JSON.stringify(response_obj));
