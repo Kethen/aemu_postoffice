@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const port = 27313
 const status_port = 27314;
 const statistic_interval_ms = 1000 * 30;
+const memory_usage_log_interval_ms =  1000 * 60 * 2;
 
 const AEMU_POSTOFFICE_INIT_PDP = 0;
 const AEMU_POSTOFFICE_INIT_PTP_LISTEN = 1;
@@ -50,7 +51,7 @@ let config = {
 	max_tx_op_rate:0,
 };
 
-let log = (str) => {
+function log(str){
 	console.log(`${new Date()}: ${str}`)
 };
 
@@ -72,7 +73,7 @@ function load_config(){
 
 load_config();
 
-let get_mac_str = (mac) => {
+function get_mac_str(mac){
 	let ret = ""
 	for (i = 0;i < 6;i++){
 		if (i != 0){
@@ -83,7 +84,7 @@ let get_mac_str = (mac) => {
 	return ret;
 }
 
-let get_sock_addr_str = (sock) => {
+function get_sock_addr_str (sock){
 	return `${sock.remoteAddress}:${sock.remotePort}`
 }
 
@@ -126,7 +127,7 @@ function get_statistics_obj(ip){
 	return new_obj;
 }
 
-let track_connect = (ip, is_ptp, is_listen) => {
+function track_connect(ip, is_ptp, is_listen){
 	let statistics_obj = get_statistics_obj(ip);
 	if (is_ptp){
 		if (is_listen){
@@ -139,7 +140,7 @@ let track_connect = (ip, is_ptp, is_listen) => {
 	}
 }
 
-let track_bandwidth = (ip, is_ptp, is_tx, size) => {
+function track_bandwidth(ip, is_ptp, is_tx, size){
 	let statistics_obj = get_statistics_obj(ip);
 	if (is_ptp){
 		if (is_tx){
@@ -159,6 +160,13 @@ let track_bandwidth = (ip, is_ptp, is_tx, size) => {
 		}
 	}
 }
+
+function output_memory_usage(){
+	console.log(`--- memory usage ${new Date()} ---`);
+	console.log(JSON.stringify(process.memoryUsage(), null, 4));
+}
+
+setInterval(output_memory_usage, memory_usage_log_interval_ms);
 
 // don't pull statistics into a scope with arrow function
 function output_statistics(){
@@ -593,7 +601,7 @@ function create_session(ctx){
 	}
 }
 
-let on_connection = (socket) => {
+function on_connection(socket){
 	socket.setKeepAlive(true);
 	socket.setNoDelay(true);
 
