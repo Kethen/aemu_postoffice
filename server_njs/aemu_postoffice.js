@@ -518,7 +518,7 @@ function create_session(ctx){
 
 			let listen_session = find_target_session("ptp_listen", ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 			if (listen_session == undefined){
-				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${listen_session_name} not found`);
+				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, target listen session not found`);
 				ctx.socket.destroy();
 				break;
 			}
@@ -547,7 +547,7 @@ function create_session(ctx){
 
 			let connect_session = find_target_session("ptp_connect", ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
 			if (connect_session == undefined){
-				log(`${connect_session_name} not found, closing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
+				log(`connect session not found, closing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
 				ctx.socket.destroy();
 				break;
 			}
