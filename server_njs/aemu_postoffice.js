@@ -20,6 +20,13 @@ const SESSION_MODE_PTP_LISTEN = 1;
 const SESSION_MODE_PTP_CONNECT = 2;
 const SESSION_MODE_PTP_ACCEPT = 3;
 
+const PDP_STATE_HEADER = 0;
+const PDP_STATE_DATA = 1;
+
+const PTP_STATE_WAITING = -1;
+const PTP_STATE_HEADER = 0;
+const PTP_STATE_DATA = 1;
+
 process.on('SIGTERM', () => {
    process.exit(1); 
 });
@@ -304,11 +311,11 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 	return sessions_of_this_mac[target_session_name];
 }
 
-let pdp_tick = (ctx) => {
+function pdp_tick(ctx){
 	let no_data = false;
 	while(!no_data){
 		switch(ctx.pdp_state){
-			case "header":{
+			case PDP_STATE_HEADER:{
 				if (ctx.pdp_data.length >= 14){
 					let cur_data = ctx.pdp_data.slice(0, 14);
 					ctx.pdp_data = ctx.pdp_data.slice(14);
@@ -330,13 +337,13 @@ let pdp_tick = (ctx) => {
 					ctx.target_session = find_target_session(SESSION_MODE_PDP, ctx.src_addr_str, get_mac_str(addr), 0, port);
 					ctx.pdp_data_size = size;
 
-					ctx.pdp_state = "data";
+					ctx.pdp_state = PDP_STATE_DATA;
 				}else{
 					no_data = true;
 				}
 				break;
 			}
-			case "data":{
+			case PDP_STATE_DATA:{
 				if (ctx.pdp_data.length >= ctx.pdp_data_size){
 					let cur_data = ctx.pdp_data.slice(0, ctx.pdp_data_size);
 					ctx.pdp_data = ctx.pdp_data.slice(ctx.pdp_data_size);
@@ -354,7 +361,7 @@ let pdp_tick = (ctx) => {
 					}
 					track_bandwidth(ctx.ip, false, true, ctx.pdp_data_size);
 
-					ctx.pdp_state = "header";
+					ctx.pdp_state = PDP_STATE_HEADER;
 				}else{
 					no_data = true;
 				}
@@ -367,11 +374,11 @@ let pdp_tick = (ctx) => {
 	}
 }
 
-let ptp_tick = (ctx) => {
+function ptp_tick(ctx){
 	let no_data = false;
 	while(!no_data){
 		switch(ctx.ptp_state){
-			case "header":{
+			case PTP_STATE_HEADER:{
 				if (ctx.ptp_data.length >= 4){
 					let cur_data = ctx.ptp_data.slice(0, 4);
 					ctx.ptp_data = ctx.ptp_data.slice(4);
@@ -384,13 +391,13 @@ let ptp_tick = (ctx) => {
 					}
 
 					ctx.ptp_data_size = size;
-					ctx.ptp_state = "data"
+					ctx.ptp_state = PTP_STATE_DATA;
 				}else{
 					no_data = true;
 				}
 				break;
 			}
-			case "data":{
+			case PTP_STATE_DATA:{
 				if (ctx.ptp_data.length >= ctx.ptp_data_size){
 					let cur_data = ctx.ptp_data.slice(0, ctx.ptp_data_size);
 					ctx.ptp_data = ctx.ptp_data.slice(ctx.ptp_data_size);
@@ -402,7 +409,7 @@ let ptp_tick = (ctx) => {
 					track_bandwidth(ctx.peer_session.ip, true, false, ctx.ptp_data_size);
 					track_bandwidth(ctx.ip, true, true, ctx.ptp_data_size);
 
-					ctx.ptp_state = "header";
+					ctx.ptp_state = PTP_STATE_HEADER;
 				}else{
 					no_data = true;
 				}
@@ -502,7 +509,7 @@ function create_session(ctx){
 			ctx.session_name = `PDP ${get_mac_str(src_addr)} ${sport}`;
 			ctx.pdp_data = ctx.outstanding_data;
 			delete ctx.outstanding_data;
-			ctx.pdp_state = "header";
+			ctx.pdp_state = PDP_STATE_HEADER;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
 			track_connect(ctx.ip, false, false);
@@ -532,15 +539,15 @@ function create_session(ctx){
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			let port = Buffer.alloc(2);
 			port.writeUInt16LE(sport);
-			ctx.ptp_state = "waiting";
+			ctx.ptp_state = PTP_STATE_WAITING;
 			ctx.ptp_data = ctx.outstanding_data;
 			delete ctx.outstanding_data;
 			listen_session.socket.write(Buffer.concat([src_addr, port]));
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
 			track_connect(ctx.ip, true, false);
 
-			setTimeout(() => {
-				if (ctx.ptp_state == "waiting"){
+			ctx.ptp_wait_timeout = setTimeout(() => {
+				if (ctx.ptp_state == PTP_STATE_WAITING){
 					log(`the other side did not accept the connection request in 20 seconds, killing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
 					close_session(ctx);
 				}
@@ -561,8 +568,9 @@ function create_session(ctx){
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			ctx.peer_session = connect_session;
 			connect_session.peer_session = ctx;
-			ctx.ptp_state = "header";
-			connect_session.ptp_state = "header";
+			ctx.ptp_state = PTP_STATE_HEADER;
+			connect_session.ptp_state = PTP_STATE_HEADER;
+			clearTimeout(connect_session.ptp_wait_timeout);
 			ctx.ptp_data = ctx.outstanding_data;
 			delete ctx.outstanding_data;
 
