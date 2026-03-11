@@ -221,15 +221,19 @@ function close_one_session(ctx){
 	ctx.socket.destroy();
 	delete sessions[ctx.session_name];
 	let sessions_of_this_mac = sessions_by_mac[ctx.src_addr_str];
-	delete sessions_of_this_mac[ctx.session_name];
-	if (Object.keys(sessions_of_this_mac).length == 0){
-		delete sessions_by_mac[ctx.src_addr_str];
+	if (sessions_of_this_mac != undefined){
+		delete sessions_of_this_mac[ctx.session_name];
+		if (Object.keys(sessions_of_this_mac).length == 0){
+			delete sessions_by_mac[ctx.src_addr_str];
+		}
 	}
 
 	let sessions_of_this_ip = sessions_by_ip[ctx.ip];
-	delete sessions_of_this_ip[ctx.session_name];
-	if (Object.keys(sessions_of_this_ip).length == 0){
-		delete sessions_by_ip[ctx.ip];
+	if (sessions_of_this_ip != undefined){
+		delete sessions_of_this_ip[ctx.session_name];
+		if (Object.keys(sessions_of_this_ip).length == 0){
+			delete sessions_by_ip[ctx.ip];
+		}
 	}
 }
 
@@ -283,6 +287,20 @@ function process_statistics(){
 
 setInterval(process_statistics, config.accounting_interval_ms);
 
+function get_target_session_name(mode, my_mac, mac, sport, dport){
+	switch(mode){
+		case SESSION_MODE_PDP:
+			return `PDP ${mac} ${dport}`;
+		case SESSION_MODE_PTP_LISTEN:
+			return `PTP_LISTEN ${mac} ${dport}`;
+		case SESSION_MODE_PTP_CONNECT:
+			return `PTP_CONNECT ${mac} ${dport} ${my_mac} ${sport}`;
+		default:
+			log(`bad mode ${mode}, debug this`);
+			process.exit(1);
+	}
+}
+
 function find_target_session(mode, my_mac, mac, sport, dport){
 	if (config.forwarding_strict_mode){
 		const adhocctl_group = adhocctl_groups_by_mac[my_mac];
@@ -295,21 +313,7 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 		}
 	}
 
-	let target_session_name = "";
-	switch(mode){
-		case SESSION_MODE_PDP:
-			target_session_name = `PDP ${mac} ${dport}`;
-			break;
-		case SESSION_MODE_PTP_LISTEN:
-			target_session_name = `PTP_LISTEN ${mac} ${dport}`;
-			break;
-		case SESSION_MODE_PTP_CONNECT:
-			target_session_name = `PTP_CONNECT ${mac} ${dport} ${my_mac} ${sport}`;
-			break;
-		default:
-			log(`bad mode ${mode}, debug this`);
-			process.exit(1);
-	}
+	const target_session_name = get_target_session_name(mode, my_mac, mac, sport, dport);
 
 	const sessions_of_this_mac = sessions_by_mac[mac];
 	if (sessions_of_this_mac == undefined){
@@ -551,7 +555,8 @@ function create_session(ctx){
 
 			let listen_session = find_target_session(SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 			if (listen_session == undefined){
-				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, target listen session not found`);
+				const target_session_name = get_target_session_name(SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
+				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${target_session_name} not found`);
 				ctx.socket.destroy();
 				break;
 			}
@@ -580,7 +585,8 @@ function create_session(ctx){
 
 			let connect_session = find_target_session(SESSION_MODE_PTP_CONNECT, ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
 			if (connect_session == undefined){
-				log(`connect session not found, closing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
+				const target_session_name = get_target_session_name(SESSION_MODE_PTP_CONNECT, ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
+				log(`${target_session_name} not found, closing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
 				ctx.socket.destroy();
 				break;
 			}
