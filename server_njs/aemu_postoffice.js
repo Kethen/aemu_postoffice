@@ -853,6 +853,24 @@ const routes = {
 	"/data_debug":data_debug,
 };
 
+function session_mode_to_string(mode){
+	switch(mode){
+		case SESSION_MODE_INIT:
+			return "init";
+		case SESSION_MODE_PDP:
+			return "pdp";
+		case SESSION_MODE_PTP_LISTEN:
+			return "ptp_listen";
+		case SESSION_MODE_PTP_CONNECT:
+			return "ptp_connect";
+		case SESSION_MODE_PTP_ACCEPT:
+			return "ptp_accept";
+		default:
+			log(`bad mode ${mode} for string conversion, debug this`);
+			process.exit(1);
+	}
+}
+
 status_server.on("request", (request, response) => {
 	let ret = {};
 	const route = routes[request.url];
@@ -863,7 +881,7 @@ status_server.on("request", (request, response) => {
 	for (let entry of Object.entries(sessions)){
 		let ctx = entry[1];
 		ret_entry = {
-			state:ctx.state,
+			state:session_mode_to_string(ctx.state),
 			src_addr:ctx.src_addr_str,
 			sport:ctx.sport
 		};
