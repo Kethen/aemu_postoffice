@@ -63,7 +63,8 @@ static int connect_with_timeout(int sock, native_sock_addr *addr, int addrlen, i
 			}
 
 			*error = WSAGetLastError();
-			if (*error == WSAEWOULDBLOCK || *error == WSAEALREADY){
+			// it was found out together with @hrydgard that after using WinHttp, it could also throw WSAEINVAL for WSAEALREADY
+			if (*error == WSAEWOULDBLOCK || *error == WSAEALREADY || *error == WSAEINVAL){
 				// in progress
 				Sleep(1);
 				continue;
