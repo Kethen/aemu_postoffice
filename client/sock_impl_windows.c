@@ -13,6 +13,7 @@ void to_native_sock_addr(native_sock_addr *dst, const struct aemu_post_office_so
 	dst->sin_family = AF_INET;
 	dst->sin_addr.s_addr = src->addr;
 	dst->sin_port = src->port;
+	memset(dst->sin_zero, 0, sizeof(dst->sin_zero));
 }
 
 void to_native_sock6_addr(native_sock6_addr *dst, const struct aemu_post_office_sock6_addr *src){
