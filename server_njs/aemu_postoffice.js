@@ -816,6 +816,7 @@ function data_debug(request, response){
 				let response_session = {
 					session_name:session.session_name,
 					ip:session.ip,
+					write_buffer_size:session.socket.writableLength,
 				};
 				response_sessions.push(response_session);
 
