@@ -12,7 +12,7 @@ See [design.md](/design.md)
 
 #### Client implementation
 
-See [./client](/client)
+See [./client/postoffice.c](/client/postoffice.c)
 
 ##### Building and testing
 
@@ -54,52 +54,8 @@ bash build_windows.sh
 
 #### Server implementation
 
-See [./server_njs](/server_njs)
+See [./server_njs/aemu_postoffice.js](/server_njs/aemu_postoffice.js)
 
-##### Running
+##### Running server
 
-Linux using distro packaged nodejs:
-
-```
-# Ubuntu/Debian:
-apt install nodejs git
-
-# OpenSUSE
-zypper install nodejs git
-
-# Fedora
-dnf install nodejs git
-
-# Clone project
-git clone https://github.com/kethen/aemu_postoffice
-
-# Run server
-cd aemu_postoffice/server_njs
-node aemu_postoffice.js
-```
-
-Linux using podman:
-
-```
-# Ubuntu/Debian:
-apt install podman git
-
-# OpenSUSE
-zypper install podman git
-
-# Fedora
-dnf install podman git
-
-# Clone project
-git clone https://github.com/kethen/aemu_postoffice
-
-# Run server
-cd aemu_postoffice/server_njs
-bash run_podman.sh
-
-```
-
-Windows:
-
-1. install https://nodejs.org/en/download
-2. open `aemu_postoffice.js` using nodejs
+See [./server_njs/usage.md](/server_njs/usage.md)
