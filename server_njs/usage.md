@@ -88,4 +88,4 @@ Note that you will have to restart the server to reload these settings. Settings
 
 ### Viewing server status internally
 
-Navigate to http://:27314/data_debug to view the current state of the relay server.
+Navigate to http://:27314/data_debug to view the current state of the relay server. Not that the data format of this endpoint is not stable.
