@@ -6,5 +6,6 @@
 	"accounting_interval_ms":30000,
 	"max_write_buffer_byte":512000,
 	"max_connections":2000,
-	"num_worker_threads":2
+	"num_worker_threads":2,
+	"tick_rate_hz":90
 }

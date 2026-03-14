@@ -62,6 +62,7 @@ let config = {
 	max_write_buffer_byte:512000,
 	max_connections:2000,
 	num_worker_threads:2,
+	tick_rate_hz:90,
 };
 
 function log(...args){
@@ -995,8 +996,7 @@ if (worker_threads.isMainThread){
 
 	server.on("connection", on_connection);
 
-	// 120 hz
-	setInterval(send_chunks_to_workers, 1000 / 120);
+	setInterval(send_chunks_to_workers, 1000 / config.tick_rate_hz);
 
 	log(`begin listening on port ${port}`);
 
@@ -1005,8 +1005,7 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
-	// 120 hz
-	setInterval(send_data_to_parent, 1000 / 120);
+	setInterval(send_data_to_parent, 1000 / config.tick_rate_hz);
 
 	worker_threads.parentPort.on("message", handle_parent_message);
 }

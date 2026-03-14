@@ -71,7 +71,9 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 	"max_per_second_data_rate_byte":0,
 	"max_tx_op_rate":0,
 	"accounting_rate_ms":30000,
-	"max_write_buffer_byte":512000
+	"max_write_buffer_byte":512000,
+	"num_worker_threads":2,
+	"tick_rate_hz":90
 }
 ```
 
@@ -83,6 +85,8 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 | max_tx_op_rate | Evict sessions by IP address that exceeds send operation rate (per second). Be cautious with this option as multiple clients can be from the same ip address. Set to 0 to disable. |
 | accounting_rate_ms | How often statistics are processed for logging and bad behavior IP sessions eviction. Setting this too low risks extra CPU usage as well as false positives on misbehaving IPs. |
 | max_write_buffer_byte | Evict sessions that are not receiving data correctly and causing send buffers to bloat. Set to 0 to disable. |
+| num_worker_threads | Number of worker threads to spawn on top of the main thread. Note that setting this too high will cause more overhead on the main thread. |
+| tick_rate_hz | The server processes packets in bursts. This controls how often the server should process packets. Note that this does not come with any processing timing guarantee, as the actual tick rate depends on whether the server is overloading. Higher tick rate is more CPU demanding, while lower tick rate is more memory demanding. Lower tick rates could also cause lags in some games. |
 
 Note that you will have to restart the server to reload these settings. Settings are logged during server startup for confirmation.
 
