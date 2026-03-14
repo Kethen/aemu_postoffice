@@ -332,18 +332,17 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 	return sessions_of_this_mac[target_session_name];
 }
 
-function send_data_to_parent(from_session_name, to_session_name, data_list){
-	let data = Buffer.concat(data_list);
+function send_data_to_parent(from_session_name, send_list){
 	worker_threads.parentPort.postMessage({
 		type:WORKER_MESSAGE_SEND_DATA,
 		from_session_name:from_session_name,
-		to_session_name:to_session_name,
-		data:data,
+		send_list:send_list,
 	});
 }
 
 function pdp_tick(ctx){
 	let no_data = false;
+	send_list = [];
 	while(!no_data){
 		switch(ctx.pdp_state){
 			case PDP_STATE_HEADER:{
@@ -369,7 +368,8 @@ function pdp_tick(ctx){
 						return;
 					}
 
-					ctx.target_session_name = get_target_session_name(SESSION_MODE_PDP, ctx.src_addr_str, get_mac_str(addr), 0, port);
+					ctx.target_mac = get_mac_str(addr);
+					ctx.target_session_name = get_target_session_name(SESSION_MODE_PDP, ctx.src_addr_str, ctx.target_mac, 0, port);
 					ctx.pdp_data_size = size;
 
 					ctx.pdp_state = PDP_STATE_DATA;
@@ -389,7 +389,12 @@ function pdp_tick(ctx){
 					port.writeUInt16LE(ctx.sport);
 					size.writeUInt32LE(cur_data.length);
 
-					send_data_to_parent(ctx.session_name, ctx.target_session_name, [addr, port, size, cur_data]);
+					send_list.push({
+						to_session_name:ctx.target_session_name,
+						to_mac:ctx.target_mac,
+						data:Buffer.concat([addr, port, size, cur_data]),
+					});
+
 					ctx.pdp_state = PDP_STATE_HEADER;
 				}else{
 					no_data = true;
@@ -401,10 +406,15 @@ function pdp_tick(ctx){
 				process.exit(1);
 		}
 	}
+
+	if (send_list.length != 0){
+		send_data_to_parent(ctx.session_name, send_list);
+	}
 }
 
 function ptp_tick(ctx){
 	let no_data = false;
+	send_list = [];
 	while(!no_data){
 		switch(ctx.ptp_state){
 			case PTP_STATE_HEADER:{
@@ -437,7 +447,11 @@ function ptp_tick(ctx){
 					let size = Buffer.alloc(4);
 					size.writeUInt32LE(ctx.ptp_data_size);
 
-					send_data_to_parent(ctx.session_name, ctx.peer_session_name, [size, cur_data]);
+					send_list.push({
+						to_session_name:ctx.peer_session_name,
+						to_mac:ctx.dst_addr_str,
+						data:Buffer.concat([size, cur_data]),
+					});
 					ctx.ptp_state = PTP_STATE_HEADER;
 				}else{
 					no_data = true;
@@ -448,6 +462,10 @@ function ptp_tick(ctx){
 				log(`bad state ${ctx.ptp_state} in ptp tick, debug this`);
 				process.exit(1);
 		}
+	}
+
+	if (send_list.length != 0){
+		send_data_to_parent(ctx.session_name, send_list);
 	}
 }
 
@@ -511,43 +529,52 @@ function close_session_by_name(name){
 	}
 }
 
-function send_data_to_session(from_session_name, to_session_name, data){
+function send_data_to_sessions(from_session_name, send_list){
 	let from_session = sessions[from_session_name];
-	let to_session = sessions[to_session_name];
 	if (from_session == undefined){
 		log(`warning: worker/coordinator desync during data send from worker`);
 		return;
 	}
-	if (to_session == undefined){
-		return;
-	}
-	if (config.forwarding_strict_mode){
-		let group_from = adhocctl_groups_by_mac[from_session.src_addr_str];
-		let group_to = adhocctl_groups_by_mac[to_session.src_addr_str];
-		if (group_from != group_to){
-			return;
-		}
-	}
-	to_session.socket.write(data);
-	const max_buffer_size = config.max_write_buffer_byte;
-	if (max_buffer_size != 0 && to_session.socket.writableLength >= max_buffer_size){
-		log(`killing session ${to_session.session_name} as write buffer has reached ${to_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
-		close_session(to_session);
-	}
 
-	switch(from_session.state){
-		case SESSION_MODE_PDP:
-			track_bandwidth(to_session.ip, true, false, data.length - 14);
-			track_bandwidth(from_session.ip, true, true, data.length - 14);
-			break;
-		case SESSION_MODE_PTP_ACCEPT:
-		case SESSION_MODE_PTP_CONNECT:
-			track_bandwidth(to_session.ip, true, false, data.length - 4);
-			track_bandwidth(from_session.ip, true, true, data.length - 4);
-			break;
-		default:
-			log(`bad session state ${state} while sending data to worker, debug this`);
-			process.exit(1);
+	for (const send of send_list){
+		const sessions_of_to_mac = sessions_by_mac[send.to_mac];
+		if (sessions_of_to_mac == undefined){
+			continue;
+		}
+		let to_session = sessions_of_to_mac[send.to_session_name];
+		if (to_session == undefined){
+			continue;
+		}
+
+		if (config.forwarding_strict_mode){
+			let group_from = adhocctl_groups_by_mac[from_session.src_addr_str];
+			let group_to = adhocctl_groups_by_mac[to_session.src_addr_str];
+			if (group_from != group_to){
+				continue;
+			}
+		}
+
+		to_session.socket.write(send.data);
+		const max_buffer_size = config.max_write_buffer_byte;
+		if (max_buffer_size != 0 && to_session.socket.writableLength >= max_buffer_size){
+			log(`killing session ${to_session.session_name} as write buffer has reached ${to_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
+			close_session(to_session);
+		}
+
+		switch(from_session.state){
+			case SESSION_MODE_PDP:
+				track_bandwidth(to_session.ip, true, false, send.data.length - 14);
+				track_bandwidth(from_session.ip, true, true, send.data.length - 14);
+				break;
+			case SESSION_MODE_PTP_ACCEPT:
+			case SESSION_MODE_PTP_CONNECT:
+				track_bandwidth(to_session.ip, true, false, send.data.length - 4);
+				track_bandwidth(from_session.ip, true, true, send.data.length - 4);
+				break;
+			default:
+				log(`bad session state ${state} while sending data to worker, debug this`);
+				process.exit(1);
+		}
 	}
 }
 
@@ -557,7 +584,7 @@ function handle_worker_message(m){
 			close_session_by_name(m.session_name);
 			break;
 		case WORKER_MESSAGE_SEND_DATA:
-			send_data_to_session(m.from_session_name, m.to_session_name, m.data);
+			send_data_to_sessions(m.from_session_name, m.send_list);
 			break;
 		default:
 			log(`unknown worker message type ${m.type}, debug this`);
