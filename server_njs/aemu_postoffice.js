@@ -34,6 +34,9 @@ const PARENT_MESSAGE_HANDLE_CHUNK = 2;
 const WORKER_MESSAGE_REMOVE_SESSION = 0;
 const WORKER_MESSAGE_SEND_DATA = 1;
 
+// max chunk size per server tick per session, considering a 2ms refresh interval, 256 data size, broadcasting to 8 other players, and then half it considering this is by tick rate, which is already very generous
+const MAX_TOTAL_CHUNK_SIZE = ((1000 / 2) * 256 * 8) / 2;
+
 process.on('SIGTERM', () => {
    process.exit(1); 
 });
@@ -709,6 +712,11 @@ function send_chunks_to_workers(){
 					chunk_lists[worker_id] = chunk_list;
 				}
 				const mega_chunk = Buffer.concat(session.chunks);
+				if (mega_chunk.length >= MAX_TOTAL_CHUNK_SIZE){
+					log(`${session.session_name} is sending too much data, evicting`);
+					close_session(session);
+					break;
+				}
 				chunk_list.push({
 					session_name:session.session_name,
 					chunk:mega_chunk
