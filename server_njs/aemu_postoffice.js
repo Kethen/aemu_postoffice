@@ -335,6 +335,9 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 }
 
 function send_data_to_parent(){
+	if (send_list.length == 0){
+		return;
+	}
 	worker_threads.parentPort.postMessage({
 		type:WORKER_MESSAGE_SEND_DATA,
 		send_list:send_list,
@@ -397,7 +400,6 @@ function pdp_tick(ctx){
 						to_mac:ctx.target_mac,
 						data:Buffer.concat([addr, port, size, cur_data]),
 					});
-
 					ctx.pdp_state = PDP_STATE_HEADER;
 				}else{
 					no_data = true;
@@ -533,12 +535,12 @@ function send_data_to_sessions(send_list){
 	for (const send of send_list){
 		const sessions_of_from_mac = sessions_by_mac[send.from_mac];
 		if (sessions_of_from_mac == undefined){
-			log(`warning: worker/coordinator desync during data send from worker`);
+			//log(`warning: worker/coordinator desync during data send from worker`);
 			continue;
 		}
 		let from_session = sessions_of_from_mac[send.from_session_name];
 		if (from_session == undefined){
-			log(`warning: worker/coordinator desync during data send from worker`);
+			//log(`warning: worker/coordinator desync during data send from worker`);
 			continue;
 		}
 
