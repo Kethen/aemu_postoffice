@@ -51,6 +51,7 @@ let adhocctl_groups_by_mac = {};
 let adhocctl_players_by_mac = {};
 
 let workers = [];
+let send_list = [];
 
 let config = {
 	connection_strict_mode:false,
@@ -333,17 +334,16 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 	return sessions_of_this_mac[target_session_name];
 }
 
-function send_data_to_parent(from_session_name, send_list){
+function send_data_to_parent(){
 	worker_threads.parentPort.postMessage({
 		type:WORKER_MESSAGE_SEND_DATA,
-		from_session_name:from_session_name,
 		send_list:send_list,
 	});
+	send_list = [];
 }
 
 function pdp_tick(ctx){
 	let no_data = false;
-	send_list = [];
 	while(!no_data){
 		switch(ctx.pdp_state){
 			case PDP_STATE_HEADER:{
@@ -391,6 +391,8 @@ function pdp_tick(ctx){
 					size.writeUInt32LE(cur_data.length);
 
 					send_list.push({
+						from_session_name:ctx.session_name,
+						from_mac:ctx.src_addr_str,
 						to_session_name:ctx.target_session_name,
 						to_mac:ctx.target_mac,
 						data:Buffer.concat([addr, port, size, cur_data]),
@@ -407,15 +409,10 @@ function pdp_tick(ctx){
 				process.exit(1);
 		}
 	}
-
-	if (send_list.length != 0){
-		send_data_to_parent(ctx.session_name, send_list);
-	}
 }
 
 function ptp_tick(ctx){
 	let no_data = false;
-	send_list = [];
 	while(!no_data){
 		switch(ctx.ptp_state){
 			case PTP_STATE_HEADER:{
@@ -449,6 +446,8 @@ function ptp_tick(ctx){
 					size.writeUInt32LE(ctx.ptp_data_size);
 
 					send_list.push({
+						from_session_name:ctx.session_name,
+						from_mac:ctx.src_addr_str,
 						to_session_name:ctx.peer_session_name,
 						to_mac:ctx.dst_addr_str,
 						data:Buffer.concat([size, cur_data]),
@@ -530,14 +529,19 @@ function close_session_by_name(name){
 	}
 }
 
-function send_data_to_sessions(from_session_name, send_list){
-	let from_session = sessions[from_session_name];
-	if (from_session == undefined){
-		log(`warning: worker/coordinator desync during data send from worker`);
-		return;
-	}
-
+function send_data_to_sessions(send_list){
 	for (const send of send_list){
+		const sessions_of_from_mac = sessions_by_mac[send.from_mac];
+		if (sessions_of_from_mac == undefined){
+			log(`warning: worker/coordinator desync during data send from worker`);
+			continue;
+		}
+		let from_session = sessions_of_from_mac[send.from_session_name];
+		if (from_session == undefined){
+			log(`warning: worker/coordinator desync during data send from worker`);
+			continue;
+		}
+
 		const sessions_of_to_mac = sessions_by_mac[send.to_mac];
 		if (sessions_of_to_mac == undefined){
 			continue;
@@ -585,7 +589,7 @@ function handle_worker_message(m){
 			close_session_by_name(m.session_name);
 			break;
 		case WORKER_MESSAGE_SEND_DATA:
-			send_data_to_sessions(m.from_session_name, m.send_list);
+			send_data_to_sessions(m.send_list);
 			break;
 		default:
 			log(`unknown worker message type ${m.type}, debug this`);
@@ -593,27 +597,29 @@ function handle_worker_message(m){
 	}
 }
 
-function handle_chunk_from_parent(session_name, chunk){
-	let target_session = sessions[session_name];
-	if (target_session == undefined){
-		log(`warning: worker/coordinator desync during chunk processing from parent, probably needs debugging`);
-		return;
-	}
-	switch(target_session.state){
-		case SESSION_MODE_PDP:{
-			target_session.pdp_data = Buffer.concat([target_session.pdp_data, chunk]);
-			pdp_tick(target_session);
-			break;
+function handle_chunks_from_parent(chunk_list){
+	for (const chunk of chunk_list){
+		let target_session = sessions[chunk.session_name];
+		if (target_session == undefined){
+			log(`warning: worker/coordinator desync during chunk processing from parent, probably needs debugging`);
+			return;
 		}
-		case SESSION_MODE_PTP_CONNECT:
-		case SESSION_MODE_PTP_ACCEPT:{
-			target_session.ptp_data = Buffer.concat([target_session.ptp_data, chunk]);
-			ptp_tick(target_session);
-			break;
+		switch(target_session.state){
+			case SESSION_MODE_PDP:{
+				target_session.pdp_data = Buffer.concat([target_session.pdp_data, chunk.chunk]);
+				pdp_tick(target_session);
+				break;
+			}
+			case SESSION_MODE_PTP_CONNECT:
+			case SESSION_MODE_PTP_ACCEPT:{
+				target_session.ptp_data = Buffer.concat([target_session.ptp_data, chunk.chunk]);
+				ptp_tick(target_session);
+				break;
+			}
+			default:
+				log(`bad session state ${target_session.state} while handling chunk from parent, debug this`);
+				process.exit(1);
 		}
-		default:
-			log(`bad session state ${target_session.state} while handling chunk from parent, debug this`);
-			process.exit(1);
 	}
 }
 
@@ -644,7 +650,7 @@ function handle_parent_message(m){
 			delete sessions[m.session_name];
 			break;
 		case PARENT_MESSAGE_HANDLE_CHUNK:
-			handle_chunk_from_parent(m.session_name, m.chunk);
+			handle_chunks_from_parent(m.chunk_list);
 			break;
 		default:
 			log(`unknown parent message type ${m.type}, debug this`);
@@ -681,6 +687,49 @@ function add_session_to_worker(session){
 	delete session.pdp_data;
 	delete session.ptp_data;
 	session.worker = least_sessions_worker;
+}
+
+function send_chunks_to_workers(){
+	let chunk_lists = {};
+	for (const session of Object.values(sessions)){
+		switch(session.state){
+			case SESSION_MODE_PDP:
+			case SESSION_MODE_PTP_ACCEPT:
+			case SESSION_MODE_PTP_CONNECT:{
+				if (session.worker == undefined){
+					break;
+				}
+				const worker_id = session.worker.id;
+				let chunk_list = chunk_lists[worker_id];
+				if (chunk_list == undefined){
+					chunk_list = [];
+					chunk_lists[worker_id] = chunk_list;
+				}
+				const mega_chunk = Buffer.concat(session.chunks);
+				chunk_list.push({
+					session_name:session.session_name,
+					chunk:mega_chunk
+				});
+				session.chunks = [];
+				break;
+			}
+			case SESSION_MODE_PTP_LISTEN:
+				break;
+			default:
+				log(`bad session state ${session.state} while sending chunks to workers, debug this`);
+				process.exit(1);
+		}
+	}
+
+	for (const [id, chunk_list] of Object.entries(chunk_lists)){
+		if (chunk_list.length == 0){
+			continue;
+		}
+		workers[id].worker.postMessage({
+			type:PARENT_MESSAGE_HANDLE_CHUNK,
+			chunk_list:chunk_list,
+		});
+	}
 }
 
 function create_session(ctx){
@@ -816,14 +865,6 @@ function create_session(ctx){
 	}
 }
 
-function send_chunk_to_worker(worker, session_name, chunk){
-	worker.worker.postMessage({
-		type:PARENT_MESSAGE_HANDLE_CHUNK,
-		session_name:session_name,
-		chunk:chunk
-	}, [chunk.buffer]);
-}
-
 function on_connection(socket){
 	socket.setKeepAlive(true);
 	socket.setNoDelay(true);
@@ -832,7 +873,8 @@ function on_connection(socket){
 		socket:socket,
 		init_data:Buffer.alloc(0),
 		state:SESSION_MODE_INIT,
-		ip:socket.remoteAddress
+		ip:socket.remoteAddress,
+		chunks:[],
 	};
 
 	socket.on("error", (err) => {
@@ -894,7 +936,7 @@ function on_connection(socket){
 				break;
 			}
 			case SESSION_MODE_PDP:{
-				send_chunk_to_worker(ctx.worker, ctx.session_name, new_data);
+				ctx.chunks.push(new_data);
 				break;
 			}
 			case SESSION_MODE_PTP_LISTEN:{
@@ -903,7 +945,7 @@ function on_connection(socket){
 			}
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:{
-				send_chunk_to_worker(ctx.worker, ctx.session_name, new_data);
+				ctx.chunks.push(new_data);
 				break;
 			}
 			default:{
@@ -937,6 +979,7 @@ if (worker_threads.isMainThread){
 
 	for (let i = 0;i < config.num_worker_threads;i++){
 		let worker = {
+			id:i,
 			num_sessions:0,
 			worker:new worker_threads.Worker(__filename),
 		};
@@ -950,6 +993,9 @@ if (worker_threads.isMainThread){
 
 	server.on("connection", on_connection);
 
+	// 120 hz
+	setInterval(send_chunks_to_workers, 1000 / 120);
+
 	log(`begin listening on port ${port}`);
 
 	server.listen({
@@ -957,6 +1003,9 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
+	// 120 hz
+	setInterval(send_data_to_parent, 1000 / 120);
+
 	worker_threads.parentPort.on("message", handle_parent_message);
 }
 
