@@ -332,6 +332,16 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 	return sessions_of_this_mac[target_session_name];
 }
 
+function send_data_to_parent(from_session_name, to_session_name, data_list){
+	let data = Buffer.concat(data_list);
+	worker_threads.parentPort.postMessage({
+		type:WORKER_MESSAGE_SEND_DATA,
+		from_session_name:from_session_name,
+		to_session_name:to_session_name,
+		data:data,
+	});
+}
+
 function pdp_tick(ctx){
 	let no_data = false;
 	while(!no_data){
@@ -379,13 +389,7 @@ function pdp_tick(ctx){
 					port.writeUInt16LE(ctx.sport);
 					size.writeUInt32LE(cur_data.length);
 
-					worker_threads.parentPort.postMessage({
-						type:WORKER_MESSAGE_SEND_DATA,
-						from_session_name:ctx.session_name,
-						to_session_name:ctx.target_session_name,
-						data:Buffer.concat([addr, port, size, cur_data]),
-					});
-
+					send_data_to_parent(ctx.session_name, ctx.target_session_name, [addr, port, size, cur_data]);
 					ctx.pdp_state = PDP_STATE_HEADER;
 				}else{
 					no_data = true;
@@ -433,13 +437,7 @@ function ptp_tick(ctx){
 					let size = Buffer.alloc(4);
 					size.writeUInt32LE(ctx.ptp_data_size);
 
-					worker_threads.parentPort.postMessage({
-						type:WORKER_MESSAGE_SEND_DATA,
-						from_session_name:ctx.session_name,
-						to_session_name:ctx.peer_session_name,
-						data:Buffer.concat([size, cur_data]),
-					});
-
+					send_data_to_parent(ctx.session_name, ctx.peer_session_name, [size, cur_data]);
 					ctx.ptp_state = PTP_STATE_HEADER;
 				}else{
 					no_data = true;
@@ -790,6 +788,14 @@ function create_session(ctx){
 	}
 }
 
+function send_chunk_to_worker(worker, session_name, chunk){
+	worker.worker.postMessage({
+		type:PARENT_MESSAGE_HANDLE_CHUNK,
+		session_name:session_name,
+		chunk:chunk
+	}, [chunk.buffer]);
+}
+
 function on_connection(socket){
 	socket.setKeepAlive(true);
 	socket.setNoDelay(true);
@@ -860,11 +866,7 @@ function on_connection(socket){
 				break;
 			}
 			case SESSION_MODE_PDP:{
-				ctx.worker.worker.postMessage({
-					type:PARENT_MESSAGE_HANDLE_CHUNK,
-					session_name:ctx.session_name,
-					chunk:new_data,
-				});
+				send_chunk_to_worker(ctx.worker, ctx.session_name, new_data);
 				break;
 			}
 			case SESSION_MODE_PTP_LISTEN:{
@@ -873,11 +875,7 @@ function on_connection(socket){
 			}
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:{
-				ctx.worker.worker.postMessage({
-					type:PARENT_MESSAGE_HANDLE_CHUNK,
-					session_name:ctx.session_name,
-					chunk:new_data,
-				});
+				send_chunk_to_worker(ctx.worker, ctx.session_name, new_data);
 				break;
 			}
 			default:{
