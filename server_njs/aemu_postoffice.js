@@ -589,13 +589,15 @@ function handle_chunk_from_parent(session_name, chunk){
 	}
 }
 
-function tick_session(session){
+function session_first_tick(session){
 	switch(session.state){
 		case SESSION_MODE_PDP:
+			session.pdp_data = Buffer.from(session.pdp_data);
 			pdp_tick(session);
 			break;
 		case SESSION_MODE_PTP_CONNECT:
 		case SESSION_MODE_PTP_ACCEPT:
+			session.ptp_data = Buffer.from(session.ptp_data);
 			ptp_tick(session);
 			break;
 		default:
@@ -608,7 +610,7 @@ function handle_parent_message(m){
 	switch(m.type){
 		case PARENT_MESSAGE_CREATE_SESSION:
 			sessions[m.session.session_name] = m.session;
-			tick_session(m.session);
+			session_first_tick(m.session);
 			break;
 		case PARENT_MESSAGE_REMOVE_SESSION:
 			delete sessions[m.session_name];
