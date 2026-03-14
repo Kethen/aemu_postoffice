@@ -52,8 +52,8 @@ let config = {
 	max_write_buffer_byte:512000,
 };
 
-function log(str){
-	console.log(`${new Date()}: ${str}`)
+function log(...args){
+	console.log(new Date().toISOString(), ...args);
 };
 
 function load_config(){
