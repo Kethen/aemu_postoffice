@@ -4,5 +4,6 @@
 	"max_per_second_data_rate_byte":0,
 	"max_tx_op_rate":0,
 	"accounting_interval_ms":30000,
-	"max_write_buffer_byte":512000
+	"max_write_buffer_byte":512000,
+	"max_connections":2000
 }
