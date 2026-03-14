@@ -50,6 +50,7 @@ let config = {
 	max_tx_op_rate:0,
 	accounting_interval_ms:30000,
 	max_write_buffer_byte:512000,
+	max_connections:2000
 };
 
 function log(...args){
@@ -89,7 +90,7 @@ function get_sock_addr_str (sock){
 
 let server = net.createServer();
 
-server.maxConnections = 1000;
+server.maxConnections = config.max_connections;
 
 server.on("error", (err) => {
 	throw err;
