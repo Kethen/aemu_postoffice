@@ -517,8 +517,11 @@ function close_session_by_name(name){
 function send_data_to_session(from_session_name, to_session_name, data){
 	let from_session = sessions[from_session_name];
 	let to_session = sessions[to_session_name];
-	if (from_session == undefined || to_session == undefined){
+	if (from_session == undefined){
 		log(`warning: worker/coordinator desync during data send from worker`);
+		return;
+	}
+	if (to_session == undefined){
 		return;
 	}
 	if (config.forwarding_strict_mode){
