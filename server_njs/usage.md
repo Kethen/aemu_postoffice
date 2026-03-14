@@ -73,7 +73,8 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 	"accounting_rate_ms":30000,
 	"max_write_buffer_byte":512000,
 	"num_worker_threads":1,
-	"tick_rate_hz":90
+	"tick_rate_hz":90,
+	"max_ips":0
 }
 ```
 
@@ -87,6 +88,7 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 | max_write_buffer_byte | Evict sessions that are not receiving data correctly and causing send buffers to bloat. Set to 0 to disable. |
 | num_worker_threads | Number of worker threads to spawn on top of the main thread. Note that setting this too high will slow the main thread down. At the moment, 1 should be the sweet spot, as most work are still done on the main thread. |
 | tick_rate_hz | The server processes packets in bursts. This controls how often the server should process packets. Note that this does not come with any processing timing guarantee, as the actual tick rate depends on whether the server is overloading. Higher tick rate is more CPU demanding, while lower tick rate is more memory demanding. Lower tick rates could also cause lags in some games. 60-120 should be a good range for tuning. |
+| max_ips | Limit the maximum number of unique IPs on the server. When the number is reached, further connections from fresh IPs are rejected. Note that number of unique IPs might not match 1 to 1 to number of users, with NATs on the internet, only adhocctl server carries that data. Set to 0 to disable. |
 
 Note that you will have to restart the server to reload these settings. Settings are logged during server startup for confirmation.
 

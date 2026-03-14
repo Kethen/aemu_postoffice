@@ -66,6 +66,7 @@ let config = {
 	max_connections:2000,
 	num_worker_threads:1,
 	tick_rate_hz:90,
+	max_ips:0,
 };
 
 function log(...args){
@@ -766,6 +767,15 @@ function create_session(ctx){
 	delete ctx.init_data;
 
 	if (!strict_mode_verify_ip_addr(ctx.src_addr_str, ctx.ip)){
+		ctx.socket.destroy();
+		clearTimeout(ctx.init_timeout);
+		return;
+	}
+
+	const num_ips = Object.keys(sessions_by_ip).length;
+	const sessions_of_this_ip = sessions_by_ip[ctx.ip];
+	const max_ips = config.max_ips;
+	if (max_ips != 0 && sessions_of_this_ip == undefined && num_ips >= max_ips){
 		ctx.socket.destroy();
 		clearTimeout(ctx.init_timeout);
 		return;
