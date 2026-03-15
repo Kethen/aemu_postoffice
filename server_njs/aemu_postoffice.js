@@ -1,7 +1,7 @@
 const net = require('node:net');
 const http = require('node:http');
 const fs = require('node:fs');
-const worker_threads = require('node:worker_threads');
+const cluster = require('node:cluster');
 
 const port = 27313
 const status_port = 27314;
@@ -87,7 +87,7 @@ function load_config(){
 }
 
 load_config();
-if (worker_threads.isMainThread){
+if (cluster.isPrimary){
 	log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
 }
 
@@ -246,7 +246,7 @@ function close_one_session(ctx){
 	}
 
 	if (ctx.worker != undefined){
-		ctx.worker.worker.postMessage({
+		ctx.worker.worker.send({
 			type:PARENT_MESSAGE_REMOVE_SESSION,
 			session_name:ctx.session_name,
 		});
@@ -343,7 +343,7 @@ function send_data_to_parent(){
 	if (send_list.length == 0){
 		return;
 	}
-	worker_threads.parentPort.postMessage({
+	process.send({
 		type:WORKER_MESSAGE_SEND_DATA,
 		send_list:send_list,
 	});
@@ -369,7 +369,7 @@ function pdp_tick(ctx){
 
 					if (size > PDP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						worker_threads.parentPort.postMessage({
+						process.send({
 							type:WORKER_MESSAGE_REMOVE_SESSION,
 							session_name:ctx.session_name,
 						});
@@ -430,7 +430,7 @@ function ptp_tick(ctx){
 					let size = cur_data.readUInt32LE();
 					if (size > PTP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						worker_threads.parentPort.postMessage({
+						process.send({
 							type:WORKER_MESSAGE_REMOVE_SESSION,
 							session_name:ctx.session_name,
 						});
@@ -562,7 +562,7 @@ function send_data_to_sessions(send_list){
 			}
 		}
 
-		to_session.socket.write(send.data);
+		to_session.socket.write(new Uint8Array(send.data.data));
 		const max_buffer_size = config.max_write_buffer_byte;
 		if (max_buffer_size != 0 && to_session.socket.writableLength >= max_buffer_size){
 			log(`killing session ${to_session.session_name} as write buffer has reached ${to_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
@@ -609,13 +609,13 @@ function handle_chunks_from_parent(chunk_list){
 		}
 		switch(target_session.state){
 			case SESSION_MODE_PDP:{
-				target_session.pdp_data = Buffer.concat([target_session.pdp_data, chunk.chunk]);
+				target_session.pdp_data = Buffer.concat([target_session.pdp_data, new Uint8Array(chunk.chunk.data)]);
 				pdp_tick(target_session);
 				break;
 			}
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:{
-				target_session.ptp_data = Buffer.concat([target_session.ptp_data, chunk.chunk]);
+				target_session.ptp_data = Buffer.concat([target_session.ptp_data, new Uint8Array(chunk.chunk.data)]);
 				ptp_tick(target_session);
 				break;
 			}
@@ -643,11 +643,17 @@ function session_first_tick(session){
 	}
 }
 
+function create_session_from_parent_message(session){
+	session.src_addr = new Uint8Array(session.src_addr.data);
+	session.dst_addr = new Uint8Array(session.dst_addr.data);
+	sessions[session.session_name] = session;
+	session_first_tick(session);
+}
+
 function handle_parent_message(m){
 	switch(m.type){
 		case PARENT_MESSAGE_CREATE_SESSION:
-			sessions[m.session.session_name] = m.session;
-			session_first_tick(m.session);
+			create_session_from_parent_message(m.session);
 			break;
 		case PARENT_MESSAGE_REMOVE_SESSION:
 			delete sessions[m.session_name];
@@ -668,7 +674,7 @@ function add_session_to_worker(session){
 			least_sessions_worker = worker;
 		}
 	}
-	least_sessions_worker.worker.postMessage({
+	least_sessions_worker.worker.send({
 		type:PARENT_MESSAGE_CREATE_SESSION,
 		session:{
 			src_addr:session.src_addr,
@@ -733,7 +739,7 @@ function send_chunks_to_workers(){
 		if (chunk_list.length == 0){
 			continue;
 		}
-		workers[id].worker.postMessage({
+		workers[id].worker.send({
 			type:PARENT_MESSAGE_HANDLE_CHUNK,
 			chunk_list:chunk_list,
 		});
@@ -980,7 +986,7 @@ function on_connection(socket){
 	}, 20000)
 }
 
-if (worker_threads.isMainThread){
+if (cluster.isPrimary){
 	let server = net.createServer();
 
 	server.maxConnections = config.max_connections;
@@ -998,7 +1004,7 @@ if (worker_threads.isMainThread){
 		let worker = {
 			id:i,
 			num_sessions:0,
-			worker:new worker_threads.Worker(__filename),
+			worker:cluster.fork(),
 		};
 		worker.worker.on("message", handle_worker_message);
 		worker.worker.once("error", (e) => {
@@ -1021,10 +1027,10 @@ if (worker_threads.isMainThread){
 }else{
 	setInterval(send_data_to_parent, 1000 / config.tick_rate_hz);
 
-	worker_threads.parentPort.on("message", handle_parent_message);
+	process.on("message", handle_parent_message);
 }
 
-if (worker_threads.isMainThread){
+if (cluster.isPrimary){
 	let status_server = http.createServer();
 	status_server.on("error", (err) => {
 		throw err;
