@@ -470,10 +470,6 @@ function ptp_tick(ctx){
 				process.exit(1);
 		}
 	}
-
-	if (send_list.length != 0){
-		send_data_to_parent(ctx.session_name, send_list);
-	}
 }
 
 function remove_existing_and_insert_session(ctx, name){
