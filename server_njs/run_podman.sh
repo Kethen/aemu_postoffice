@@ -1,5 +1,7 @@
 IMAGE=node:slim
 
+set -xe
+
 DEBUG=${DEBUG:-false}
 
 podman_arg=""
@@ -8,6 +10,11 @@ if $DEBUG
 then
 	podman_arg="-p 9229:9229"
 	node_arg="--inspect=0.0.0.0:9229"
+
+	for port in 9230 9231 9232 9233
+	do
+		podman_arg="$podman_arg -p $port:$port"
+	done
 fi
 
 MAX_OLD_SPACE_MB=${MAX_OLD_SPACE_MB:-}

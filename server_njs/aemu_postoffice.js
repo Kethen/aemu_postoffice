@@ -1,7 +1,7 @@
 const net = require('node:net');
 const http = require('node:http');
 const fs = require('node:fs');
-const worker_threads = require('node:worker_threads');
+const cluster = require('node:cluster');
 
 const port = 27313
 const status_port = 27314;
@@ -15,6 +15,7 @@ const AEMU_POSTOFFICE_INIT_PTP_ACCEPT = 3;
 const PDP_BLOCK_MAX = 10 * 1024;
 const PTP_BLOCK_MAX = 50 * 1024;
 
+const SESSION_MODE_DEAD = -2;
 const SESSION_MODE_INIT = -1;
 const SESSION_MODE_PDP = 0;
 const SESSION_MODE_PTP_LISTEN = 1;
@@ -44,6 +45,8 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
    process.exit(1); 
 });
+
+let pending_sessions = {};
 
 let sessions = {};
 let sessions_by_mac = {};
@@ -87,7 +90,7 @@ function load_config(){
 }
 
 load_config();
-if (worker_threads.isMainThread){
+if (cluster.isPrimary){
 	log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
 }
 
@@ -246,7 +249,7 @@ function close_one_session(ctx){
 	}
 
 	if (ctx.worker != undefined){
-		ctx.worker.worker.postMessage({
+		ctx.worker.worker.send({
 			type:PARENT_MESSAGE_REMOVE_SESSION,
 			session_name:ctx.session_name,
 		});
@@ -339,15 +342,11 @@ function find_target_session(mode, my_mac, mac, sport, dport){
 	return sessions_of_this_mac[target_session_name];
 }
 
-function send_data_to_parent(){
-	if (send_list.length == 0){
-		return;
-	}
-	worker_threads.parentPort.postMessage({
-		type:WORKER_MESSAGE_SEND_DATA,
-		send_list:send_list,
-	});
-	send_list = [];
+function send_drop_session_message_to_parent(session){
+	process.send({
+		type:WORKER_MESSAGE_REMOVE_SESSION,
+		session_name:session.session_name,
+	});	
 }
 
 function pdp_tick(ctx){
@@ -369,10 +368,7 @@ function pdp_tick(ctx){
 
 					if (size > PDP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						worker_threads.parentPort.postMessage({
-							type:WORKER_MESSAGE_REMOVE_SESSION,
-							session_name:ctx.session_name,
-						});
+						send_drop_session_message_to_parent(ctx);
 
 						return;
 					}
@@ -430,10 +426,7 @@ function ptp_tick(ctx){
 					let size = cur_data.readUInt32LE();
 					if (size > PTP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						worker_threads.parentPort.postMessage({
-							type:WORKER_MESSAGE_REMOVE_SESSION,
-							session_name:ctx.session_name,
-						});
+						send_drop_session_message_to_parent(ctx);
 						return;
 					}
 
@@ -470,10 +463,70 @@ function ptp_tick(ctx){
 				process.exit(1);
 		}
 	}
+}
 
-	if (send_list.length != 0){
-		send_data_to_parent(ctx.session_name, send_list);
+function process_new_chunks(){
+	for (const session of Object.values(sessions)){
+		switch(session.state){
+			case SESSION_MODE_PDP:{
+				if (session.chunks.length == 0){
+					break;
+				}
+				session.chunks.unshift(session.pdp_data);
+				session.pdp_data = Buffer.concat(session.chunks);
+				session.chunks = [];
+				pdp_tick(session);
+				break;
+			}
+			case SESSION_MODE_PTP_CONNECT:
+			case SESSION_MODE_PTP_ACCEPT:{
+				if (session.chunks.length == 0){
+					break;
+				}
+				session.chunks.unshift(session.ptp_data);
+				session.ptp_data = Buffer.concat(session.chunks);
+				session.chunks = [];
+				ptp_tick(session);
+				break
+			}
+			default:
+				log(`bad session mode ${sesion.state} during chunk processing`);
+				process.exit(1);
+		}
 	}
+}
+
+function process_send_list(){
+	if (send_list.length == 0){
+		return;
+	}
+
+	let to_parent_send_list = [];
+	for (const send of send_list){
+		const session = sessions[send.to_session_name];
+		if (session == undefined){
+			to_parent_send_list.push(send);
+			continue;
+		}
+		session.socket.write(send.data);
+		// TODO process statistics in worker
+		// TODO process write buffer size limit in worker
+		// TODO parent send list forwarder
+		// TODO worker send list handler
+	}
+
+	if (to_parent_send_list.length != 0){
+		process.send({
+			type:WORKER_MESSAGE_SEND_DATA,
+			send_list:to_parent_send_list,
+		});
+	}
+	send_list = [];
+}
+
+function worker_tick(){
+	process_new_chunks();
+	process_send_list();
 }
 
 function remove_existing_and_insert_session(ctx, name){
@@ -566,7 +619,7 @@ function send_data_to_sessions(send_list){
 			}
 		}
 
-		to_session.socket.write(send.data);
+		to_session.socket.write(Buffer.from(send.data));
 		const max_buffer_size = config.max_write_buffer_byte;
 		if (max_buffer_size != 0 && to_session.socket.writableLength >= max_buffer_size){
 			log(`killing session ${to_session.session_name} as write buffer has reached ${to_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
@@ -638,8 +691,15 @@ function session_first_tick(session){
 			break;
 		case SESSION_MODE_PTP_CONNECT:
 		case SESSION_MODE_PTP_ACCEPT:
+			// only tick the sessions when the pair is here
+			let peer_session = sessions[session.peer_session_name];
+			if (peer_session == undefined){
+				break;
+			}
 			session.ptp_data = Buffer.from(session.ptp_data);
+			peer_session.ptp_data = Buffer.from(peer_session.ptp_data);
 			ptp_tick(session);
+			ptp_tick(peer_session);
 			break;
 		default:
 			log(`bad session state ${session.state} during first tick in worker, please debug this`);
@@ -647,14 +707,65 @@ function session_first_tick(session){
 	}
 }
 
-function handle_parent_message(m){
+function create_session_from_parent(session, socket){
+	if (!socket){
+		// socket died during transportation
+		log(`${session.session_name} socket died while being assigned to worker, killing session`);
+		send_drop_session_message_to_parent(session);
+		return;
+	}
+
+	session.src_addr = Buffer.from(session.src_addr);
+	session.dst_addr = Buffer.from(session.dst_addr);
+	switch(session.state){
+		case SESSION_MODE_PDP:
+			session.pdp_data = Buffer.from(session.pdp_data);
+			break;
+		case SESSION_MODE_PTP_ACCEPT:
+		case SESSION_MODE_PTP_CONNECT:
+			session.ptp_data = Buffer.from(session.ptp_data);
+			break;
+		default:
+			log(`bad session state ${session.state} while importing session from parent, debug this`);
+			process.exit(1);
+	}
+
+	session.socket = socket;
+	session.chunks = [];
+	session.socket.on("data", (chunk) => {
+		log(`pushing chunk on ${session.session_name}`);
+		session.chunks.push(chunk);
+	});
+	session.socket.on("error", () => {
+		log(`${session.session_name} socket errored, closing session`);
+		send_drop_session_message_to_parent(session);
+	});
+	session.socket.on("end", () => {
+		log(`${session.session_name} socket closed, closing session`);
+		send_drop_session_message_to_parent(session);
+	});
+	sessions[session.session_name] = session;
+	session.socket.resume();
+
+	session_first_tick(session);	
+}
+
+function remove_session_from_parent(session_name){
+	let session = sessions[session_name];
+	if (session == undefined){
+		return;
+	}
+	delete sessions[session_name];
+	session.socket.destroy();
+}
+
+function handle_parent_message(m, handle){
 	switch(m.type){
 		case PARENT_MESSAGE_CREATE_SESSION:
-			sessions[m.session.session_name] = m.session;
-			session_first_tick(m.session);
+			create_session_from_parent(m.session, handle);
 			break;
 		case PARENT_MESSAGE_REMOVE_SESSION:
-			delete sessions[m.session_name];
+			remove_session_from_parent(m.session_name);
 			break;
 		case PARENT_MESSAGE_HANDLE_CHUNK:
 			handle_chunks_from_parent(m.chunk_list);
@@ -665,35 +776,40 @@ function handle_parent_message(m){
 	}
 }
 
-function add_session_to_worker(session){
+function add_session_to_worker(session_list){
 	let least_sessions_worker = null;
 	for (let worker of workers){
 		if (least_sessions_worker == null || least_sessions_worker.num_sessions > worker.num_sessions){
 			least_sessions_worker = worker;
 		}
 	}
-	least_sessions_worker.worker.postMessage({
-		type:PARENT_MESSAGE_CREATE_SESSION,
-		session:{
-			src_addr:session.src_addr,
-			sport:session.sport,
-			dst_addr:session.dst_addr,
-			dport:session.dport,
-			src_addr_str:session.src_addr_str,
-			dst_addr_str:session.dst_addr_str,
-			state:session.state,
-			session_name:session.session_name,
-			pdp_data:session.pdp_data,
-			ptp_data:session.ptp_data,
-			peer_session_name:session.peer_session_name,
-			pdp_state:session.pdp_state,
-			ptp_state:session.ptp_state,
-		}
-	});
-	least_sessions_worker.num_sessions++;
-	delete session.pdp_data;
-	delete session.ptp_data;
-	session.worker = least_sessions_worker;
+
+	for (const session of session_list){
+		session.socket.on("end", () => {});
+		session.socket.on("err", () => {});
+		least_sessions_worker.worker.send({
+			type:PARENT_MESSAGE_CREATE_SESSION,
+			session:{
+				src_addr:session.src_addr,
+				sport:session.sport,
+				dst_addr:session.dst_addr,
+				dport:session.dport,
+				src_addr_str:session.src_addr_str,
+				dst_addr_str:session.dst_addr_str,
+				state:session.state,
+				session_name:session.session_name,
+				pdp_data:session.pdp_data,
+				ptp_data:session.ptp_data,
+				peer_session_name:session.peer_session_name,
+				pdp_state:session.pdp_state,
+				ptp_state:session.ptp_state,
+			}
+		}, session.socket, {keepOpen:false});
+		least_sessions_worker.num_sessions++;
+		delete session.pdp_data;
+		delete session.ptp_data;
+		session.worker = least_sessions_worker;
+	}
 }
 
 function send_chunks_to_workers(){
@@ -737,7 +853,7 @@ function send_chunks_to_workers(){
 		if (chunk_list.length == 0){
 			continue;
 		}
-		workers[id].worker.postMessage({
+		workers[id].worker.send({
 			type:PARENT_MESSAGE_HANDLE_CHUNK,
 			chunk_list:chunk_list,
 		});
@@ -792,7 +908,7 @@ function create_session(ctx){
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
 			track_connect(ctx.ip, false, false);
 
-			add_session_to_worker(ctx);
+			add_session_to_worker([ctx]);
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
@@ -802,6 +918,7 @@ function create_session(ctx){
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
 			track_connect(ctx.ip, true, true);
+			ctx.socket.resume();
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
@@ -875,8 +992,7 @@ function create_session(ctx){
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
 			track_connect(ctx.ip, true, false);
 
-			add_session_to_worker(connect_session);
-			add_session_to_worker(ctx);
+			add_session_to_worker([connect_session, ctx]);
 			break;
 		}
 		default:
@@ -944,29 +1060,27 @@ function on_connection(socket){
 
 	socket.on("data", (new_data) => {
 		switch(ctx.state){
-			case SESSION_MODE_INIT:{
-				let new_buffer = Buffer.concat([ctx.init_data, new_data]);
-				
-				if (new_buffer.length >= 24){
-					ctx.init_data = new_buffer.slice(0, 24);
-					ctx.outstanding_data = new_buffer.slice(24);
-					create_session(ctx);
-				}
+			case SESSION_MODE_INIT:
+				ctx.init_data = Buffer.concat([ctx.init_data, new_data]);
+				if (ctx.init_data.length >= 24){
+					// this gives me a headache, why is node like this in this case
+					// https://github.com/nodejs/node/issues/8353
+					// calling pause doesn't mean we don't have data event waiting for us
+					// calling .read just resumes the socket
+					// so there's no way to drain the socket through node while keeping it paused
+					ctx.socket.pause();
+					clearTimeout(ctx.init_timeout);
 
-				ctx.init_data = new_buffer;
+					setTimeout(() => {
+						ctx.outstanding_data = ctx.init_data.slice(24);
+						ctx.init_data = ctx.init_data.slice(0, 24);
+						create_session(ctx);
+					}, 200);
+
+					return;
+				}
 				break;
-			}
-			case SESSION_MODE_PDP:{
-				ctx.chunks.push(new_data);
-				break;
-			}
 			case SESSION_MODE_PTP_LISTEN:{
-				// we just discard incoming data for ptp_listen
-				break;
-			}
-			case SESSION_MODE_PTP_CONNECT:
-			case SESSION_MODE_PTP_ACCEPT:{
-				ctx.chunks.push(new_data);
 				break;
 			}
 			default:{
@@ -980,11 +1094,12 @@ function on_connection(socket){
 		if (ctx.state == SESSION_MODE_INIT){
 			log(`removing stale connection ${get_sock_addr_str(ctx.socket)}`);
 			ctx.socket.destroy();
+			ctx.state = SESSION_MODE_DEAD;
 		}
 	}, 20000)
 }
 
-if (worker_threads.isMainThread){
+if (cluster.isPrimary){
 	let server = net.createServer();
 
 	server.maxConnections = config.max_connections;
@@ -1002,11 +1117,11 @@ if (worker_threads.isMainThread){
 		let worker = {
 			id:i,
 			num_sessions:0,
-			worker:new worker_threads.Worker(__filename),
+			worker:cluster.fork(),
 		};
 		worker.worker.on("message", handle_worker_message);
 		worker.worker.once("error", (e) => {
-			log(`worker error ${e}, debug this`);
+			log(`worker error `, e, ` debug this`);
 			process.exit(1);
 		});
 		workers.push(worker);
@@ -1014,7 +1129,7 @@ if (worker_threads.isMainThread){
 
 	server.on("connection", on_connection);
 
-	setInterval(send_chunks_to_workers, 1000 / config.tick_rate_hz);
+	//setInterval(send_chunks_to_workers, 1000 / config.tick_rate_hz);
 
 	log(`begin listening on port ${port}`);
 
@@ -1023,12 +1138,12 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
-	setInterval(send_data_to_parent, 1000 / config.tick_rate_hz);
+	setInterval(worker_tick, 1000 / config.tick_rate_hz);
 
-	worker_threads.parentPort.on("message", handle_parent_message);
+	process.on("message", handle_parent_message);
 }
 
-if (worker_threads.isMainThread){
+if (cluster.isPrimary){
 	let status_server = http.createServer();
 	status_server.on("error", (err) => {
 		throw err;
