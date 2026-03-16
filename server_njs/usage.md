@@ -99,6 +99,7 @@ Note that you will have to restart the server to reload these settings. Settings
 
 Factors to consider while tuning the server under high load:
 
+- Most of the time the optimal maximum number of workers is (the number of CPU cores you have) - 1.
 - If workers are using the CPU way more than the main thread, then it might be time to increase the worker thread count. Go up by one worker and re-test. Workers not getting enough CPU resources will cause memory bloat.
 - If main thread is showing a lot of CPU usage, but worker threads are getting very little work, there are two possible cases:
   - You have too many workers, causing overhead.
@@ -108,4 +109,4 @@ Factors to consider while tuning the server under high load:
 
 ### Viewing server status internally
 
-Navigate to http://:27314/data_debug to view the current state of the relay server. Not that the data format of this endpoint is not stable.
+Navigate to http://:27314/data_debug to view the current state of the relay server. Note that the data format of this endpoint is not stable.
