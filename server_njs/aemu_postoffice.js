@@ -143,7 +143,7 @@ function get_statistics_obj(ip, container){
 	if (container == undefined){
 		container = statistics;
 	}
-	let existing_obj = statistics[ip];
+	let existing_obj = container[ip];
 	if (existing_obj != undefined){
 		return existing_obj;
 	}
@@ -160,7 +160,7 @@ function get_statistics_obj(ip, container){
 		pdp_rx:0,
 		pdp_rx_ops:0
 	};
-	statistics[ip] = new_obj;
+	container[ip] = new_obj;
 	return new_obj;
 }
 
