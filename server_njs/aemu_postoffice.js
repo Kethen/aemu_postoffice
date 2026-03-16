@@ -657,7 +657,7 @@ function handle_chunks_from_parent(chunk_list){
 		let target_session = sessions[chunk.session_name];
 		if (target_session == undefined){
 			log(`warning: worker/coordinator desync during chunk processing from parent, probably needs debugging`);
-			return;
+			continue;
 		}
 		switch(target_session.state){
 			case SESSION_MODE_PDP:{
