@@ -3,6 +3,7 @@
 - [Prerequisite](#prerequisite)
 - [Starting server](#starting-server)
 - [`config.json` configuration file](#configjson-configuration-file)
+- [Performance tuning](#performance-tuning)
 - [Viewing server status internally](#viewing-server-status-internally)
 
 ### Prerequisite
@@ -93,6 +94,17 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 | max_ips | Limit the maximum number of unique IPs on the server. When the number is reached, further connections from fresh IPs are rejected. Note that number of unique IPs might not match 1 to 1 to number of users, with NATs on the internet, only adhocctl server carries that data. Set to 0 to disable. |
 
 Note that you will have to restart the server to reload these settings. Settings are logged during server startup for confirmation.
+
+### Performance tuning
+
+Factors to consider while tuning the server under high load:
+
+- If workers are using the CPU way more than the main thread, then it might be time to increase the worker thread count. Go up by one worker and re-test. Workers not getting enough CPU resources will cause memory bloat.
+- If main thread is showing a lot of CPU usage, but worker threads are getting very little work, there are two possible cases:
+  - You have too many workers, causing overhead.
+  - There are a lot of sessions to be handled by the main thread. You'll need a faster CPU core for the main thread, or you should start limiting the amount of unique IPs or connections.
+- If your tick rate is too low, it could cause memory bloat, as specific cross thread work are accumulated until tick.
+- If you run out of memory without noticing any CPU usage issues, you might have to assign the server more memory on startup, or increase your tick rate.
 
 ### Viewing server status internally
 
