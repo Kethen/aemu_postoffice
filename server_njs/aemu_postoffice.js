@@ -32,6 +32,7 @@ const PARENT_MESSAGE_CREATE_SESSION = 0;
 const PARENT_MESSAGE_REMOVE_SESSION = 1;
 const PARENT_MESSAGE_HANDLE_CHUNK = 2;
 const PARENT_MESSAGE_ADD_SESSION_IP = 3;
+const PARENT_MESSAGE_SYNC_ADHOCCTL_DATA = 4;
 const WORKER_MESSAGE_REMOVE_SESSION = 0;
 const WORKER_MESSAGE_SEND_DATA = 1;
 
@@ -381,7 +382,13 @@ function send_data_to_parent(){
 		const to_ip = session_ip_lookup[send.to_session_name];
 		const from_ip = session_ip_lookup[send.from_session_name];
 
-		// TODO strict mode
+		if (config.forwarding_strict_mode){
+			const from_group = adhocctl_groups_by_mac[send.from_mac];
+			const to_group = adhocctl_groups_by_mac[send.to_mac];
+			if (from_group != to_group){
+				continue;
+			}
+		}
 
 		// merge the sends per session name
 		let send_item_of_this_dst = organized_send_list[send.to_session_name];
@@ -702,6 +709,10 @@ function remove_worker_session(session_name){
 	delete session_ip_lookup[session_name];
 }
 
+function update_adhocctl_data_from_parent(new_data){
+	adhocctl_groups_by_mac = new_data;
+}
+
 function handle_parent_message(m){
 	switch(m.type){
 		case PARENT_MESSAGE_CREATE_SESSION:
@@ -715,6 +726,9 @@ function handle_parent_message(m){
 			break;
 		case PARENT_MESSAGE_ADD_SESSION_IP:
 			update_session_ip_lookup(m.session_name, m.ip);
+			break;
+		case PARENT_MESSAGE_SYNC_ADHOCCTL_DATA:
+			update_adhocctl_data_from_parent(m.adhocctl_groups_by_mac);
 			break;
 		default:
 			log(`unknown parent message type ${m.type}, debug this`);
@@ -1101,6 +1115,17 @@ if (worker_threads.isMainThread){
 	worker_threads.parentPort.on("message", handle_parent_message);
 }
 
+function send_adhocctl_data_to_workers(){
+	const message = {
+		type:PARENT_MESSAGE_SYNC_ADHOCCTL_DATA,
+		adhocctl_groups_by_mac:adhocctl_groups_by_mac,
+	};
+
+	for(let worker of workers){
+		worker.worker.postMessage(message);
+	}
+}
+
 if (worker_threads.isMainThread){
 	let status_server = http.createServer();
 	status_server.on("error", (err) => {
@@ -1170,6 +1195,7 @@ if (worker_threads.isMainThread){
 			adhocctl_data = processed_data;
 			adhocctl_groups_by_mac = processed_groups_by_mac;
 			adhocctl_players_by_mac = processed_players_by_mac;
+			send_adhocctl_data_to_workers();
 			response.writeHeader(200);
 			response.end("data accepted");
 		});
