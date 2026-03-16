@@ -1144,7 +1144,7 @@ if (worker_threads.isMainThread){
 				parsed_data = JSON.parse(decoded_string)
 			}catch(e){
 				log(`failed parsing game list update from ${request.socket.remoteAddress}`);
-				response.writeHeader(400);
+				response.writeHead(400);
 				response.end("bad data");
 				return;
 			}
@@ -1152,7 +1152,7 @@ if (worker_threads.isMainThread){
 			const games = parsed_data["games"];
 			if (games == undefined){
 				log(`incoming game list has no game array..`);
-				response.writeHeader(400);
+				response.writeHead(400);
 				response.end("bad data");
 				return;
 			}
@@ -1196,7 +1196,7 @@ if (worker_threads.isMainThread){
 			adhocctl_groups_by_mac = processed_groups_by_mac;
 			adhocctl_players_by_mac = processed_players_by_mac;
 			send_adhocctl_data_to_workers();
-			response.writeHeader(200);
+			response.writeHead(200);
 			response.end("data accepted");
 		});
 	}
@@ -1246,7 +1246,7 @@ if (worker_threads.isMainThread){
 		response_obj["sessions_by_ip"] = convert_session_list(sessions_by_ip);
 		response_obj["memory_usage"] = process.memoryUsage();
 
-		response.writeHeader(200, {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
+		response.writeHead(200, {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"});
 		response.end(JSON.stringify(response_obj));
 	}
 
