@@ -101,6 +101,7 @@ Factors to consider while tuning the server under high load:
 
 - Most of the time the optimal maximum number of workers is (the number of CPU cores you have) - 1.
 - If workers are using the CPU way more than the main thread, then it might be time to increase the worker thread count. Go up by one worker and re-test. Workers not getting enough CPU resources will cause memory bloat.
+  - If you are already at (the number of CPU cores you have) - 1 workers, and your workers are still not getting enough CPU resources, you'll likely need more cores.
 - If main thread is showing a lot of CPU usage, but worker threads are getting very little work, there are two possible cases:
   - You have too many workers, causing overhead.
   - There are a lot of sessions to be handled by the main thread. You'll need a faster CPU core for the main thread, or you should start limiting the amount of unique IPs or connections.
