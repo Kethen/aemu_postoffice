@@ -387,9 +387,12 @@ function send_data_to_parent(){
 		const to_ip = session_ip_lookup[send.to_session_name];
 		const from_ip = session_ip_lookup[send.from_session_name];
 
-		if (config.forwarding_strict_mode){
+		if (config.forwarding_strict_mode && send.send_type == SEND_TYPE_PDP){
 			const from_group = adhocctl_groups_by_mac[send.from_mac];
 			const to_group = adhocctl_groups_by_mac[send.to_mac];
+			if (from_group == undefined || to_group == undefined){
+				continue;
+			}
 			if (from_group != to_group){
 				continue;
 			}
