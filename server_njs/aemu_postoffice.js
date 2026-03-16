@@ -31,8 +31,12 @@ const PTP_STATE_DATA = 1;
 const PARENT_MESSAGE_CREATE_SESSION = 0;
 const PARENT_MESSAGE_REMOVE_SESSION = 1;
 const PARENT_MESSAGE_HANDLE_CHUNK = 2;
+const PARENT_MESSAGE_ADD_SESSION_IP = 3;
 const WORKER_MESSAGE_REMOVE_SESSION = 0;
 const WORKER_MESSAGE_SEND_DATA = 1;
+
+const SEND_TYPE_PDP = 0;
+const SEND_TYPE_PTP = 1;
 
 // max chunk size per server tick per session, considering a 2ms refresh interval, 256 data size, broadcasting to 8 other players, and then half it considering this is by tick rate, which is already very generous
 const MAX_TOTAL_CHUNK_SIZE = ((1000 / 2) * 256 * 8) / 2;
@@ -48,6 +52,7 @@ process.on('SIGINT', () => {
 let sessions = {};
 let sessions_by_mac = {};
 let sessions_by_ip = {};
+let session_ip_lookup = {};
 
 let adhocctl_data = {};
 let adhocctl_groups_by_mac = {};
@@ -109,7 +114,34 @@ function get_sock_addr_str(sock){
 // simple tracking per interval statistics for now, a better picture requires a database
 let statistics = {};
 
-function get_statistics_obj(ip){
+function update_statistics(update, base){
+	if (base == undefined){
+		base = statistics;
+	}
+	for (const [ip, value] of Object.entries(update)){
+		base_value = base[ip];
+		if (base_value == undefined){
+			base[ip] = value;
+			continue;
+		}
+		base_value.ptp_connects += value.ptp_connects;
+		base_value.ptp_listen_connects += value.ptp_listen_connects;
+		base_value.ptp_tx += value.ptp_tx;
+		base_value.ptp_tx_ops += value.ptp_tx_ops;
+		base_value.ptp_rx += value.ptp_rx;
+		base_value.ptp_rx_ops += value.ptp_rx_ops;
+		base_value.pdp_connects += value.pdp_connects;
+		base_value.pdp_tx += value.pdp_tx;
+		base_value.pdp_tx_ops += value.pdp_tx_ops;
+		base_value.pdp_rx += value.pdp_rx;
+		base_value.pdp_rx_ops += value.pdp_rx_ops;
+	}
+}
+
+function get_statistics_obj(ip, container){
+	if (container == undefined){
+		container = statistics;
+	}
 	let existing_obj = statistics[ip];
 	if (existing_obj != undefined){
 		return existing_obj;
@@ -131,8 +163,8 @@ function get_statistics_obj(ip){
 	return new_obj;
 }
 
-function track_connect(ip, is_ptp, is_listen){
-	let statistics_obj = get_statistics_obj(ip);
+function track_connect(ip, is_ptp, is_listen, container){
+	let statistics_obj = get_statistics_obj(ip, container);
 	if (is_ptp){
 		if (is_listen){
 			statistics_obj.ptp_listen_connects++;
@@ -144,8 +176,8 @@ function track_connect(ip, is_ptp, is_listen){
 	}
 }
 
-function track_bandwidth(ip, is_ptp, is_tx, size){
-	let statistics_obj = get_statistics_obj(ip);
+function track_bandwidth(ip, is_ptp, is_tx, size, container){
+	let statistics_obj = get_statistics_obj(ip, container);
 	if (is_ptp){
 		if (is_tx){
 			statistics_obj.ptp_tx += size;
@@ -343,9 +375,53 @@ function send_data_to_parent(){
 	if (send_list.length == 0){
 		return;
 	}
+	let statistics_update = {};
+	let organized_send_list = {};
+	for (const send of send_list){
+		const to_ip = session_ip_lookup[send.to_session_name];
+		const from_ip = session_ip_lookup[send.from_session_name];
+
+		// TODO strict mode
+
+		// merge the sends per session name
+		let send_item_of_this_dst = organized_send_list[send.to_session_name];
+		if (send_item_of_this_dst == undefined){
+			send_item_of_this_dst = {
+				to_session_name:send.to_session_name,
+				to_mac:send.to_mac,
+				data:send.data,
+			};
+			organized_send_list[send.to_session_name] = send_item_of_this_dst;
+		}else{
+			send_item_of_this_dst.data = Buffer.concat([send_item_of_this_dst.data, send.data]);
+		}
+
+		// evaluate statistics
+		if (to_ip == undefined || from_ip == undefined){
+			// send has to be done, incase we somehow fell behind the session ip update message
+			// we can let this slide however if it's just for stats
+			continue;
+		}
+
+		switch(send.send_type){
+			case SEND_TYPE_PDP:
+				track_bandwidth(to_ip, false, false, send.data.length - 14, statistics_update);
+				track_bandwidth(from_ip, false, true, send.data.length - 14, statistics_update);
+				break;
+			case SEND_TYPE_PTP:
+				track_bandwidth(to_ip, true, false, send.data.length - 4, statistics_update);
+				track_bandwidth(from_ip, true, true, send.data.length - 4, statistics_update);
+				break;
+			default:
+				log(`bad send type ${send.send_type} while organizing statistics update, debug this`);
+				process.exit(1);
+		}
+	}
+
 	worker_threads.parentPort.postMessage({
 		type:WORKER_MESSAGE_SEND_DATA,
-		send_list:send_list,
+		send_list:Object.values(organized_send_list),
+		statistics_update:statistics_update,
 	});
 	send_list = [];
 }
@@ -404,6 +480,7 @@ function pdp_tick(ctx){
 						to_session_name:ctx.target_session_name,
 						to_mac:ctx.target_mac,
 						data:Buffer.concat([addr, port, size, cur_data]),
+						send_type:SEND_TYPE_PDP,
 					});
 					ctx.pdp_state = PDP_STATE_HEADER;
 				}else{
@@ -458,6 +535,7 @@ function ptp_tick(ctx){
 						to_session_name:ctx.peer_session_name,
 						to_mac:ctx.dst_addr_str,
 						data:Buffer.concat([size, cur_data]),
+						send_type:SEND_TYPE_PTP,
 					});
 					ctx.ptp_state = PTP_STATE_HEADER;
 				}else{
@@ -534,17 +612,6 @@ function close_session_by_name(name){
 
 function send_data_to_sessions(send_list){
 	for (const send of send_list){
-		const sessions_of_from_mac = sessions_by_mac[send.from_mac];
-		if (sessions_of_from_mac == undefined){
-			//log(`warning: worker/coordinator desync during data send from worker`);
-			continue;
-		}
-		let from_session = sessions_of_from_mac[send.from_session_name];
-		if (from_session == undefined){
-			//log(`warning: worker/coordinator desync during data send from worker`);
-			continue;
-		}
-
 		const sessions_of_to_mac = sessions_by_mac[send.to_mac];
 		if (sessions_of_to_mac == undefined){
 			continue;
@@ -554,34 +621,11 @@ function send_data_to_sessions(send_list){
 			continue;
 		}
 
-		if (config.forwarding_strict_mode){
-			let group_from = adhocctl_groups_by_mac[from_session.src_addr_str];
-			let group_to = adhocctl_groups_by_mac[to_session.src_addr_str];
-			if (group_from != group_to){
-				continue;
-			}
-		}
-
 		to_session.socket.write(send.data);
 		const max_buffer_size = config.max_write_buffer_byte;
 		if (max_buffer_size != 0 && to_session.socket.writableLength >= max_buffer_size){
 			log(`killing session ${to_session.session_name} as write buffer has reached ${to_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
 			close_session(to_session);
-		}
-
-		switch(from_session.state){
-			case SESSION_MODE_PDP:
-				track_bandwidth(to_session.ip, true, false, send.data.length - 14);
-				track_bandwidth(from_session.ip, true, true, send.data.length - 14);
-				break;
-			case SESSION_MODE_PTP_ACCEPT:
-			case SESSION_MODE_PTP_CONNECT:
-				track_bandwidth(to_session.ip, true, false, send.data.length - 4);
-				track_bandwidth(from_session.ip, true, true, send.data.length - 4);
-				break;
-			default:
-				log(`bad session state ${state} while sending data to worker, debug this`);
-				process.exit(1);
 		}
 	}
 }
@@ -593,6 +637,7 @@ function handle_worker_message(m){
 			break;
 		case WORKER_MESSAGE_SEND_DATA:
 			send_data_to_sessions(m.send_list);
+			update_statistics(m.statistics_update);
 			break;
 		default:
 			log(`unknown worker message type ${m.type}, debug this`);
@@ -643,17 +688,33 @@ function session_first_tick(session){
 	}
 }
 
+function create_session_from_parent(session){
+	sessions[session.session_name] = session;
+	session_first_tick(session);
+}
+
+function update_session_ip_lookup(session_name, ip){
+	session_ip_lookup[session_name] = ip;
+}
+
+function remove_worker_session(session_name){
+	delete sessions[session_name];
+	delete session_ip_lookup[session_name];
+}
+
 function handle_parent_message(m){
 	switch(m.type){
 		case PARENT_MESSAGE_CREATE_SESSION:
-			sessions[m.session.session_name] = m.session;
-			session_first_tick(m.session);
+			create_session_from_parent(m.session);
 			break;
 		case PARENT_MESSAGE_REMOVE_SESSION:
-			delete sessions[m.session_name];
+			remove_worker_session(m.session_name);
 			break;
 		case PARENT_MESSAGE_HANDLE_CHUNK:
 			handle_chunks_from_parent(m.chunk_list);
+			break;
+		case PARENT_MESSAGE_ADD_SESSION_IP:
+			update_session_ip_lookup(m.session_name, m.ip);
 			break;
 		default:
 			log(`unknown parent message type ${m.type}, debug this`);
@@ -690,6 +751,18 @@ function add_session_to_worker(session){
 	delete session.pdp_data;
 	delete session.ptp_data;
 	session.worker = least_sessions_worker;
+}
+
+function add_session_ip_to_workers(session_name, ip){
+	const message = {
+		type:PARENT_MESSAGE_ADD_SESSION_IP,
+		session_name:session_name,
+		ip:ip
+	};
+
+	for(let worker of workers){
+		worker.worker.postMessage(message);
+	}
 }
 
 function send_chunks_to_workers(){
@@ -789,6 +862,7 @@ function create_session(ctx){
 			track_connect(ctx.ip, false, false);
 
 			add_session_to_worker(ctx);
+			add_session_ip_to_workers(ctx.session_name, ctx.ip);
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
@@ -873,6 +947,9 @@ function create_session(ctx){
 
 			add_session_to_worker(connect_session);
 			add_session_to_worker(ctx);
+
+			add_session_ip_to_workers(connect_session.session_name, ctx.ip);
+			add_session_ip_to_workers(connect_session.session_name, ctx.ip);
 			break;
 		}
 		default:
