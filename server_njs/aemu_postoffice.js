@@ -95,6 +95,11 @@ function load_config(){
 load_config();
 if (worker_threads.isMainThread){
 	log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
+
+	if (config.num_worker_threads <= 0){
+		log(`number of worker threads cannot be less than one (${config.num_worker_threads}), please change your config`);
+		process.exit(1);
+	}
 }
 
 function get_mac_str(mac){
