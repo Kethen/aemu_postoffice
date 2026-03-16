@@ -1002,7 +1002,7 @@ if (worker_threads.isMainThread){
 		};
 		worker.worker.on("message", handle_worker_message);
 		worker.worker.once("error", (e) => {
-			log(`worker error ${e}, debug this`);
+			log(`worker error `, e, ` debug this`);
 			process.exit(1);
 		});
 		workers.push(worker);
