@@ -106,7 +106,7 @@ if (worker_threads.isMainThread){
 	}
 }
 
-const tick_interval = 1000 / config.tick_rate_hz;
+const tick_interval_ms = 1000 / config.tick_rate_hz;
 
 function get_mac_str(mac){
 	let ret = ""
@@ -114,7 +114,7 @@ function get_mac_str(mac){
 		if (i != 0){
 			ret = ret + ":";
 		}
-		ret = ret + mac.slice(i, i + 1).toString("hex");
+		ret = ret + mac.subarray(i, i + 1).toString("hex");
 	}
 	return ret;
 }
@@ -214,7 +214,23 @@ function output_memory_usage(){
 	console.log(JSON.stringify(process.memoryUsage(), null, 4));
 }
 
-setInterval(output_memory_usage, memory_usage_log_interval_ms);
+function set_interval(func, interval_ms){
+	interval_ms = BigInt(Math.floor(interval_ms));
+
+	let wrapper = () => {
+		let begin_ns = process.hrtime.bigint();
+		func();
+		let duration_ms = (process.hrtime.bigint() - begin_ns) / BigInt(1000000);
+		let wait_ms = interval_ms - duration_ms;
+		if (wait_ms <= 0){
+			wait_ms = 0;
+		}
+		setTimeout(wrapper, Number(wait_ms));
+	};
+	wrapper();
+}
+
+set_interval(output_memory_usage, memory_usage_log_interval_ms);
 
 // don't pull statistics into a scope with arrow function
 function output_statistics(){
@@ -347,7 +363,7 @@ function process_statistics(){
 }
 
 if (worker_threads.isMainThread && config.accounting_interval_ms >= 0){
-	setInterval(process_statistics, config.accounting_interval_ms);
+	set_interval(process_statistics, config.accounting_interval_ms);
 }
 
 function get_target_session_name(mode, my_mac, mac, sport, dport){
@@ -391,6 +407,7 @@ function send_data_to_parent(){
 	}
 	let statistics_update = {};
 	let organized_send_list = {};
+	//let transfer_list = [];
 	for (const send of send_list){
 		const to_ip = session_ip_lookup[send.to_session_name];
 		const from_ip = session_ip_lookup[send.from_session_name];
@@ -414,12 +431,13 @@ function send_data_to_parent(){
 			send_item_of_this_dst = {
 				to_session_name:send.to_session_name,
 				to_mac:send.to_mac,
-				data:send.data,
+				data:[send.data],
 			};
 			organized_send_list[send.to_session_name] = send_item_of_this_dst;
 		}else{
-			send_item_of_this_dst.data = Buffer.concat([send_item_of_this_dst.data, send.data]);
+			send_item_of_this_dst.data.push(send.data);
 		}
+		//transfer_list.push(send.data.buffer);
 
 		// evaluate statistics
 		if (config.accounting_interval_ms <= 0){
@@ -455,18 +473,25 @@ function send_data_to_parent(){
 	send_list = [];
 }
 
+function send_remove_session_message_to_parent(session_name){
+	worker_threads.parentPort.postMessage({
+		type:WORKER_MESSAGE_REMOVE_SESSION,
+		session_name:session_name,
+	});
+}
+
 function pdp_tick(ctx){
 	let no_data = false;
 	while(!no_data){
 		switch(ctx.pdp_state){
 			case PDP_STATE_HEADER:{
 				if (ctx.pdp_data.length >= 14){
-					let cur_data = ctx.pdp_data.slice(0, 14);
-					ctx.pdp_data = ctx.pdp_data.slice(14);
+					let cur_data = ctx.pdp_data.subarray(0, 14);
+					ctx.pdp_data = ctx.pdp_data.subarray(14);
 
-					let addr = cur_data.slice(0, 8);
-					let port = cur_data.slice(8, 10);
-					let size = cur_data.slice(10, 14);
+					let addr = cur_data.subarray(0, 8);
+					let port = cur_data.subarray(8, 10);
+					let size = cur_data.subarray(10, 14);
 
 					// decode
 					port = port.readUInt16LE();
@@ -474,11 +499,7 @@ function pdp_tick(ctx){
 
 					if (size > PDP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						worker_threads.parentPort.postMessage({
-							type:WORKER_MESSAGE_REMOVE_SESSION,
-							session_name:ctx.session_name,
-						});
-
+						send_remove_session_message_to_parent(ctx.session_name);
 						return;
 					}
 
@@ -494,21 +515,21 @@ function pdp_tick(ctx){
 			}
 			case PDP_STATE_DATA:{
 				if (ctx.pdp_data.length >= ctx.pdp_data_size){
-					let cur_data = ctx.pdp_data.slice(0, ctx.pdp_data_size);
-					ctx.pdp_data = ctx.pdp_data.slice(ctx.pdp_data_size);
+					let cur_data = ctx.pdp_data.subarray(0, ctx.pdp_data_size);
+					ctx.pdp_data = ctx.pdp_data.subarray(ctx.pdp_data_size);
 
-					let addr = ctx.src_addr;
-					let port = Buffer.alloc(2);
-					let size = Buffer.alloc(4);
-					port.writeUInt16LE(ctx.sport);
-					size.writeUInt32LE(cur_data.length);
+					let packet = Buffer.alloc(14 + ctx.pdp_data_size);
+					ctx.src_addr.copy(packet);
+					packet.writeUInt16LE(ctx.sport, 8);
+					packet.writeUInt32LE(cur_data.length, 10);
+					cur_data.copy(packet, 14);
 
 					send_list.push({
 						from_session_name:ctx.session_name,
 						from_mac:ctx.src_addr_str,
 						to_session_name:ctx.target_session_name,
 						to_mac:ctx.target_mac,
-						data:Buffer.concat([addr, port, size, cur_data]),
+						data:packet,
 						send_type:SEND_TYPE_PDP,
 					});
 					ctx.pdp_state = PDP_STATE_HEADER;
@@ -530,16 +551,13 @@ function ptp_tick(ctx){
 		switch(ctx.ptp_state){
 			case PTP_STATE_HEADER:{
 				if (ctx.ptp_data.length >= 4){
-					let cur_data = ctx.ptp_data.slice(0, 4);
-					ctx.ptp_data = ctx.ptp_data.slice(4);
+					let cur_data = ctx.ptp_data.subarray(0, 4);
+					ctx.ptp_data = ctx.ptp_data.subarray(4);
 
 					let size = cur_data.readUInt32LE();
 					if (size > PTP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
-						worker_threads.parentPort.postMessage({
-							type:WORKER_MESSAGE_REMOVE_SESSION,
-							session_name:ctx.session_name,
-						});
+						send_remove_session_message_to_parent(ctx.session_name);
 						return;
 					}
 
@@ -552,18 +570,19 @@ function ptp_tick(ctx){
 			}
 			case PTP_STATE_DATA:{
 				if (ctx.ptp_data.length >= ctx.ptp_data_size){
-					let cur_data = ctx.ptp_data.slice(0, ctx.ptp_data_size);
-					ctx.ptp_data = ctx.ptp_data.slice(ctx.ptp_data_size);
+					let cur_data = ctx.ptp_data.subarray(0, ctx.ptp_data_size);
+					ctx.ptp_data = ctx.ptp_data.subarray(ctx.ptp_data_size);
 
-					let size = Buffer.alloc(4);
-					size.writeUInt32LE(ctx.ptp_data_size);
+					let packet = Buffer.alloc(4 + ctx.ptp_data_size);
+					packet.writeUInt32LE(ctx.ptp_data_size);
+					cur_data.copy(packet, 4);
 
 					send_list.push({
 						from_session_name:ctx.session_name,
 						from_mac:ctx.src_addr_str,
 						to_session_name:ctx.peer_session_name,
 						to_mac:ctx.dst_addr_str,
-						data:Buffer.concat([size, cur_data]),
+						data:packet,
 						send_type:SEND_TYPE_PTP,
 					});
 					ctx.ptp_state = PTP_STATE_HEADER;
@@ -650,7 +669,7 @@ function send_data_to_sessions(send_list){
 			continue;
 		}
 
-		to_session.socket.write(send.data);
+		to_session.socket.write(Buffer.concat(send.data));
 		const max_buffer_size = config.max_write_buffer_byte;
 		if (max_buffer_size != 0 && to_session.socket.writableLength >= max_buffer_size){
 			log(`killing session ${to_session.session_name} as write buffer has reached ${to_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
@@ -685,13 +704,27 @@ function handle_chunks_from_parent(chunk_list){
 		}
 		switch(target_session.state){
 			case SESSION_MODE_PDP:{
-				target_session.pdp_data = Buffer.concat([target_session.pdp_data, chunk.chunk]);
+				chunk.chunks.unshift(target_session.pdp_data);
+				target_session.pdp_data = Buffer.concat(chunk.chunks);
+				if (target_session.pdp_data.length >= MAX_TOTAL_CHUNK_SIZE){
+					log(`${session.session_name} is sending too much data, evicting`);
+					send_remove_session_message_to_parent(session.session_name);
+					break;
+				}
+
 				pdp_tick(target_session);
 				break;
 			}
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:{
-				target_session.ptp_data = Buffer.concat([target_session.ptp_data, chunk.chunk]);
+				chunk.chunks.unshift(target_session.ptp_data);
+				target_session.ptp_data = Buffer.concat(chunk.chunks);
+				if (target_session.ptp_data.length >= MAX_TOTAL_CHUNK_SIZE){
+					log(`${session.session_name} is sending too much data, evicting`);
+					send_remove_session_message_to_parent(session.session_name);
+					break;
+				}
+
 				ptp_tick(target_session);
 				break;
 			}
@@ -703,6 +736,7 @@ function handle_chunks_from_parent(chunk_list){
 }
 
 function session_first_tick(session){
+	session.src_addr = Buffer.from(session.src_addr);
 	switch(session.state){
 		case SESSION_MODE_PDP:
 			session.pdp_data = Buffer.from(session.pdp_data);
@@ -805,6 +839,7 @@ function add_session_ip_to_workers(session_name, ip){
 
 function send_chunks_to_workers(){
 	let chunk_lists = {};
+	//let transfer_lists = {};
 	for (const session of Object.values(sessions)){
 		switch(session.state){
 			case SESSION_MODE_PDP:
@@ -819,16 +854,22 @@ function send_chunks_to_workers(){
 					chunk_list = [];
 					chunk_lists[worker_id] = chunk_list;
 				}
-				const mega_chunk = Buffer.concat(session.chunks);
-				if (mega_chunk.length >= MAX_TOTAL_CHUNK_SIZE){
-					log(`${session.session_name} is sending too much data, evicting`);
-					close_session(session);
-					break;
+				/*
+				let transfer_list = transfer_lists[worker_id];
+				if (transfer_list == undefined){
+					transfer_list = [];
+					transfer_lists[worker_id] = transfer_list;
 				}
+				*/
 				chunk_list.push({
 					session_name:session.session_name,
-					chunk:mega_chunk
+					chunks:session.chunks
 				});
+				/*
+				for(const chunk of session.chunks){
+					transfer_list.push(chunk.buffer);
+				}
+				*/
 				session.chunks = [];
 				break;
 			}
@@ -852,11 +893,11 @@ function send_chunks_to_workers(){
 }
 
 function create_session(ctx){
-	let type = ctx.init_data.slice(0, 4);
-	let src_addr = ctx.init_data.slice(4, 12);
-	let sport = ctx.init_data.slice(12, 14);
-	let dst_addr = ctx.init_data.slice(14, 22);
-	let dport = ctx.init_data.slice(22, 24);
+	let type = ctx.init_data.subarray(0, 4);
+	let src_addr = ctx.init_data.subarray(4, 12);
+	let sport = ctx.init_data.subarray(12, 14);
+	let dst_addr = ctx.init_data.subarray(14, 22);
+	let dport = ctx.init_data.subarray(22, 24);
 
 	// decode
 	type = type.readInt32LE();
@@ -1052,7 +1093,7 @@ function on_connection(socket){
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
-				setTimeout(()=>{close_session(ctx)}, tick_interval * 10);
+				setTimeout(()=>{close_session(ctx)}, tick_interval_ms * 10);
 				break;
 			default:
 				log(`bad state ${ctx.state} on socket end, debug this`);
@@ -1066,8 +1107,8 @@ function on_connection(socket){
 				let new_buffer = Buffer.concat([ctx.init_data, new_data]);
 				
 				if (new_buffer.length >= 24){
-					ctx.init_data = new_buffer.slice(0, 24);
-					ctx.outstanding_data = new_buffer.slice(24);
+					ctx.init_data = new_buffer.subarray(0, 24);
+					ctx.outstanding_data = new_buffer.subarray(24);
 					create_session(ctx);
 				}
 
@@ -1132,7 +1173,7 @@ if (worker_threads.isMainThread){
 
 	server.on("connection", on_connection);
 
-	setInterval(send_chunks_to_workers, tick_interval);
+	set_interval(send_chunks_to_workers, tick_interval_ms);
 
 	log(`begin listening on port ${port}`);
 
@@ -1141,7 +1182,7 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
-	setInterval(send_data_to_parent, tick_interval);
+	set_interval(send_data_to_parent, tick_interval_ms);
 
 	worker_threads.parentPort.on("message", handle_parent_message);
 }
