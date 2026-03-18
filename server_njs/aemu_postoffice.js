@@ -707,8 +707,8 @@ function handle_chunks_from_parent(chunk_list){
 				chunk.chunks.unshift(target_session.pdp_data);
 				target_session.pdp_data = Buffer.concat(chunk.chunks);
 				if (target_session.pdp_data.length >= MAX_TOTAL_CHUNK_SIZE){
-					log(`${session.session_name} is sending too much data, evicting`);
-					send_remove_session_message_to_parent(session.session_name);
+					log(`${target_session.session_name} is sending too much data, evicting`);
+					send_remove_session_message_to_parent(target_session.session_name);
 					break;
 				}
 
@@ -720,8 +720,8 @@ function handle_chunks_from_parent(chunk_list){
 				chunk.chunks.unshift(target_session.ptp_data);
 				target_session.ptp_data = Buffer.concat(chunk.chunks);
 				if (target_session.ptp_data.length >= MAX_TOTAL_CHUNK_SIZE){
-					log(`${session.session_name} is sending too much data, evicting`);
-					send_remove_session_message_to_parent(session.session_name);
+					log(`${target_session.session_name} is sending too much data, evicting`);
+					send_remove_session_message_to_parent(target_session.session_name);
 					break;
 				}
 
