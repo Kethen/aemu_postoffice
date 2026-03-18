@@ -346,7 +346,7 @@ function process_statistics(){
 	statistics = {};
 }
 
-if (config.accounting_interval_ms >= 0){
+if (worker_threads.isMainThread && config.accounting_interval_ms >= 0){
 	setInterval(process_statistics, config.accounting_interval_ms);
 }
 
