@@ -518,7 +518,7 @@ function pdp_tick(ctx){
 					let cur_data = ctx.pdp_data.subarray(0, ctx.pdp_data_size);
 					ctx.pdp_data = ctx.pdp_data.subarray(ctx.pdp_data_size);
 
-					let packet = Buffer.alloc(14 + ctx.pdp_data_size);
+					let packet = Buffer.allocUnsafe(14 + ctx.pdp_data_size);
 					ctx.src_addr.copy(packet);
 					packet.writeUInt16LE(ctx.sport, 8);
 					packet.writeUInt32LE(cur_data.length, 10);
@@ -573,7 +573,7 @@ function ptp_tick(ctx){
 					let cur_data = ctx.ptp_data.subarray(0, ctx.ptp_data_size);
 					ctx.ptp_data = ctx.ptp_data.subarray(ctx.ptp_data_size);
 
-					let packet = Buffer.alloc(4 + ctx.ptp_data_size);
+					let packet = Buffer.allocUnsafe(4 + ctx.ptp_data_size);
 					packet.writeUInt32LE(ctx.ptp_data_size);
 					cur_data.copy(packet, 4);
 
@@ -970,7 +970,7 @@ function create_session(ctx){
 			}
 
 			remove_existing_and_insert_session(ctx, ctx.session_name);
-			let port = Buffer.alloc(2);
+			let port = Buffer.allocUnsafe(2);
 			port.writeUInt16LE(sport);
 			ctx.ptp_state = PTP_STATE_WAITING;
 			ctx.ptp_data = ctx.outstanding_data;
@@ -1022,7 +1022,7 @@ function create_session(ctx){
 			ctx.peer_session_name = ctx.peer_session.session_name;
 			connect_session.peer_session_name = connect_session.peer_session.session_name;
 
-			let port = Buffer.alloc(2);
+			let port = Buffer.allocUnsafe(2);
 			port.writeUInt16LE(sport);
 			connect_session.socket.write(Buffer.concat([ctx.src_addr, port]));
 			port.writeUInt16LE(dport);
@@ -1051,7 +1051,7 @@ function on_connection(socket){
 
 	let ctx = {
 		socket:socket,
-		init_data:Buffer.alloc(0),
+		init_data:Buffer.allocUnsafe(0),
 		state:SESSION_MODE_INIT,
 		ip:socket.remoteAddress,
 		chunks:[],
@@ -1205,7 +1205,7 @@ if (worker_threads.isMainThread){
 	});
 
 	function game_list_sync(request, response){
-		let ctx = {buf:Buffer.alloc(0)};
+		let ctx = {buf:Buffer.allocUnsafe(0)};
 		request.on("data", (chunk) => {
 			ctx.buf = Buffer.concat([ctx.buf, chunk]);
 		});
