@@ -100,7 +100,13 @@ if (worker_threads.isMainThread){
 		log(`number of worker threads cannot be less than one (${config.num_worker_threads}), please change your config`);
 		process.exit(1);
 	}
+
+	if (config.accounting_interval_ms <= 0){
+		log(`warning: accounting is disabled, statistics logging is disabled, "max_per_second_data_rate_byte" and "max_tx_op_rate" are now not enforced`);
+	}
 }
+
+const tick_interval = 1000 / config.tick_rate_hz;
 
 function get_mac_str(mac){
 	let ret = ""
@@ -340,7 +346,9 @@ function process_statistics(){
 	statistics = {};
 }
 
-setInterval(process_statistics, config.accounting_interval_ms);
+if (config.accounting_interval_ms >= 0){
+	setInterval(process_statistics, config.accounting_interval_ms);
+}
 
 function get_target_session_name(mode, my_mac, mac, sport, dport){
 	switch(mode){
@@ -387,6 +395,8 @@ function send_data_to_parent(){
 		const to_ip = session_ip_lookup[send.to_session_name];
 		const from_ip = session_ip_lookup[send.from_session_name];
 
+		// if we can ensure that the session ip list is always complete when chunks are sent, we can actually drop packets with missing to ip
+
 		if (config.forwarding_strict_mode && send.send_type == SEND_TYPE_PDP){
 			const from_group = adhocctl_groups_by_mac[send.from_mac];
 			const to_group = adhocctl_groups_by_mac[send.to_mac];
@@ -412,6 +422,10 @@ function send_data_to_parent(){
 		}
 
 		// evaluate statistics
+		if (config.accounting_interval_ms <= 0){
+			continue;
+		}
+
 		if (to_ip == undefined || from_ip == undefined){
 			// send has to be done, incase we somehow fell behind the session ip update message
 			// we can let this slide however if it's just for stats
@@ -652,7 +666,9 @@ function handle_worker_message(m){
 			break;
 		case WORKER_MESSAGE_SEND_DATA:
 			send_data_to_sessions(m.send_list);
-			update_statistics(m.statistics_update);
+			if (config.accounting_interval_ms > 0){
+				update_statistics(m.statistics_update);
+			}
 			break;
 		default:
 			log(`unknown worker message type ${m.type}, debug this`);
@@ -881,7 +897,9 @@ function create_session(ctx){
 			ctx.pdp_state = PDP_STATE_HEADER;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
-			track_connect(ctx.ip, false, false);
+			if (config.accounting_interval_ms > 0){
+				track_connect(ctx.ip, false, false);
+			}
 
 			add_session_to_worker(ctx);
 			add_session_ip_to_workers(ctx.session_name, ctx.ip);
@@ -893,7 +911,9 @@ function create_session(ctx){
 			delete ctx.outstanding_data;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
-			track_connect(ctx.ip, true, true);
+			if (config.accounting_interval_ms > 0){
+				track_connect(ctx.ip, true, true);
+			}
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
@@ -925,7 +945,9 @@ function create_session(ctx){
 			}
 
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
-			track_connect(ctx.ip, true, false);
+			if (config.accounting_interval_ms > 0){
+				track_connect(ctx.ip, true, false);
+			}
 
 			ctx.ptp_wait_timeout = setTimeout(() => {
 				if (ctx.ptp_state == PTP_STATE_WAITING){
@@ -965,7 +987,9 @@ function create_session(ctx){
 			port.writeUInt16LE(dport);
 			ctx.socket.write(Buffer.concat([ctx.dst_addr, port]));
 			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
-			track_connect(ctx.ip, true, false);
+			if (config.accounting_interval_ms > 0){
+				track_connect(ctx.ip, true, false);
+			}
 
 			add_session_to_worker(connect_session);
 			add_session_to_worker(ctx);
@@ -1028,7 +1052,7 @@ function on_connection(socket){
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:
 				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
-				close_session(ctx);
+				setTimeout(()=>{close_session(ctx)}, tick_interval * 10);
 				break;
 			default:
 				log(`bad state ${ctx.state} on socket end, debug this`);
@@ -1108,7 +1132,7 @@ if (worker_threads.isMainThread){
 
 	server.on("connection", on_connection);
 
-	setInterval(send_chunks_to_workers, 1000 / config.tick_rate_hz);
+	setInterval(send_chunks_to_workers, tick_interval);
 
 	log(`begin listening on port ${port}`);
 
@@ -1117,7 +1141,7 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
-	setInterval(send_data_to_parent, 1000 / config.tick_rate_hz);
+	setInterval(send_data_to_parent, tick_interval);
 
 	worker_threads.parentPort.on("message", handle_parent_message);
 }

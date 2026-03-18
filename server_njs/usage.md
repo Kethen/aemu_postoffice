@@ -86,7 +86,7 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 | forwarding_strict_mode | WIP subjected to changes. Limit data transmission within adhocctl client groups registered with http://:27314/game_list_sync , sample api json can be found at [sample_game_list_sync_request.json](sample_game_list_sync_request.json) |
 | max_per_second_data_rate_byte | Evict sessions by IP address that exceeds this data rate (per second). Be cautious with this option as multiple clients can be from the same ip address. Set to 0 to disable. |
 | max_tx_op_rate | Evict sessions by IP address that exceeds send operation rate (per second). Be cautious with this option as multiple clients can be from the same ip address. Set to 0 to disable. |
-| accounting_rate_ms | How often statistics are processed for logging and bad behavior IP sessions eviction. Setting this too low risks extra CPU usage as well as false positives on misbehaving IPs. |
+| accounting_rate_ms | How often statistics are processed for logging and bad behavior IP sessions eviction. Setting this too low risks extra CPU usage as well as false positives on misbehaving IPs. When deperate for CPU resources, this can be set to 0, however that will disable usage statistics log, as well as the enforcement of max_per_second_data_rate_byte and max_tx_op_rate. |
 | max_write_buffer_byte | Evict sessions that are not receiving data correctly and causing send buffers to bloat. Set to 0 to disable. |
 | max_connections | Global maximum number of connections. Note that this number usually does not match 1 to 1 to number of users, as some games create multiple sockets, hence multiple TCP connections. |
 | num_worker_threads | Number of worker threads to spawn on top of the main thread. Note that setting this too high will slow the main thread down, as it coordinates work between workers. There should be at least 1 worker thread. |
@@ -107,6 +107,7 @@ Factors to consider while tuning the server under high load:
   - There are a lot of sessions to be handled by the main thread. You'll need a faster CPU core for the main thread, or you should start limiting the amount of unique IPs or connections.
 - If your tick rate is too low, it could cause memory bloat, as specific cross thread work are accumulated until tick.
 - If you run out of memory without noticing any CPU usage issues, you might have to assign the server more memory on startup, or increase your tick rate.
+- If you must run this with very weak hardware while serving way too many users, you can set accounting_rate_ms to 0 to save a bit of CPU and memory. Note that however this will disable usage statistics log, as well as the enforcement of max_per_second_data_rate_byte and max_tx_op_rate.
 
 ### Viewing server status internally
 
