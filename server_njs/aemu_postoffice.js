@@ -32,7 +32,8 @@ const PARENT_MESSAGE_CREATE_SESSION = 0;
 const PARENT_MESSAGE_REMOVE_SESSION = 1;
 const PARENT_MESSAGE_HANDLE_CHUNK = 2;
 const PARENT_MESSAGE_ADD_SESSION_IP = 3;
-const PARENT_MESSAGE_SYNC_ADHOCCTL_DATA = 4;
+const PARENT_MESSAGE_REMOVE_SESSION_IP = 4;
+const PARENT_MESSAGE_SYNC_ADHOCCTL_DATA = 5;
 const WORKER_MESSAGE_REMOVE_SESSION = 0;
 const WORKER_MESSAGE_SEND_DATA = 1;
 
@@ -281,6 +282,17 @@ function output_statistics(){
 	}
 }
 
+function remove_session_ip_in_workers(session_name){
+	const message = {
+		type:PARENT_MESSAGE_REMOVE_SESSION_IP,
+		session_name:session_name,
+	};
+
+	for(let worker of workers){
+		worker.worker.postMessage(message);
+	}
+}
+
 function close_one_session(ctx){
 	if (sessions[ctx.session_name] == undefined){
 		return;
@@ -312,6 +324,8 @@ function close_one_session(ctx){
 		});
 		ctx.worker.num_sessions--;
 	}
+
+	remove_session_ip_in_workers(ctx.session_name);
 }
 
 function close_session(ctx){
@@ -764,11 +778,14 @@ function update_session_ip_lookup(session_name, ip){
 
 function remove_worker_session(session_name){
 	delete sessions[session_name];
-	delete session_ip_lookup[session_name];
 }
 
 function update_adhocctl_data_from_parent(new_data){
 	adhocctl_groups_by_mac = new_data;
+}
+
+function delete_from_session_ip_lookup(session_name){
+	delete session_ip_lookup[session_name];
 }
 
 function handle_parent_message(m){
@@ -787,6 +804,9 @@ function handle_parent_message(m){
 			break;
 		case PARENT_MESSAGE_SYNC_ADHOCCTL_DATA:
 			update_adhocctl_data_from_parent(m.adhocctl_groups_by_mac);
+			break;
+		case PARENT_MESSAGE_REMOVE_SESSION_IP:
+			delete_from_session_ip_lookup(m.session_name);
 			break;
 		default:
 			log(`unknown parent message type ${m.type}, debug this`);
