@@ -107,7 +107,13 @@ Factors to consider while tuning the server under high load:
   - There are a lot of sessions to be handled by the main thread. You'll need a faster CPU core for the main thread, or you should start limiting the amount of unique IPs or connections.
 - If your tick rate is too low, it could cause memory bloat, as specific cross thread work are accumulated until tick.
 - If you run out of memory without noticing any CPU usage issues, you might have to assign the server more memory on startup, or increase your tick rate.
-- If you must run this with very weak hardware while serving way too many users, you can set accounting_rate_ms to 0 to save a bit of CPU and memory. Note that however this will disable usage statistics log, as well as the enforcement of max_per_second_data_rate_byte and max_tx_op_rate.
+- If you must serve way too many users with limited hardware, you can set accounting_rate_ms to 0 to save a little bit of CPU and memory. Note that however this will disable usage statistics log, as well as the enforcement of max_per_second_data_rate_byte and max_tx_op_rate.
+
+To inspect thread CPU usage in Linux, install and run `htop`, press F2, under `Display options`, enable `Tree view` and `Show custom thread names`
+
+![htop_1](htop_1.png)
+
+![htop_2](htop_2.png)
 
 ### Viewing server status internally
 
