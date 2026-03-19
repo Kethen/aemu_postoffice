@@ -932,8 +932,6 @@ function create_session(ctx){
 	ctx.src_addr_str = get_mac_str(ctx.src_addr);
 	ctx.dst_addr_str = get_mac_str(ctx.dst_addr);
 
-	delete ctx.init_data;
-
 	clearTimeout(ctx.init_timeout);
 
 	if (!strict_mode_verify_ip_addr(ctx.src_addr_str, ctx.ip)){
@@ -962,6 +960,8 @@ function create_session(ctx){
 				track_connect(ctx.ip, false, false);
 			}
 
+			delete ctx.init_data;
+
 			add_session_to_worker(ctx);
 			add_session_ip_to_workers(ctx.session_name, ctx.ip);
 			break;
@@ -975,19 +975,38 @@ function create_session(ctx){
 			if (config.accounting_interval_ms > 0){
 				track_connect(ctx.ip, true, true);
 			}
+
+			delete ctx.init_data;
+
 			break;
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
-			ctx.state = SESSION_MODE_PTP_CONNECT;
 			ctx.session_name = `PTP_CONNECT ${get_mac_str(src_addr)} ${sport} ${get_mac_str(dst_addr)} ${dport}`;
 
 			let listen_session = find_target_session(SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 			if (listen_session == undefined){
+				if (ctx.ptp_connect_retries == undefined){
+					ctx.ptp_connect_retries = 0;
+				}
+				// 2 seconds of retries
+				if (ctx.ptp_connect_retries < 8){
+					const retry = () => {
+						if (ctx.state != SESSION_MODE_INIT){
+							return;
+						}
+						create_session(ctx);
+					}
+					ctx.ptp_connect_retries++;
+					setTimeout(retry, 250);
+					break;
+				}
 				const target_session_name = get_target_session_name(SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${target_session_name} not found`);
 				ctx.socket.destroy();
 				break;
 			}
+
+			ctx.state = SESSION_MODE_PTP_CONNECT;
 
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			let port = Buffer.allocUnsafe(2);
@@ -1057,6 +1076,10 @@ function create_session(ctx){
 
 			add_session_ip_to_workers(connect_session.session_name, ctx.ip);
 			add_session_ip_to_workers(connect_session.session_name, ctx.ip);
+
+			delete connect_session.init_data;
+			delete ctx.init_data;
+
 			break;
 		}
 		default:
@@ -1124,15 +1147,17 @@ function on_connection(socket){
 	socket.on("data", (new_data) => {
 		switch(ctx.state){
 			case SESSION_MODE_INIT:{
-				let new_buffer = Buffer.concat([ctx.init_data, new_data]);
-				
-				if (new_buffer.length >= 24){
-					ctx.init_data = new_buffer.subarray(0, 24);
-					ctx.outstanding_data = new_buffer.subarray(24);
-					create_session(ctx);
+				if (ctx.outstanding_data == undefined){
+					ctx.init_data = Buffer.concat([ctx.init_data, new_data]);
+					if (ctx.init_data.length >= 24){
+						ctx.outstanding_data = ctx.init_data.subarray(24);
+						ctx.init_data = ctx.init_data.subarray(0, 24);
+						create_session(ctx);
+					}
+				}else{
+					ctx.outstanding_data = Buffer.concat([ctx.outstanding_data, new_data]);
 				}
 
-				ctx.init_data = new_buffer;
 				break;
 			}
 			case SESSION_MODE_PDP:{
