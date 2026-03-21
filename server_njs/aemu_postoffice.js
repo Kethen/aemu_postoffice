@@ -512,7 +512,7 @@ function pdp_tick(ctx){
 					size = size.readUInt32LE();
 
 					if (size > PDP_BLOCK_MAX * 2){
-						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
+						log(`${ctx.session_name} ${ctx.sock_addr_str} is sending way too big data with size ${size}, ending session`);
 						send_remove_session_message_to_parent(ctx.session_name);
 						return;
 					}
@@ -570,7 +570,7 @@ function ptp_tick(ctx){
 
 					let size = cur_data.readUInt32LE();
 					if (size > PTP_BLOCK_MAX * 2){
-						log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} is sending way too big data with size ${size}, ending session`);
+						log(`${ctx.session_name} ${ctx.sock_addr_str} is sending way too big data with size ${size}, ending session`);
 						send_remove_session_message_to_parent(ctx.session_name);
 						return;
 					}
@@ -615,7 +615,7 @@ function ptp_tick(ctx){
 function remove_existing_and_insert_session(ctx, name){
 	const existing_session = sessions[name];
 	if (existing_session != undefined){
-		log(`dropping session ${existing_session.session_name} ${get_sock_addr_str(existing_session.socket)} for new session`);
+		log(`dropping session ${existing_session.session_name} ${existing_session.sock_addr_str} for new session`);
 		switch(existing_session.state){
 			case SESSION_MODE_PDP:
 			case SESSION_MODE_PTP_LISTEN:{
@@ -837,6 +837,7 @@ function add_session_to_worker(session){
 			peer_session_name:session.peer_session_name,
 			pdp_state:session.pdp_state,
 			ptp_state:session.ptp_state,
+			sock_addr_str:session.sock_addr_str,
 		}
 	});
 	least_sessions_worker.num_sessions++;
@@ -955,7 +956,7 @@ function create_session(ctx){
 			delete ctx.outstanding_data;
 			ctx.pdp_state = PDP_STATE_HEADER;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
-			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			log(`created session ${ctx.session_name} for ${ctx.sock_addr_str}`);
 			if (config.accounting_interval_ms > 0){
 				track_connect(ctx.ip, false, false);
 			}
@@ -971,7 +972,7 @@ function create_session(ctx){
 			ctx.session_name = `PTP_LISTEN ${get_mac_str(src_addr)} ${sport}`;
 			delete ctx.outstanding_data;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
-			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			log(`created session ${ctx.session_name} for ${ctx.sock_addr_str}`);
 			if (config.accounting_interval_ms > 0){
 				track_connect(ctx.ip, true, true);
 			}
@@ -1001,7 +1002,7 @@ function create_session(ctx){
 					break;
 				}
 				const target_session_name = get_target_session_name(SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
-				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${target_session_name} not found`);
+				log(`not creating ${ctx.session_name} for ${ctx.sock_addr_str}, ${target_session_name} not found`);
 				ctx.socket.destroy();
 				break;
 			}
@@ -1019,19 +1020,19 @@ function create_session(ctx){
 			if (max_buffer_size != 0 && listen_session.socket.writableLength >= max_buffer_size){
 				log(`killing session ${listen_session.session_name} as write buffer has reached ${listen_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
 				close_session(listen_session);
-				log(`not creating ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}, ${listen_session.session_name} is stale`);
+				log(`not creating ${ctx.session_name} for ${ctx.sock_addr_str}, ${listen_session.session_name} is stale`);
 				ctx.socket.destroy();
 				break;
 			}
 
-			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			log(`created session ${ctx.session_name} for ${ctx.sock_addr_str}`);
 			if (config.accounting_interval_ms > 0){
 				track_connect(ctx.ip, true, false);
 			}
 
 			ctx.ptp_wait_timeout = setTimeout(() => {
 				if (ctx.ptp_state == PTP_STATE_WAITING){
-					log(`the other side did not accept the connection request in 20 seconds, killing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
+					log(`the other side did not accept the connection request in 20 seconds, killing ${ctx.session_name} of ${ctx.sock_addr_str}`);
 					close_session(ctx);
 				}
 			}, 20000);
@@ -1045,7 +1046,7 @@ function create_session(ctx){
 			let connect_session = find_target_session(SESSION_MODE_PTP_CONNECT, ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
 			if (connect_session == undefined){
 				const target_session_name = get_target_session_name(SESSION_MODE_PTP_CONNECT, ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
-				log(`${target_session_name} not found, closing ${ctx.session_name} of ${get_sock_addr_str(ctx.socket)}`);
+				log(`${target_session_name} not found, closing ${ctx.session_name} of ${ctx.sock_addr_str}`);
 				ctx.socket.destroy();
 				break;
 			}
@@ -1066,7 +1067,7 @@ function create_session(ctx){
 			connect_session.socket.write(Buffer.concat([ctx.src_addr, port]));
 			port.writeUInt16LE(dport);
 			ctx.socket.write(Buffer.concat([ctx.dst_addr, port]));
-			log(`created session ${ctx.session_name} for ${get_sock_addr_str(ctx.socket)}`);
+			log(`created session ${ctx.session_name} for ${ctx.sock_addr_str}`);
 			if (config.accounting_interval_ms > 0){
 				track_connect(ctx.ip, true, false);
 			}
@@ -1083,7 +1084,7 @@ function create_session(ctx){
 			break;
 		}
 		default:
-			log(`${get_sock_addr_str(ctx.socket)} has bad init type ${type}, dropping connection`);
+			log(`${ctx.sock_addr_str} has bad init type ${type}, dropping connection`);
 			ctx.socket.destroy();
 	}
 }
@@ -1098,22 +1099,23 @@ function on_connection(socket){
 		state:SESSION_MODE_INIT,
 		ip:socket.remoteAddress,
 		chunks:[],
+		sock_addr_str:get_sock_addr_str(socket),
 	};
 
 	socket.on("error", (err) => {
 		switch(ctx.state){
 			case SESSION_MODE_INIT:
-				log(`${get_sock_addr_str(ctx.socket)} errored during init, ${err}`);
+				log(`${ctx.sock_addr_str} errored during init, ${err}`);
 				ctx.socket.destroy();
 				break;
 			case SESSION_MODE_PDP:
 			case SESSION_MODE_PTP_LISTEN:
-				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
+				log(`${ctx.session_name} ${ctx,sock_addr_str} errored, ${err}`);
 				close_session(ctx);
 				break;
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:
-				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} errored, ${err}`);
+				log(`${ctx.session_name} ${ctx.sock_addr_str} errored, ${err}`);
 				close_session(ctx);
 				break;
 			default:
@@ -1125,17 +1127,17 @@ function on_connection(socket){
 	socket.on("end", () => {
 		switch(ctx.state){
 			case SESSION_MODE_INIT:
-				log(`${get_sock_addr_str(ctx.socket)} closed during init`);
+				log(`${ctx.sock_addr_str} closed during init`);
 				ctx.socket.destroy();
 				break;
 			case SESSION_MODE_PDP:
 			case SESSION_MODE_PTP_LISTEN:
-				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
+				log(`${ctx.session_name} ${ctx.sock_addr_str} closed by client`);
 				close_session(ctx);
 				break;
 			case SESSION_MODE_PTP_CONNECT:
 			case SESSION_MODE_PTP_ACCEPT:
-				log(`${ctx.session_name} ${get_sock_addr_str(ctx.socket)} closed by client`);
+				log(`${ctx.session_name} ${ctx.sock_addr_str} closed by client`);
 				setTimeout(()=>{close_session(ctx)}, tick_interval_ms * 10);
 				break;
 			default:
@@ -1182,7 +1184,7 @@ function on_connection(socket){
 
 	ctx.init_timeout = setTimeout(() => {
 		if (ctx.state == SESSION_MODE_INIT){
-			log(`removing stale connection ${get_sock_addr_str(ctx.socket)}`);
+			log(`removing stale connection ${ctx.sock_addr_str}`);
 			ctx.socket.destroy();
 		}
 	}, 20000)
