@@ -143,6 +143,27 @@ interface SessionIpMap{
 	[index:string]:string,
 }
 
+interface SendListItem{
+	from_session_name:string,
+	from_mac:string,
+	to_session_name:string,
+	to_mac:string,
+	data:Buffer,
+	send_type:SendType,
+}
+
+interface SendListItemToParent{
+	to_session_name:string,
+	to_mac:string,
+	data:Buffer[],
+}
+
+interface SendListItemFromWorker{
+	to_session_name:string,
+	to_mac:string,
+	data:Uint8Array[],
+}
+
 process.on('SIGTERM', () => {
    process.exit(1); 
 });
@@ -162,8 +183,8 @@ let adhocctl_data = {};
 let adhocctl_groups_by_mac = {};
 let adhocctl_players_by_mac = {};
 
-let workers = [];
-let send_list = [];
+let workers:Worker[] = [];
+let send_list:SendListItem[] = [];
 
 let config = {
 	connection_strict_mode:false,
@@ -533,8 +554,8 @@ function send_data_to_parent(){
 	if (send_list.length == 0){
 		return;
 	}
-	let statistics_update = {};
-	let organized_send_list = {};
+	let statistics_update:Statistics = {};
+	let organized_send_list:{[index:string]:SendListItemToParent} = {};
 	//let transfer_list = [];
 	for (const send of send_list){
 		const to_ip = session_ip_lookup[send.to_session_name];
@@ -786,7 +807,7 @@ function close_session_by_name(name){
 	}
 }
 
-function send_data_to_sessions(send_list){
+function send_data_to_sessions(send_list:SendListItemFromWorker[]){
 	for (const send of send_list){
 		const sessions_of_to_mac = sessions_by_mac[send.to_mac];
 		if (sessions_of_to_mac == undefined){
