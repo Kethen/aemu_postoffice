@@ -24,6 +24,8 @@ jobs:
       run: |
         cd client
         bash build_podman.sh
+        cd ../server_njs
+        bash build_podman.sh
 
     - name: Push package artifact
       uses: actions/upload-artifact@v4
