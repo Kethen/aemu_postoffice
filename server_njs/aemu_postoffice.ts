@@ -76,6 +76,7 @@ interface SessionFromParent{
 	pdp_state:PdpState,
 	ptp_state:PtpState,
 	sock_addr_str:string,
+	target_session_name:string,
 }
 
 interface WorkerSession{
@@ -93,6 +94,10 @@ interface WorkerSession{
 	pdp_state:PdpState,
 	ptp_state:PtpState,
 	sock_addr_str:string,
+	target_session_name?:string,
+	target_mac?:string,
+	pdp_data_size?:number,
+	ptp_data_size?:number,
 }
 
 interface Worker{
@@ -125,6 +130,7 @@ interface Session{
 	ip:string,
 	ptp_wait_timeout:any,
 	init_timeout:any,
+	ptp_connect_retries:number,
 }
 
 interface SessionMap{
@@ -179,14 +185,18 @@ let sessions_by_ip:AddrSessionsMap = {};
 let session_ip_lookup:SessionIpMap = {};
 let worker_sessions:WorkerSessionMap = {};
 
-let adhocctl_data = {};
-let adhocctl_groups_by_mac = {};
-let adhocctl_players_by_mac = {};
+let adhocctl_data:any = {};
+let adhocctl_groups_by_mac:any = {};
+let adhocctl_players_by_mac:any = {};
 
 let workers:Worker[] = [];
 let send_list:SendListItem[] = [];
 
-let config = {
+interface Config{
+	[index:string]:any
+}
+
+let config:Config = {
 	connection_strict_mode:false,
 	forwarding_strict_mode:false,
 	max_per_second_data_rate_byte:0,
@@ -199,7 +209,7 @@ let config = {
 	max_ips:0,
 };
 
-function log(...args){
+function log(...args:any){
 	console.log(new Date().toISOString(), ...args);
 };
 
@@ -232,7 +242,7 @@ if (worker_threads.isMainThread){
 
 const tick_interval_ms = 1000 / config.tick_rate_hz;
 
-function get_mac_str(mac){
+function get_mac_str(mac:Buffer | Uint8Array){
 	let ret = ""
 	for (let i = 0;i < 6;i++){
 		if (i != 0){
@@ -243,7 +253,7 @@ function get_mac_str(mac){
 	return ret;
 }
 
-function get_sock_addr_str(sock){
+function get_sock_addr_str(sock:net.Socket){
 	return `${sock.remoteAddress}:${sock.remotePort}`
 }
 
@@ -311,7 +321,7 @@ function get_statistics_obj(ip:string, container:Statistics = statistics):Statis
 	return new_obj;
 }
 
-function track_connect(ip:string, is_ptp:boolean, is_listen:boolean, container:Statistics = statistics):undefined{
+function track_connect(ip:string, is_ptp:boolean, is_listen:boolean, container:Statistics = statistics):void{
 	let statistics_obj = get_statistics_obj(ip, container);
 	if (is_ptp){
 		if (is_listen){
@@ -324,7 +334,7 @@ function track_connect(ip:string, is_ptp:boolean, is_listen:boolean, container:S
 	}
 }
 
-function track_bandwidth(ip:string, is_ptp:boolean, is_tx:boolean, size:number, container:Statistics = statistics):undefined{
+function track_bandwidth(ip:string, is_ptp:boolean, is_tx:boolean, size:number, container:Statistics = statistics):void{
 	let statistics_obj = get_statistics_obj(ip, container);
 	if (is_ptp){
 		if (is_tx){
@@ -350,14 +360,14 @@ function output_memory_usage(){
 	console.log(JSON.stringify(process.memoryUsage(), null, 4));
 }
 
-function set_interval(func, interval_ms){
-	interval_ms = BigInt(Math.floor(interval_ms));
+function set_interval(func:() => void, interval_ms_num:number){
+	let interval_ms:bigint = BigInt(Math.floor(interval_ms_num));
 
 	let wrapper = () => {
-		let begin_ns = process.hrtime.bigint();
+		let begin_ns:bigint = process.hrtime.bigint();
 		func();
-		let duration_ms = (process.hrtime.bigint() - begin_ns) / BigInt(1000000);
-		let wait_ms = interval_ms - duration_ms;
+		let duration_ms:bigint = (process.hrtime.bigint() - begin_ns) / BigInt(1000000);
+		let wait_ms:bigint = interval_ms - duration_ms;
 		if (wait_ms <= 0){
 			wait_ms = BigInt(0);
 		}
@@ -417,7 +427,7 @@ function output_statistics(){
 	}
 }
 
-function remove_session_ip_in_workers(session_name){
+function remove_session_ip_in_workers(session_name:string){
 	const message = {
 		type:ParentToWorkerMessageType.PARENT_MESSAGE_REMOVE_SESSION_IP,
 		session_name:session_name,
@@ -428,7 +438,7 @@ function remove_session_ip_in_workers(session_name){
 	}
 }
 
-function close_one_session(ctx){
+function close_one_session(ctx:Session){
 	if (sessions[ctx.session_name] == undefined){
 		return;
 	}
@@ -463,7 +473,7 @@ function close_one_session(ctx){
 	remove_session_ip_in_workers(ctx.session_name);
 }
 
-function close_session(ctx){
+function close_session(ctx:Session){
 	close_one_session(ctx);
 
 	if (ctx.peer_session != undefined){
@@ -515,7 +525,7 @@ if (worker_threads.isMainThread && config.accounting_interval_ms >= 0){
 	set_interval(process_statistics, config.accounting_interval_ms);
 }
 
-function get_target_session_name(mode, my_mac, mac, sport, dport){
+function get_target_session_name(mode:SessionMode, my_mac:string, mac:string, sport:number, dport:number){
 	switch(mode){
 		case SessionMode.SESSION_MODE_PDP:
 			return `PDP ${mac} ${dport}`;
@@ -529,7 +539,7 @@ function get_target_session_name(mode, my_mac, mac, sport, dport){
 	}
 }
 
-function find_target_session(mode, my_mac, mac, sport, dport){
+function find_target_session(mode:SessionMode, my_mac:string, mac:string, sport:number, dport:number){
 	if (config.forwarding_strict_mode){
 		const adhocctl_group = adhocctl_groups_by_mac[my_mac];
 		if (adhocctl_group == undefined){
@@ -622,14 +632,14 @@ function send_data_to_parent(){
 	send_list = [];
 }
 
-function send_remove_session_message_to_parent(session_name){
+function send_remove_session_message_to_parent(session_name:string){
 	worker_threads.parentPort.postMessage({
 		type:WorkerToParentMessageType.WORKER_MESSAGE_REMOVE_SESSION,
 		session_name:session_name,
 	});
 }
 
-function pdp_tick(ctx){
+function pdp_tick(ctx:WorkerSession){
 	let no_data = false;
 	while(!no_data){
 		switch(ctx.pdp_state){
@@ -639,12 +649,8 @@ function pdp_tick(ctx){
 					ctx.pdp_data = ctx.pdp_data.subarray(14);
 
 					let addr = cur_data.subarray(0, 8);
-					let port = cur_data.subarray(8, 10);
-					let size = cur_data.subarray(10, 14);
-
-					// decode
-					port = port.readUInt16LE();
-					size = size.readUInt32LE();
+					let port = cur_data.subarray(8, 10).readUInt16LE();
+					let size = cur_data.subarray(10, 14).readUInt32LE();
 
 					if (size > PDP_BLOCK_MAX * 2){
 						log(`${ctx.session_name} ${ctx.sock_addr_str} is sending way too big data with size ${size}, ending session`);
@@ -694,7 +700,7 @@ function pdp_tick(ctx){
 	}
 }
 
-function ptp_tick(ctx){
+function ptp_tick(ctx:WorkerSession){
 	let no_data = false;
 	while(!no_data){
 		switch(ctx.ptp_state){
@@ -747,7 +753,7 @@ function ptp_tick(ctx){
 	}
 }
 
-function remove_existing_and_insert_session(ctx, name){
+function remove_existing_and_insert_session(ctx:Session, name:string){
 	const existing_session = sessions[name];
 	if (existing_session != undefined){
 		log(`dropping session ${existing_session.session_name} ${existing_session.sock_addr_str} for new session`);
@@ -784,7 +790,7 @@ function remove_existing_and_insert_session(ctx, name){
 	sessions_of_this_ip[name] = ctx;
 }
 
-function strict_mode_verify_ip_addr(mac_addr, ip_addr){
+function strict_mode_verify_ip_addr(mac_addr:string, ip_addr:string){
 	if (!config.connection_strict_mode){
 		return true;
 	}
@@ -800,7 +806,7 @@ function strict_mode_verify_ip_addr(mac_addr, ip_addr){
 	return true;
 }
 
-function close_session_by_name(name){
+function close_session_by_name(name:string){
 	let session = sessions[name];
 	if (session != undefined){
 		close_session(session);
@@ -827,7 +833,7 @@ function send_data_to_sessions(send_list:SendListItemFromWorker[]){
 	}
 }
 
-function handle_worker_message(m){
+function handle_worker_message(m:any){
 	switch(m.type){
 		case WorkerToParentMessageType.WORKER_MESSAGE_REMOVE_SESSION:
 			close_session_by_name(m.session_name);
@@ -884,7 +890,7 @@ function handle_chunks_from_parent(chunk_list:{session_name:string, chunks:Buffe
 	}
 }
 
-function session_first_tick(session){
+function session_first_tick(session:WorkerSession){
 	session.src_addr = Buffer.from(session.src_addr);
 	switch(session.state){
 		case SessionMode.SESSION_MODE_PDP:
@@ -918,26 +924,26 @@ function create_session_from_parent(session:SessionFromParent){
 		sock_addr_str:session.sock_addr_str,
 	};
 	worker_sessions[session.session_name] = worker_session;
-	session_first_tick(session);
+	session_first_tick(worker_session);
 }
 
-function update_session_ip_lookup(session_name, ip){
+function update_session_ip_lookup(session_name:string, ip:string){
 	session_ip_lookup[session_name] = ip;
 }
 
-function remove_worker_session(session_name){
-	delete sessions[session_name];
+function remove_worker_session(session_name:string){
+	delete worker_sessions[session_name];
 }
 
-function update_adhocctl_data_from_parent(new_data){
+function update_adhocctl_data_from_parent(new_data:any){
 	adhocctl_groups_by_mac = new_data;
 }
 
-function delete_from_session_ip_lookup(session_name){
+function delete_from_session_ip_lookup(session_name:string){
 	delete session_ip_lookup[session_name];
 }
 
-function handle_parent_message(m){
+function handle_parent_message(m:any){
 	switch(m.type){
 		case ParentToWorkerMessageType.PARENT_MESSAGE_CREATE_SESSION:
 			create_session_from_parent(m.session);
@@ -963,7 +969,7 @@ function handle_parent_message(m){
 	}
 }
 
-function add_session_to_worker(session){
+function add_session_to_worker(session:Session){
 	let least_sessions_worker:Worker | null = null;
 	for (let worker of workers){
 		if (least_sessions_worker == null || least_sessions_worker.num_sessions > worker.num_sessions){
@@ -996,7 +1002,7 @@ function add_session_to_worker(session){
 	session.worker = least_sessions_worker;
 }
 
-function add_session_ip_to_workers(session_name, ip){
+function add_session_ip_to_workers(session_name:string, ip:string){
 	const message = {
 		type:ParentToWorkerMessageType.PARENT_MESSAGE_ADD_SESSION_IP,
 		session_name:session_name,
@@ -1056,24 +1062,19 @@ function send_chunks_to_workers(){
 		if (chunk_list.length == 0){
 			continue;
 		}
-		workers[id].worker.postMessage({
+		workers[Number(id)].worker.postMessage({
 			type:ParentToWorkerMessageType.PARENT_MESSAGE_HANDLE_CHUNK,
 			chunk_list:chunk_list,
 		});
 	}
 }
 
-function create_session(ctx){
-	let type = ctx.init_data.subarray(0, 4);
+function create_session(ctx:Session){
+	let type = ctx.init_data.subarray(0, 4).readInt32LE();
 	let src_addr = ctx.init_data.subarray(4, 12);
-	let sport = ctx.init_data.subarray(12, 14);
+	let sport = ctx.init_data.subarray(12, 14).readUInt16LE();
 	let dst_addr = ctx.init_data.subarray(14, 22);
-	let dport = ctx.init_data.subarray(22, 24);
-
-	// decode
-	type = type.readInt32LE();
-	sport = sport.readUInt16LE();
-	dport = dport.readUInt16LE();
+	let dport = ctx.init_data.subarray(22, 24).readUInt16LE();
 
 	ctx.src_addr = src_addr;
 	ctx.sport = sport;
@@ -1137,9 +1138,7 @@ function create_session(ctx){
 
 			let listen_session = find_target_session(SessionMode.SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 			if (listen_session == undefined){
-				if (ctx.ptp_connect_retries == undefined){
-					ctx.ptp_connect_retries = 0;
-				}
+				ctx.ptp_connect_retries = 0;
 				// 2 seconds of retries
 				if (ctx.ptp_connect_retries < 8){
 					const retry = () => {
@@ -1241,7 +1240,7 @@ function create_session(ctx){
 	}
 }
 
-function on_connection(socket){
+function on_connection(socket:net.Socket){
 	socket.setKeepAlive(true);
 	socket.setNoDelay(true);
 
@@ -1269,6 +1268,7 @@ function on_connection(socket){
 		ip:socket.remoteAddress,
 		ptp_wait_timeout:0,
 		init_timeout:0,
+		ptp_connect_retries:0,
 	};
 
 	socket.on("error", (err) => {
@@ -1315,7 +1315,7 @@ function on_connection(socket){
 		}
 	})
 
-	socket.on("data", (new_data) => {
+	socket.on("data", (new_data:Buffer) => {
 		switch(ctx.state){
 			case SessionMode.SESSION_MODE_INIT:{
 				if (ctx.outstanding_data == undefined){
@@ -1414,14 +1414,14 @@ function send_adhocctl_data_to_workers(){
 	}
 }
 
-function game_list_sync(request, response){
+function game_list_sync(request:http.IncomingMessage, response:http.ServerResponse){
 	let ctx = {buf:Buffer.allocUnsafe(0)};
 	request.on("data", (chunk) => {
 		ctx.buf = Buffer.concat([ctx.buf, chunk]);
 	});
 	request.on("end", () => {
 		const decoded_string = ctx.buf.toString("utf8");
-		let parsed_data = {};
+		let parsed_data:any = {};
 		try{
 			parsed_data = JSON.parse(decoded_string)
 		}catch(e){
@@ -1431,7 +1431,7 @@ function game_list_sync(request, response){
 			return;
 		}
 
-		const games = parsed_data["games"];
+		const games:any = parsed_data["games"];
 		if (games == undefined){
 			log(`incoming game list has no game array..`);
 			response.writeHead(400);
@@ -1439,19 +1439,19 @@ function game_list_sync(request, response){
 			return;
 		}
 
-		let processed_data = {
+		let processed_data:any = {
 			games:[]
 		};
 
-		let processed_groups_by_mac = {};
-		let processed_players_by_mac = {};
+		let processed_groups_by_mac:any = {};
+		let processed_players_by_mac:any = {};
 
 		for (const game of games){
 			const groups = game["groups"];
 			if (groups == undefined){
 				continue;
 			}
-			let processed_game = {
+			let processed_game:any = {
 				groups:[]
 			};
 			processed_data.games.push(processed_game);
@@ -1460,7 +1460,7 @@ function game_list_sync(request, response){
 				if (players == undefined){
 					continue;
 				}
-				let processed_group = {
+				let processed_group:any = {
 				};
 				processed_game.groups.push(processed_group);
 				for (const player of players){
@@ -1483,17 +1483,17 @@ function game_list_sync(request, response){
 	});
 }
 
-function data_debug(request, response){
-	let response_obj = {
+function data_debug(request:http.IncomingMessage, response:http.ServerResponse){
+	let response_obj:any = {
 		adhocctl_data:adhocctl_data,
 		adhocctl_groups_by_mac:adhocctl_groups_by_mac,
 		adhocctl_players_by_mac:adhocctl_players_by_mac,
 	};
 
-	let convert_session_list = (from_list) => {
-		let to_list = {}
+	let convert_session_list = (from_list:AddrSessionsMap) => {
+		let to_list:any = {}
 		for (const [key, sessions] of Object.entries(from_list)){
-			let response_sessions = [];
+			let response_sessions:any = [];
 			to_list[key] = response_sessions;
 			for(const session of Object.values(sessions)){
 				let response_session:any = {
@@ -1532,12 +1532,16 @@ function data_debug(request, response){
 	response.end(JSON.stringify(response_obj));
 }
 
-const routes = {
+interface Routes{
+	[index:string]:(request:http.IncomingMessage, response:http.ServerResponse) => void,
+}
+
+const routes:Routes = {
 	"/game_list_sync":game_list_sync,
 	"/data_debug":data_debug,
 };
 
-function session_mode_to_string(mode){
+function session_mode_to_string(mode:SessionMode){
 	switch(mode){
 		case SessionMode.SESSION_MODE_INIT:
 			return "init";
@@ -1561,9 +1565,9 @@ if (worker_threads.isMainThread){
 		throw err;
 	});
 
-	status_server.on("request", (request, response) => {
-		let ret = {};
-		const route = routes[request.url];
+	status_server.on("request", (request:http.IncomingMessage, response:http.ServerResponse) => {
+		let ret:any = {};
+		const route:(request:http.IncomingMessage, response:http.ServerResponse) => void | undefined = routes[request.url];
 		if (route != undefined){
 			route(request, response);
 			return;

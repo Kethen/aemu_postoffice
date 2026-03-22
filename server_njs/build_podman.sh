@@ -14,4 +14,4 @@ podman run \
 	-v ./:/work_dir \
 	-w /work_dir \
 	$IMAGE \
-	tsc --typeRoots '/usr/local/lib/node_modules/@types' --types 'node' aemu_postoffice.ts
+	tsc --typeRoots '/usr/local/lib/node_modules/@types' --types 'node' --noImplicitAny aemu_postoffice.ts
