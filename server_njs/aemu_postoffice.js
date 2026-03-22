@@ -2,6 +2,9 @@ const net = require('node:net');
 const http = require('node:http');
 const fs = require('node:fs');
 const worker_threads = require('node:worker_threads');
+const process = require('node:process');
+const { Buffer } = require('node:buffer');
+
 
 const port = 27313
 const status_port = 27314;
@@ -111,7 +114,7 @@ const tick_interval_ms = 1000 / config.tick_rate_hz;
 
 function get_mac_str(mac){
 	let ret = ""
-	for (i = 0;i < 6;i++){
+	for (let i = 0;i < 6;i++){
 		if (i != 0){
 			ret = ret + ":";
 		}
@@ -132,7 +135,7 @@ function update_statistics(update, base){
 		base = statistics;
 	}
 	for (const [ip, value] of Object.entries(update)){
-		base_value = base[ip];
+		let base_value = base[ip];
 		if (base_value == undefined){
 			base[ip] = value;
 			continue;
@@ -264,13 +267,13 @@ function output_statistics(){
 		console.log(`  ptp rx ops ${obj.ptp_rx_ops} avg ${obj.ptp_rx_ops / interval_s}/s`);
 		console.log(`  ptp rx ${obj.ptp_rx} bytes avg ${obj.ptp_rx / interval_s} bytes/s`);
 
-		total_connects = obj.pdp_connects + obj.ptp_connects + obj.ptp_listen_connects;
-		total_tx_ops = obj.pdp_tx_ops + obj.ptp_tx_ops;
-		total_rx_ops = obj.pdp_rx_ops + obj.ptp_rx_ops;
-		total_ops = total_tx_ops + total_rx_ops;
-		total_tx = obj.pdp_tx + obj.ptp_tx;
-		total_rx = obj.pdp_rx + obj.ptp_rx;
-		total_data = total_tx + total_rx;
+		let total_connects = obj.pdp_connects + obj.ptp_connects + obj.ptp_listen_connects;
+		let total_tx_ops = obj.pdp_tx_ops + obj.ptp_tx_ops;
+		let total_rx_ops = obj.pdp_rx_ops + obj.ptp_rx_ops;
+		let total_ops = total_tx_ops + total_rx_ops;
+		let total_tx = obj.pdp_tx + obj.ptp_tx;
+		let total_rx = obj.pdp_rx + obj.ptp_rx;
+		let total_data = total_tx + total_rx;
 
 		console.log(`  total connects: ${total_connects} avg ${total_connects / interval_s}/s`);
 		console.log(`  total tx ops: ${total_tx_ops} avg ${total_tx_ops / interval_s}/s`);
@@ -666,7 +669,7 @@ function strict_mode_verify_ip_addr(mac_addr, ip_addr){
 }
 
 function close_session_by_name(name){
-	session = sessions[name];
+	let session = sessions[name];
 	if (session != undefined){
 		close_session(session);
 	}
@@ -1110,7 +1113,7 @@ function on_connection(socket){
 				break;
 			case SESSION_MODE_PDP:
 			case SESSION_MODE_PTP_LISTEN:
-				log(`${ctx.session_name} ${ctx,sock_addr_str} errored, ${err}`);
+				log(`${ctx.session_name} ${ctx.sock_addr_str} errored, ${err}`);
 				close_session(ctx);
 				break;
 			case SESSION_MODE_PTP_CONNECT:
@@ -1401,7 +1404,7 @@ if (worker_threads.isMainThread){
 		}
 		for (let entry of Object.entries(sessions)){
 			let ctx = entry[1];
-			ret_entry = {
+			let ret_entry = {
 				state:session_mode_to_string(ctx.state),
 				src_addr:ctx.src_addr_str,
 				sport:ctx.sport
