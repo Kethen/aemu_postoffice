@@ -1105,7 +1105,6 @@ function create_session(ctx){
 			ctx.state = SessionMode.SESSION_MODE_PDP;
 			ctx.session_name = `PDP ${get_mac_str(src_addr)} ${sport}`;
 			ctx.pdp_data = ctx.outstanding_data;
-			delete ctx.outstanding_data;
 			ctx.pdp_state = PdpState.PDP_STATE_HEADER;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${ctx.sock_addr_str}`);
@@ -1113,16 +1112,17 @@ function create_session(ctx){
 				track_connect(ctx.ip, false, false);
 			}
 
-			delete ctx.init_data;
-
 			add_session_to_worker(ctx);
 			add_session_ip_to_workers(ctx.session_name, ctx.ip);
+
+			delete ctx.init_data;
+			delete ctx.outstanding_data;
+
 			break;
 		}
 		case InitPacketType.AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
 			ctx.state = SessionMode.SESSION_MODE_PTP_LISTEN;
 			ctx.session_name = `PTP_LISTEN ${get_mac_str(src_addr)} ${sport}`;
-			delete ctx.outstanding_data;
 			remove_existing_and_insert_session(ctx, ctx.session_name);
 			log(`created session ${ctx.session_name} for ${ctx.sock_addr_str}`);
 			if (config.accounting_interval_ms > 0){
@@ -1130,6 +1130,7 @@ function create_session(ctx){
 			}
 
 			delete ctx.init_data;
+			delete ctx.outstanding_data;
 
 			break;
 		}
@@ -1166,7 +1167,6 @@ function create_session(ctx){
 			port.writeUInt16LE(sport);
 			ctx.ptp_state = PtpState.PTP_STATE_WAITING;
 			ctx.ptp_data = ctx.outstanding_data;
-			delete ctx.outstanding_data;
 			listen_session.socket.write(Buffer.concat([src_addr, port]));
 			const max_buffer_size = config.max_write_buffer_byte;
 			if (max_buffer_size != 0 && listen_session.socket.writableLength >= max_buffer_size){
@@ -1210,7 +1210,6 @@ function create_session(ctx){
 			connect_session.ptp_state = PtpState.PTP_STATE_HEADER;
 			clearTimeout(connect_session.ptp_wait_timeout);
 			ctx.ptp_data = ctx.outstanding_data;
-			delete ctx.outstanding_data;
 			ctx.peer_session_name = ctx.peer_session.session_name;
 			connect_session.peer_session_name = connect_session.peer_session.session_name;
 
@@ -1232,6 +1231,9 @@ function create_session(ctx){
 
 			delete connect_session.init_data;
 			delete ctx.init_data;
+
+			delete connect_session.outstanding_data;
+			delete ctx.outstanding_data;
 
 			break;
 		}
