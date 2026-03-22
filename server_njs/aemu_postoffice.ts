@@ -81,7 +81,7 @@ interface SessionFromParent{
 interface WorkerSession{
 	src_addr:Buffer,
 	sport:number,
-	dst_addr:Uint8Array,
+	dst_addr:Buffer,
 	dport:number,
 	src_addr_str:string,
 	dst_addr_str:string,
@@ -888,12 +888,10 @@ function session_first_tick(session){
 	session.src_addr = Buffer.from(session.src_addr);
 	switch(session.state){
 		case SessionMode.SESSION_MODE_PDP:
-			session.pdp_data = Buffer.from(session.pdp_data);
 			pdp_tick(session);
 			break;
 		case SessionMode.SESSION_MODE_PTP_CONNECT:
 		case SessionMode.SESSION_MODE_PTP_ACCEPT:
-			session.ptp_data = Buffer.from(session.ptp_data);
 			ptp_tick(session);
 			break;
 		default:
@@ -906,7 +904,7 @@ function create_session_from_parent(session:SessionFromParent){
 	let worker_session:WorkerSession = {
 		src_addr:Buffer.from(session.src_addr),
 		sport:session.sport,
-		dst_addr:session.dst_addr,
+		dst_addr:Buffer.from(session.dst_addr),
 		dport:session.dport,
 		src_addr_str:session.src_addr_str,
 		dst_addr_str:session.dst_addr_str,
