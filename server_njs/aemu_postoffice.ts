@@ -867,7 +867,17 @@ function handle_worker_message(m:any){
 	}
 }
 
-function handle_chunks_from_parent(chunk_list:{session_name:string, chunks:Buffer[]}[]){
+interface ChunkListEntryToWorker{
+	session_name:string,
+	chunks:Buffer[]
+}
+
+interface ChunkListEntryFromParent{
+	session_name:string,
+	chunks:Uint8Array[]
+}
+
+function handle_chunks_from_parent(chunk_list:ChunkListEntryFromParent[]){
 	for (const chunk of chunk_list){
 		let target_session = worker_sessions[chunk.session_name];
 		if (target_session == undefined){
@@ -1032,7 +1042,7 @@ function add_session_ip_to_workers(session_name:string, ip:string){
 }
 
 function send_chunks_to_workers(){
-	let chunk_lists:{[index:number]:{session_name:string, chunks:Buffer[]}[]} = {};
+	let chunk_lists:{[index:number]:ChunkListEntryToWorker[]} = {};
 	//let transfer_lists = {};
 	for (const session of Object.values(sessions)){
 		switch(session.state){
