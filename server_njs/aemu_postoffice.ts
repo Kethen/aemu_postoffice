@@ -126,7 +126,8 @@ interface Session{
 	chunks:Buffer[],
 	peer_session?:Session,
 	init_data:Buffer,
-	outstanding_data?:Buffer,
+	outstanding_data:Buffer,
+	outstanding_data_created:boolean,
 	ip:string,
 	ptp_wait_timeout:any,
 	init_timeout:any,
@@ -1291,7 +1292,8 @@ function on_connection(socket:net.Socket){
 		chunks:[],
 		peer_session:undefined,
 		init_data:Buffer.allocUnsafe(0),
-		outstanding_data:undefined,
+		outstanding_data:Buffer.allocUnsafe(0),
+		outstanding_data_created:false,
 		ip:socket.remoteAddress,
 		ptp_wait_timeout:0,
 		init_timeout:0,
@@ -1345,10 +1347,11 @@ function on_connection(socket:net.Socket){
 	socket.on("data", (new_data:Buffer) => {
 		switch(ctx.state){
 			case SessionMode.SESSION_MODE_INIT:{
-				if (ctx.outstanding_data == undefined){
+				if (!ctx.outstanding_data_created){
 					ctx.init_data = Buffer.concat([ctx.init_data, new_data]);
 					if (ctx.init_data.length >= 24){
 						ctx.outstanding_data = ctx.init_data.subarray(24);
+						ctx.outstanding_data_created = true;
 						ctx.init_data = ctx.init_data.subarray(0, 24);
 						create_session(ctx);
 					}
