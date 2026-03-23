@@ -185,9 +185,26 @@ let sessions_by_ip:AddrSessionsMap = {};
 let session_ip_lookup:SessionIpMap = {};
 let worker_sessions:WorkerSessionMap = {};
 
-let adhocctl_data:any = {};
-let adhocctl_groups_by_mac:any = {};
-let adhocctl_players_by_mac:any = {};
+interface AdhocctlPlayer{
+	mac_addr:string,
+	ip_addr:string,
+}
+
+interface AdhocctlGroup{
+	[index:string]:AdhocctlPlayer,
+}
+
+interface AdhocctlGame{
+	groups:AdhocctlGroup[],
+}
+
+interface AdhocctlData{
+	games:AdhocctlGame[],
+}
+
+let adhocctl_data:AdhocctlData = {games:[]};
+let adhocctl_groups_by_mac:{[index:string]:AdhocctlGroup} = {};
+let adhocctl_players_by_mac:{[index:string]:AdhocctlPlayer} = {};
 
 let workers:Worker[] = [];
 let send_list:SendListItem[] = [];
@@ -935,7 +952,7 @@ function remove_worker_session(session_name:string){
 	delete worker_sessions[session_name];
 }
 
-function update_adhocctl_data_from_parent(new_data:any){
+function update_adhocctl_data_from_parent(new_data:{[index:string]:AdhocctlGroup}){
 	adhocctl_groups_by_mac = new_data;
 }
 
@@ -1439,19 +1456,19 @@ function game_list_sync(request:http.IncomingMessage, response:http.ServerRespon
 			return;
 		}
 
-		let processed_data:any = {
+		let processed_data:AdhocctlData = {
 			games:[]
 		};
 
-		let processed_groups_by_mac:any = {};
-		let processed_players_by_mac:any = {};
+		let processed_groups_by_mac:{[index:string]:AdhocctlGroup} = {};
+		let processed_players_by_mac:{[index:string]:AdhocctlPlayer} = {};
 
 		for (const game of games){
 			const groups = game["groups"];
 			if (groups == undefined){
 				continue;
 			}
-			let processed_game:any = {
+			let processed_game:AdhocctlGame = {
 				groups:[]
 			};
 			processed_data.games.push(processed_game);
@@ -1460,11 +1477,10 @@ function game_list_sync(request:http.IncomingMessage, response:http.ServerRespon
 				if (players == undefined){
 					continue;
 				}
-				let processed_group:any = {
-				};
+				let processed_group:AdhocctlGroup = {};
 				processed_game.groups.push(processed_group);
 				for (const player of players){
-					let processed_player = {
+					let processed_player:AdhocctlPlayer = {
 						mac_addr:player["mac_addr"].toLowerCase(),
 						ip_addr:player["ip_addr"],
 					}
@@ -1559,6 +1575,16 @@ function session_mode_to_string(mode:SessionMode){
 	}
 }
 
+interface SessionListEntry{
+	state:string,
+	src_addr:string,
+	sport:number,
+	pdp_state?:PdpState,
+	ptp_state?:PtpState,
+	dst_addr?:string,
+	dport?:number,
+}
+
 if (worker_threads.isMainThread){
 	let status_server = http.createServer();
 	status_server.on("error", (err) => {
@@ -1566,7 +1592,7 @@ if (worker_threads.isMainThread){
 	});
 
 	status_server.on("request", (request:http.IncomingMessage, response:http.ServerResponse) => {
-		let ret:any = {};
+		let ret:{[index:string]:SessionListEntry[]} = {};
 		const route:(request:http.IncomingMessage, response:http.ServerResponse) => void | undefined = routes[request.url];
 		if (route != undefined){
 			route(request, response);
@@ -1574,7 +1600,7 @@ if (worker_threads.isMainThread){
 		}
 		for (let entry of Object.entries(sessions)){
 			let ctx = entry[1];
-			let ret_entry:any = {
+			let ret_entry:SessionListEntry = {
 				state:session_mode_to_string(ctx.state),
 				src_addr:ctx.src_addr_str,
 				sport:ctx.sport
