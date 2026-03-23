@@ -54,7 +54,7 @@ bash build_windows.sh
 
 #### Server implementation
 
-See [./server_njs/aemu_postoffice.js](/server_njs/aemu_postoffice.js)
+See [./server_njs/aemu_postoffice.ts](/server_njs/aemu_postoffice.ts)
 
 ##### Running server
 
