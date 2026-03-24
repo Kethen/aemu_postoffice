@@ -242,21 +242,27 @@ function load_config(){
 	}catch(e){
 		log(`warning: failed parsing config.json, ${e}`);
 	}
+
+	if (worker_threads.isMainThread){
+		log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
+
+		if (config.num_worker_threads <= 0){
+			log(`number of worker threads cannot be less than one (${config.num_worker_threads}), please change your config`);
+			process.exit(1);
+		}
+
+		if (config.accounting_interval_ms <= 0){
+			log(`warning: accounting is disabled, statistics logging is disabled, "max_per_second_data_rate_byte" and "max_tx_op_rate" are now not enforced`);
+		}
+
+		if (config.tick_rate_hz < 30 || config.tick_rate_hz > 1000){
+			log(`bad tickrate ${config.tick_rate_hz} configured (accepts 30 - 1000), please change your config`);
+			process.exit(1);
+		}
+	}
 }
 
 load_config();
-if (worker_threads.isMainThread){
-	log(`runtime config:\n${JSON.stringify(config, null, 4)}`);
-
-	if (config.num_worker_threads <= 0){
-		log(`number of worker threads cannot be less than one (${config.num_worker_threads}), please change your config`);
-		process.exit(1);
-	}
-
-	if (config.accounting_interval_ms <= 0){
-		log(`warning: accounting is disabled, statistics logging is disabled, "max_per_second_data_rate_byte" and "max_tx_op_rate" are now not enforced`);
-	}
-}
 
 function get_mac_str(mac:Buffer | Uint8Array){
 	let ret = ""
