@@ -258,8 +258,6 @@ if (worker_threads.isMainThread){
 	}
 }
 
-const tick_interval_ms = 1000 / config.tick_rate_hz;
-
 function get_mac_str(mac:Buffer | Uint8Array){
 	let ret = ""
 	for (let i = 0;i < 6;i++){
@@ -394,7 +392,23 @@ function set_interval(func:() => void, interval_ms_num:number){
 	wrapper();
 }
 
-set_interval(output_memory_usage, memory_usage_log_interval_ms);
+function run_per_tick(func:() => void){
+	let wrapper = () => {
+		let begin_ns:bigint = process.hrtime.bigint();
+		func();
+		let duration_ms:bigint = (process.hrtime.bigint() - begin_ns) / BigInt(1000000);
+		let wait_ms:bigint = BigInt(Math.floor(1000 / config.tick_rate_hz)) - duration_ms;
+		if (wait_ms <= 0){
+			wait_ms = BigInt(0);
+		}
+		setTimeout(wrapper, Number(wait_ms));
+	};
+	wrapper();
+}
+
+if (worker_threads.isMainThread){
+	set_interval(output_memory_usage, memory_usage_log_interval_ms);
+}
 
 // don't pull statistics into a scope with arrow function
 function output_statistics(){
@@ -461,12 +475,20 @@ function close_one_session(ctx:Session){
 		return;
 	}
 
+	// in case we get into the edge case of new session added before delayed removal, we want to keep track of this
+	let session_deleted:boolean = false;
+
 	log(`closing ${ctx.session_name}`);
 	ctx.socket.destroy();
-	delete sessions[ctx.session_name];
+	if (ctx == sessions[ctx.session_name]){
+		session_deleted = true;
+		delete sessions[ctx.session_name];
+	}
 	let sessions_of_this_mac = sessions_by_mac[ctx.src_addr_str];
 	if (sessions_of_this_mac != undefined){
-		delete sessions_of_this_mac[ctx.session_name];
+		if (ctx == sessions_of_this_mac[ctx.session_name]){
+			delete sessions_of_this_mac[ctx.session_name];
+		}
 		if (Object.keys(sessions_of_this_mac).length == 0){
 			delete sessions_by_mac[ctx.src_addr_str];
 		}
@@ -474,21 +496,26 @@ function close_one_session(ctx:Session){
 
 	let sessions_of_this_ip = sessions_by_ip[ctx.ip];
 	if (sessions_of_this_ip != undefined){
-		delete sessions_of_this_ip[ctx.session_name];
+		if (ctx == sessions_of_this_ip[ctx.session_name]){
+			delete sessions_of_this_ip[ctx.session_name];
+		}
 		if (Object.keys(sessions_of_this_ip).length == 0){
 			delete sessions_by_ip[ctx.ip];
 		}
 	}
 
-	if (ctx.worker != undefined){
-		ctx.worker.worker.postMessage({
-			type:ParentToWorkerMessageType.PARENT_MESSAGE_REMOVE_SESSION,
-			session_name:ctx.session_name,
-		});
-		ctx.worker.num_sessions--;
-	}
+	if (session_deleted){
+		// if we have not replaced the session already, we push a delete message to the workers
+		if (ctx.worker != undefined){
+			ctx.worker.worker.postMessage({
+				type:ParentToWorkerMessageType.PARENT_MESSAGE_REMOVE_SESSION,
+				session_name:ctx.session_name,
+			});
+			ctx.worker.num_sessions--;
+		}
 
-	remove_session_ip_in_workers(ctx.session_name);
+		remove_session_ip_in_workers(ctx.session_name);
+	}
 }
 
 function close_session(ctx:Session){
@@ -534,13 +561,20 @@ function check_bandwidth_limit(){
 }
 
 function process_statistics(){
-	output_statistics();
-	check_bandwidth_limit();
-	statistics = {};
+	if (config.accounting_interval_ms >= 0){
+		output_statistics();
+		check_bandwidth_limit();
+		statistics = {};
+	}
+	let wait_ms = config.accounting_interval_ms;
+	if (wait_ms <= 0){
+		wait_ms = 1000;
+	}
+	setTimeout(process_statistics, wait_ms);
 }
 
-if (worker_threads.isMainThread && config.accounting_interval_ms >= 0){
-	set_interval(process_statistics, config.accounting_interval_ms);
+if (worker_threads.isMainThread){
+	process_statistics();
 }
 
 function get_target_session_name(mode:SessionMode, my_mac:string, mac:string, sport:number, dport:number){
@@ -1336,7 +1370,7 @@ function on_connection(socket:net.Socket){
 			case SessionMode.SESSION_MODE_PTP_CONNECT:
 			case SessionMode.SESSION_MODE_PTP_ACCEPT:
 				log(`${ctx.session_name} ${ctx.sock_addr_str} closed by client`);
-				setTimeout(()=>{close_session(ctx)}, tick_interval_ms * 10);
+				setTimeout(()=>{close_session(ctx)}, (1000 / config.tick_rate_hz) * 10);
 				break;
 			default:
 				log(`bad state ${ctx.state} on socket end, debug this`);
@@ -1419,7 +1453,7 @@ if (worker_threads.isMainThread){
 
 	server.on("connection", on_connection);
 
-	set_interval(send_chunks_to_workers, tick_interval_ms);
+	run_per_tick(send_chunks_to_workers);
 
 	log(`begin listening on port ${port}`);
 
@@ -1428,7 +1462,7 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
-	set_interval(send_data_to_parent, tick_interval_ms);
+	run_per_tick(send_data_to_parent);
 
 	worker_threads.parentPort.on("message", handle_parent_message);
 }
