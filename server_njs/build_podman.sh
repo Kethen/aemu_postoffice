@@ -14,4 +14,4 @@ podman run \
 	-v ./:/work_dir \
 	-w /work_dir \
 	$IMAGE \
-	tsc --typeRoots '/usr/local/lib/node_modules/@types' --types 'node' --noImplicitAny aemu_postoffice.ts
+	tsc --typeRoots '/usr/local/lib/node_modules/@types' --types 'node' -m 'node18' -t 'es2021' --noImplicitAny aemu_postoffice.ts

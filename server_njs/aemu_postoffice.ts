@@ -1,10 +1,7 @@
-import net = require('node:net');
-import http = require('node:http');
-import fs = require('node:fs');
-import worker_threads = require('node:worker_threads');
-import process = require('node:process');
-import { Buffer } from 'node:buffer';
-
+import * as net from 'node:net';
+import * as http from 'node:http';
+import * as fs from 'node:fs';
+import * as worker_threads from 'node:worker_threads';
 
 const port = 27313
 const status_port = 27314;
@@ -76,7 +73,6 @@ interface SessionFromParent{
 	pdp_state:PdpState,
 	ptp_state:PtpState,
 	sock_addr_str:string,
-	target_session_name:string,
 }
 
 interface WorkerSession{
@@ -94,10 +90,10 @@ interface WorkerSession{
 	pdp_state:PdpState,
 	ptp_state:PtpState,
 	sock_addr_str:string,
-	target_session_name?:string,
-	target_mac?:string,
-	pdp_data_size?:number,
-	ptp_data_size?:number,
+	target_session_name:string,
+	target_mac:string,
+	pdp_data_size:number,
+	ptp_data_size:number,
 }
 
 interface Worker{
@@ -682,19 +678,23 @@ function send_data_to_parent(){
 		}
 	}
 
-	worker_threads.parentPort.postMessage({
-		type:WorkerToParentMessageType.WORKER_MESSAGE_SEND_DATA,
-		send_list:Object.values(organized_send_list),
-		statistics_update:statistics_update,
-	});
+	if (worker_threads.parentPort != undefined){
+		worker_threads.parentPort.postMessage({
+			type:WorkerToParentMessageType.WORKER_MESSAGE_SEND_DATA,
+			send_list:Object.values(organized_send_list),
+			statistics_update:statistics_update,
+		});
+	}
 	send_list = [];
 }
 
 function send_remove_session_message_to_parent(session_name:string){
-	worker_threads.parentPort.postMessage({
-		type:WorkerToParentMessageType.WORKER_MESSAGE_REMOVE_SESSION,
-		session_name:session_name,
-	});
+	if (worker_threads.parentPort != undefined){
+		worker_threads.parentPort.postMessage({
+			type:WorkerToParentMessageType.WORKER_MESSAGE_REMOVE_SESSION,
+			session_name:session_name,
+		});
+	}
 }
 
 function pdp_tick(ctx:WorkerSession){
@@ -990,6 +990,10 @@ function create_session_from_parent(session:SessionFromParent){
 		pdp_state:session.pdp_state,
 		ptp_state:session.ptp_state,
 		sock_addr_str:session.sock_addr_str,
+		target_session_name:"",
+		target_mac:"",
+		pdp_data_size:0,
+		ptp_data_size:0,
 	};
 	worker_sessions[session.session_name] = worker_session;
 	session_first_tick(worker_session);
@@ -1038,9 +1042,9 @@ function handle_parent_message(m:any){
 }
 
 function add_session_to_worker(session:Session){
-	let least_sessions_worker:Worker | null = null;
+	let least_sessions_worker:Worker = workers[0];
 	for (let worker of workers){
-		if (least_sessions_worker == null || least_sessions_worker.num_sessions > worker.num_sessions){
+		if (least_sessions_worker.num_sessions > worker.num_sessions){
 			least_sessions_worker = worker;
 		}
 	}
@@ -1059,14 +1063,18 @@ function add_session_to_worker(session:Session){
 		pdp_state:session.pdp_state,
 		ptp_state:session.ptp_state,
 		sock_addr_str:session.sock_addr_str,
+		target_session_name:"",
+		target_mac:"",
+		pdp_data_size:0,
+		ptp_data_size:0,
 	};
 	least_sessions_worker.worker.postMessage({
 		type:ParentToWorkerMessageType.PARENT_MESSAGE_CREATE_SESSION,
 		session:worker_session,
 	});
 	least_sessions_worker.num_sessions++;
-	delete session.pdp_data;
-	delete session.ptp_data;
+	session.pdp_data = Buffer.allocUnsafe(0);
+	session.ptp_data = Buffer.allocUnsafe(0);
 	session.worker = least_sessions_worker;
 }
 
@@ -1182,8 +1190,8 @@ function create_session(ctx:Session){
 			add_session_to_worker(ctx);
 			add_session_ip_to_workers(ctx.session_name, ctx.ip);
 
-			delete ctx.init_data;
-			delete ctx.outstanding_data;
+			ctx.init_data = Buffer.allocUnsafe(0);
+			ctx.outstanding_data = Buffer.allocUnsafe(0);
 
 			break;
 		}
@@ -1196,8 +1204,8 @@ function create_session(ctx:Session){
 				track_connect(ctx.ip, true, true);
 			}
 
-			delete ctx.init_data;
-			delete ctx.outstanding_data;
+			ctx.init_data = Buffer.allocUnsafe(0);
+			ctx.outstanding_data = Buffer.allocUnsafe(0);
 
 			break;
 		}
@@ -1294,11 +1302,11 @@ function create_session(ctx:Session){
 			add_session_ip_to_workers(connect_session.session_name, ctx.ip);
 			add_session_ip_to_workers(connect_session.session_name, ctx.ip);
 
-			delete connect_session.init_data;
-			delete ctx.init_data;
+			connect_session.init_data = Buffer.allocUnsafe(0);
+			ctx.init_data = Buffer.allocUnsafe(0);
 
-			delete connect_session.outstanding_data;
-			delete ctx.outstanding_data;
+			connect_session.outstanding_data = Buffer.allocUnsafe(0);
+			ctx.outstanding_data = Buffer.allocUnsafe(0);
 
 			break;
 		}
@@ -1334,7 +1342,7 @@ function on_connection(socket:net.Socket){
 		init_data:Buffer.allocUnsafe(0),
 		outstanding_data:Buffer.allocUnsafe(0),
 		outstanding_data_created:false,
-		ip:socket.remoteAddress,
+		ip:socket.remoteAddress == undefined ? "" : socket.remoteAddress,
 		ptp_wait_timeout:0,
 		init_timeout:0,
 		ptp_connect_retries:0,
@@ -1468,7 +1476,9 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
-	worker_threads.parentPort.on("message", handle_parent_message);
+	if (worker_threads.parentPort != undefined){
+		worker_threads.parentPort.on("message", handle_parent_message);
+	}
 
 	run_per_tick(send_data_to_parent);
 }
@@ -1646,7 +1656,8 @@ if (worker_threads.isMainThread){
 
 	status_server.on("request", (request:http.IncomingMessage, response:http.ServerResponse) => {
 		let ret:{[index:string]:SessionListEntry[]} = {};
-		const route:(request:http.IncomingMessage, response:http.ServerResponse) => void | undefined = routes[request.url];
+		const url = request.url == undefined ? "" : request.url;
+		const route:(request:http.IncomingMessage, response:http.ServerResponse) => void | undefined = routes[url];
 		if (route != undefined){
 			route(request, response);
 			return;
