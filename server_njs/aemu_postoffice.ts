@@ -1468,9 +1468,9 @@ if (worker_threads.isMainThread){
 		backlog:1000
 	});
 }else{
-	run_per_tick(send_data_to_parent);
-
 	worker_threads.parentPort.on("message", handle_parent_message);
+
+	run_per_tick(send_data_to_parent);
 }
 
 function send_adhocctl_data_to_workers(){
