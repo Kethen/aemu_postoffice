@@ -93,6 +93,7 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 | tick_rate_hz | The server processes packets in bursts. This controls how often the server should process packets. Note that this does not come with any processing timing guarantee, as the actual tick rate depends on whether the server is overloading. Higher tick rate is more CPU demanding, while lower tick rate is more memory demanding. Lower tick rates could also cause lags in some games. 60-120 should be a good range for tuning. | Yes |
 | max_ips | Limit the maximum number of unique IPs on the server. When the number is reached, further connections from fresh IPs are rejected. Note that number of unique IPs might not match 1 to 1 to number of users, with NATs on the internet, only adhocctl server carries that data. Set to 0 to disable. | Yes |
 
+By default, the config file is read from `<current directory>/config.json`. `AEMU_POSTOFFICE_CONFIG_PATH` environment variable can be used to change the path.
 
 ### Performance tuning
 

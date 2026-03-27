@@ -28,6 +28,7 @@ podman run \
 	-p 27314:27314 \
 	-v ./aemu_postoffice.js:/aemu_postoffice.js:ro \
 	-v ./config.json:/config.json:ro \
+	-e AEMU_POSTOFFICE_CONFIG_PATH='/config.json' \
 	$podman_arg \
 	$IMAGE \
-	${node_arg} aemu_postoffice.js
+	${node_arg} /aemu_postoffice.js

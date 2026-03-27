@@ -230,8 +230,16 @@ function log(...args:any){
 };
 
 function load_config(){
+	let config_path = "./config.json";
+	if (process.env.AEMU_POSTOFFICE_CONFIG_PATH != undefined){
+		config_path = process.env.AEMU_POSTOFFICE_CONFIG_PATH;
+	}
+	if (worker_threads.isMainThread){
+		log(`loading config from ${config_path}`);
+	}
+
 	try{
-		const file_str = fs.readFileSync("./config.json", {encoding:"utf8"});
+		const file_str = fs.readFileSync(config_path, {encoding:"utf8"});
 
 		let parsed_data = JSON.parse(file_str);
 		for(const [key, value] of Object.entries(parsed_data)){
@@ -1479,7 +1487,7 @@ if (worker_threads.isMainThread){
 		if (os.platform() == 'win32'){
 			process.exit(0);
 		}
-		log(`reloading config on sigup`);
+		log(`reloading config on SIGHUP`);
 		load_config();
 		for (const worker of workers){
 			worker.worker.postMessage({
