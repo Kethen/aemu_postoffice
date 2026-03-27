@@ -33,6 +33,7 @@ jobs:
         name: aemu_postoffice_${{ env.sha_name }}
         path: |
            server_njs/aemu_postoffice.js
+           server_njs/run_podman.sh
            server_njs/config.json
            server_njs/sample_game_list_sync_request.json
            client/postoffice_client_import.S
