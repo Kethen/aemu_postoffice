@@ -2,6 +2,7 @@ import * as net from 'node:net';
 import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as worker_threads from 'node:worker_threads';
+import * as os from 'node:os';
 
 const port = 27313
 const status_port = 27314;
@@ -46,6 +47,7 @@ enum ParentToWorkerMessageType{
 	PARENT_MESSAGE_ADD_SESSION_IP = 3,
 	PARENT_MESSAGE_REMOVE_SESSION_IP = 4,
 	PARENT_MESSAGE_SYNC_ADHOCCTL_DATA = 5,
+	PARENT_MESSAGE_UPDATE_CONFIG = 6,
 }
 
 enum WorkerToParentMessageType{
@@ -168,11 +170,11 @@ interface SendListItemFromWorker{
 }
 
 process.on('SIGTERM', () => {
-   process.exit(1); 
+   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-   process.exit(1); 
+   process.exit(0);
 });
 
 let sessions:SessionMap = {};
@@ -1015,6 +1017,11 @@ function delete_from_session_ip_lookup(session_name:string){
 	delete session_ip_lookup[session_name];
 }
 
+function sync_config_from_parent(parent_config:Config){
+	log(`syncing config from parent`);
+	config = parent_config;
+}
+
 function handle_parent_message(m:any){
 	switch(m.type){
 		case ParentToWorkerMessageType.PARENT_MESSAGE_CREATE_SESSION:
@@ -1034,6 +1041,9 @@ function handle_parent_message(m:any){
 			break;
 		case ParentToWorkerMessageType.PARENT_MESSAGE_REMOVE_SESSION_IP:
 			delete_from_session_ip_lookup(m.session_name);
+			break;
+		case ParentToWorkerMessageType.PARENT_MESSAGE_UPDATE_CONFIG:
+			sync_config_from_parent(m.config);
 			break;
 		default:
 			log(`unknown parent message type ${m.type}, debug this`);
@@ -1464,6 +1474,20 @@ if (worker_threads.isMainThread){
 		});
 		workers.push(worker);
 	}
+
+	process.on('SIGHUP', () => {
+		if (os.platform() == 'win32'){
+			process.exit(0);
+		}
+		log(`reloading config on sigup`);
+		load_config();
+		for (const worker of workers){
+			worker.worker.postMessage({
+				type:ParentToWorkerMessageType.PARENT_MESSAGE_UPDATE_CONFIG,
+				config:config,
+			});
+		}
+	});
 
 	server.on("connection", on_connection);
 

@@ -80,20 +80,19 @@ node --max-old-space-size=500 --max-semi-space-size=128 aemu_postoffice.js
 }
 ```
 
-| Name | Description |
-| -- | -- |
-| connection_strict_mode | WIP subjected to changes. Limit new connection to adhocctl clients registered with http://:27314/game_list_sync , sample api json can be found at [sample_game_list_sync_request.json](sample_game_list_sync_request.json) |
-| forwarding_strict_mode | WIP subjected to changes. Limit data transmission within adhocctl client groups registered with http://:27314/game_list_sync , sample api json can be found at [sample_game_list_sync_request.json](sample_game_list_sync_request.json) |
-| max_per_second_data_rate_byte | Evict sessions by IP address that exceeds this data rate (per second). Be cautious with this option as multiple clients can be from the same ip address. Set to 0 to disable. |
-| max_tx_op_rate | Evict sessions by IP address that exceeds send operation rate (per second). Be cautious with this option as multiple clients can be from the same ip address. Set to 0 to disable. |
-| accounting_rate_ms | How often statistics are processed for logging and bad behavior IP sessions eviction. Setting this too low risks extra CPU usage as well as false positives on misbehaving IPs. When deperate for CPU resources, this can be set to 0, however that will disable usage statistics log, as well as the enforcement of max_per_second_data_rate_byte and max_tx_op_rate. |
-| max_write_buffer_byte | Evict sessions that are not receiving data correctly and causing send buffers to bloat. Set to 0 to disable. |
-| max_connections | Global maximum number of connections. Note that this number usually does not match 1 to 1 to number of users, as some games create multiple sockets, hence multiple TCP connections. |
-| num_worker_threads | Number of worker threads to spawn on top of the main thread. Note that setting this too high will slow the main thread down, as it coordinates work between workers. There should be at least 1 worker thread. |
-| tick_rate_hz | The server processes packets in bursts. This controls how often the server should process packets. Note that this does not come with any processing timing guarantee, as the actual tick rate depends on whether the server is overloading. Higher tick rate is more CPU demanding, while lower tick rate is more memory demanding. Lower tick rates could also cause lags in some games. 60-120 should be a good range for tuning. |
-| max_ips | Limit the maximum number of unique IPs on the server. When the number is reached, further connections from fresh IPs are rejected. Note that number of unique IPs might not match 1 to 1 to number of users, with NATs on the internet, only adhocctl server carries that data. Set to 0 to disable. |
+| Name | Description | Reloads on SIGHUP on non Windows platforms |
+| -- | -- | -- |
+| connection_strict_mode | WIP subjected to changes. Limit new connection to adhocctl clients registered with http://:27314/game_list_sync , sample api json can be found at [sample_game_list_sync_request.json](sample_game_list_sync_request.json) | Yes |
+| forwarding_strict_mode | WIP subjected to changes. Limit data transmission within adhocctl client groups registered with http://:27314/game_list_sync , sample api json can be found at [sample_game_list_sync_request.json](sample_game_list_sync_request.json) | Yes |
+| max_per_second_data_rate_byte | Evict sessions by IP address that exceeds this data rate (per second). Be cautious with this option as multiple clients can be from the same ip address. Set to 0 to disable. | Yes |
+| max_tx_op_rate | Evict sessions by IP address that exceeds send operation rate (per second). Be cautious with this option as multiple clients can be from the same ip address. Set to 0 to disable. | Yes |
+| accounting_rate_ms | How often statistics are processed for logging and bad behavior IP sessions eviction. Setting this too low risks extra CPU usage as well as false positives on misbehaving IPs. When deperate for CPU resources, this can be set to 0, however that will disable usage statistics log, as well as the enforcement of max_per_second_data_rate_byte and max_tx_op_rate. | Yes |
+| max_write_buffer_byte | Evict sessions that are not receiving data correctly and causing send buffers to bloat. Set to 0 to disable. | Yes |
+| max_connections | Global maximum number of connections. Note that this number usually does not match 1 to 1 to number of users, as some games create multiple sockets, hence multiple TCP connections. | No |
+| num_worker_threads | Number of worker threads to spawn on top of the main thread. Note that setting this too high will slow the main thread down, as it coordinates work between workers. There should be at least 1 worker thread. | No |
+| tick_rate_hz | The server processes packets in bursts. This controls how often the server should process packets. Note that this does not come with any processing timing guarantee, as the actual tick rate depends on whether the server is overloading. Higher tick rate is more CPU demanding, while lower tick rate is more memory demanding. Lower tick rates could also cause lags in some games. 60-120 should be a good range for tuning. | Yes |
+| max_ips | Limit the maximum number of unique IPs on the server. When the number is reached, further connections from fresh IPs are rejected. Note that number of unique IPs might not match 1 to 1 to number of users, with NATs on the internet, only adhocctl server carries that data. Set to 0 to disable. | Yes |
 
-Note that you will have to restart the server to reload these settings. Settings are logged during server startup for confirmation.
 
 ### Performance tuning
 
