@@ -161,12 +161,16 @@ interface SendListItemToParent{
 	to_session_name:string,
 	to_mac:string,
 	data:Buffer[],
+	send_type:SendType,
+	timestamp:bigint,
 }
 
 interface SendListItemFromWorker{
 	to_session_name:string,
 	to_mac:string,
 	data:Uint8Array[],
+	send_type:SendType,
+	timestamp:bigint,
 }
 
 process.on('SIGTERM', () => {
@@ -207,6 +211,7 @@ let adhocctl_players_by_mac:{[index:string]:AdhocctlPlayer} = {};
 
 let workers:Worker[] = [];
 let send_list:SendListItem[] = [];
+let send_list_pending_pdp:SendListItemFromWorker[] = [];
 
 interface Config{
 	[index:string]:any
@@ -655,6 +660,8 @@ function send_data_to_parent(){
 				to_session_name:send.to_session_name,
 				to_mac:send.to_mac,
 				data:[send.data],
+				timestamp:process.hrtime.bigint(),
+				send_type:send.send_type,
 			};
 			organized_send_list[send.to_session_name] = send_item_of_this_dst;
 		}else{
@@ -881,16 +888,69 @@ function close_session_by_name(name:string){
 	}
 }
 
-function send_data_to_sessions(send_list:SendListItemFromWorker[]){
-	for (const send of send_list){
+function retry_pdp_send(){
+	let remove_list:SendListItemFromWorker[] = [];
+
+	const add_to_list_if_timed_out = (item:SendListItemFromWorker) => {
+		const age_ms = (process.hrtime.bigint() - item.timestamp) / BigInt(1000000);
+		// 2 seconds of retries
+		if (age_ms > BigInt(2000)){
+			log(`timing out data`);
+			remove_list.push(item);
+		}
+	};
+
+	for (const send of send_list_pending_pdp){
 		const sessions_of_to_mac = sessions_by_mac[send.to_mac];
 		if (sessions_of_to_mac == undefined){
+			add_to_list_if_timed_out(send);
 			continue;
 		}
 		let to_session = sessions_of_to_mac[send.to_session_name];
 		if (to_session == undefined){
+			add_to_list_if_timed_out(send);
 			continue;
 		}
+
+		log(`resending data`);
+		to_session.socket.write(Buffer.concat(send.data));
+		remove_list.push(send);
+		const max_buffer_size = config.max_write_buffer_byte;
+		if (max_buffer_size != 0 && to_session.socket.writableLength >= max_buffer_size){
+			log(`killing session ${to_session.session_name} as write buffer has reached ${to_session.socket.writableLength} bytes, max ${max_buffer_size} bytes`);
+			close_session(to_session);
+		}
+	}
+
+	for (const to_remove of remove_list){
+		const index = send_list_pending_pdp.indexOf(to_remove);
+		if (index > -1){
+			send_list_pending_pdp.splice(index, 1);
+		}
+	}
+}
+
+function send_data_to_sessions(send_list:SendListItemFromWorker[]){
+	const queue_to_pending_list = (item:SendListItemFromWorker) => {
+		if (item.send_type == SendType.SEND_TYPE_PDP){
+			log(`queiing data for retry`);
+			send_list_pending_pdp.push(item);
+		}
+	};
+
+	for (const send of send_list){
+		const sessions_of_to_mac = sessions_by_mac[send.to_mac];
+		if (sessions_of_to_mac == undefined){
+			queue_to_pending_list(send);
+			continue;
+		}
+		let to_session = sessions_of_to_mac[send.to_session_name];
+		if (to_session == undefined){
+			queue_to_pending_list(send);
+			continue;
+		}
+
+		log(`sending data to ${send.to_session_name}`);
 
 		to_session.socket.write(Buffer.concat(send.data));
 		const max_buffer_size = config.max_write_buffer_byte;
@@ -1499,7 +1559,10 @@ if (worker_threads.isMainThread){
 
 	server.on("connection", on_connection);
 
-	run_per_tick(send_chunks_to_workers);
+	run_per_tick(() => {
+		send_chunks_to_workers();
+		retry_pdp_send();
+	});
 
 	log(`begin listening on port ${port}`);
 
