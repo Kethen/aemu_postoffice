@@ -483,10 +483,6 @@ function remove_session_ip_in_workers(session_name:string){
 }
 
 function close_one_session(ctx:Session){
-	if (sessions[ctx.session_name] == undefined){
-		return;
-	}
-
 	// in case we get into the edge case of new session added before delayed removal, we want to keep track of this
 	let session_deleted:boolean = false;
 
@@ -1232,7 +1228,6 @@ function create_session(ctx:Session){
 
 			let listen_session = find_target_session(SessionMode.SESSION_MODE_PTP_LISTEN, ctx.src_addr_str, ctx.dst_addr_str, 0, ctx.dport);
 			if (listen_session == undefined){
-				ctx.ptp_connect_retries = 0;
 				// 2 seconds of retries
 				if (ctx.ptp_connect_retries < 8){
 					const retry = () => {
@@ -1287,7 +1282,7 @@ function create_session(ctx:Session){
 			ctx.session_name = `PTP_ACCEPT ${get_mac_str(src_addr)} ${sport} ${get_mac_str(dst_addr)} ${dport}`
 
 			let connect_session = find_target_session(SessionMode.SESSION_MODE_PTP_CONNECT, ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
-			if (connect_session == undefined){
+			if (connect_session == undefined || connect_session.ptp_state != PtpState.PTP_STATE_WAITING){
 				const target_session_name = get_target_session_name(SessionMode.SESSION_MODE_PTP_CONNECT, ctx.src_addr_str, ctx.dst_addr_str, ctx.sport, ctx.dport);
 				log(`${target_session_name} not found, closing ${ctx.session_name} of ${ctx.sock_addr_str}`);
 				ctx.socket.destroy();
