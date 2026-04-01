@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+// current limits on send/recv calls
+#define AEMU_POSTOFFICE_PDP_BLOCK_MAX (10 * 1024)
+#define AEMU_POSTOFFICE_PTP_BLOCK_MAX (50 * 1024)
+
 // structs here are gcc little endian
 
 typedef enum{
