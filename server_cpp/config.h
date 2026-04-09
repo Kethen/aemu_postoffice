@@ -30,7 +30,7 @@ struct Config {
 	uint64_t target_tick_interval_ms = 8;
 
 	// maximum number of pending and active sessions before new connections are rejceted
-	int max_num_sessions = 2000;
+	int max_num_sessions = 5000;
 };
 
 }
