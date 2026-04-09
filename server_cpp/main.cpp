@@ -6,6 +6,8 @@
 
 #ifdef __unix__
 #include <signal.h>
+#include <sys/resource.h>
+#include <sys/errno.h>
 #endif
 
 #include "server.h"
@@ -28,6 +30,17 @@ int main(){
 	{
 		aemu_postoffice_server::Config config;
 		aemu_postoffice_server::Server server(config);
+
+		#ifdef __unix__
+		struct rlimit num_file_limit = {
+			(rlim_t)(config.max_num_sessions + 10),
+			(rlim_t)(config.max_num_sessions + 10)
+		};
+		int set_limit_status = setrlimit(RLIMIT_NOFILE, &num_file_limit);
+		if (set_limit_status == -1){
+			LOG("%s: failed changing number of opened files (including sockets) limit, 0x%x\n", __func__, errno);
+		}
+		#endif
 
 		while(!should_stop){
 			auto begin = std::chrono::high_resolution_clock::now();

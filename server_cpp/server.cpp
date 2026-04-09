@@ -239,10 +239,20 @@ ServerPumpStatus Server::pump(){
 			if (native_error_is_would_block(error)){
 				break;
 			}
+			if (native_error_is_emfile(error)){
+				LOG("%s: warning, new connection dropped as system limit has reached\n", __func__);
+				break;
+			}
 			LOG("%s: failed accepting connection, 0x%x\n", __func__, error);
 			native_close(this->sock_fd);
 			this->sock_fd = -1;
 			return ServerPumpStatus::LISTEN_SOCK_DEAD;
+		}
+
+		if (this->pending_sessions.size() + this->sessions.size() >= this->config.max_num_sessions){
+			LOG("%s: session limit %d reached, rejecting connection from %s\n", __func__, this->config.max_num_sessions, peer_addr.c_str());
+			native_close(accept_status);
+			continue;
 		}
 
 		pending_sessions.push_back(PendingSession(accept_status, peer_addr, &this->config));

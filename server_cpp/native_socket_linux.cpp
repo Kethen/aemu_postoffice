@@ -37,6 +37,10 @@ bool native_error_is_no_mem(int error){
 	return error == ENOBUFS || error == ENOMEM;
 }
 
+bool native_error_is_emfile(int error){
+	return error == EMFILE;
+}
+
 int native_tcp_listen(std::string ip, uint16_t port){
 	struct sockaddr_in6 addr6 = {0};
 	struct sockaddr_in addr4 = {0};

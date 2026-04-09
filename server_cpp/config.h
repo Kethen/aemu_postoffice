@@ -26,7 +26,11 @@ struct Config {
 	// how log ptp_connect waits for ptp_listen to respond until ptp_connect times out
 	uint64_t connect_time_limit_ms = 5000;
 
+	// only used in stand-alone mode, target packet processing tick rate
 	uint64_t target_tick_interval_ms = 8;
+
+	// maximum number of pending and active sessions before new connections are rejceted
+	int max_num_sessions = 2000;
 };
 
 }
