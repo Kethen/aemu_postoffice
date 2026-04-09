@@ -26,6 +26,8 @@ jobs:
         bash build_podman.sh
         cd ../server_njs
         bash build_podman.sh
+        cd ../server_cpp
+        bash build_podman.sh
 
     - name: Push package artifact
       uses: actions/upload-artifact@v4
@@ -41,4 +43,5 @@ jobs:
            client/postoffice_client.h
            client/libaemu_postoffice_client.so
            client/libaemu_postoffice_client.dll
+           server_cpp/aemu_postoffice
         if-no-files-found: error
