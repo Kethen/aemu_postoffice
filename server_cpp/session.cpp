@@ -19,13 +19,13 @@ PendingSession::PendingSession(int sock_fd, std::string client_addr, Config *con
 
 static std::string get_listen_session_name(const char *mac, uint16_t port){
 	char buf[128] = {0};
-	sprintf(buf, "PTP_LISTEN %02x:%02x:%02x:%02x:%02x:%02x %u", (uint8_t)mac[0], (uint8_t)mac[1], (uint8_t)mac[2], (uint8_t)mac[3], (uint8_t)mac[4], (uint8_t)mac[5], port);
+	snprintf(buf, sizeof(buf), "PTP_LISTEN %02x:%02x:%02x:%02x:%02x:%02x %u", (uint8_t)mac[0], (uint8_t)mac[1], (uint8_t)mac[2], (uint8_t)mac[3], (uint8_t)mac[4], (uint8_t)mac[5], port);
 	return std::string(buf);
 }
 
 static std::string get_connect_session_name(const char *src_addr, uint16_t sport, const char *dst_addr, uint16_t dport){
 	char buf[128] = {0};
-	sprintf(buf, "PTP_CONNECT %02x:%02x:%02x:%02x:%02x:%02x %u %02x:%02x:%02x:%02x:%02x:%02x %u",
+	snprintf(buf, sizeof(buf), "PTP_CONNECT %02x:%02x:%02x:%02x:%02x:%02x %u %02x:%02x:%02x:%02x:%02x:%02x %u",
 			(uint8_t)src_addr[0], (uint8_t)src_addr[1], (uint8_t)src_addr[2], (uint8_t)src_addr[3], (uint8_t)src_addr[4], (uint8_t)src_addr[5], sport,
 			(uint8_t)dst_addr[0], (uint8_t)dst_addr[1], (uint8_t)dst_addr[2], (uint8_t)dst_addr[3], (uint8_t)dst_addr[4], (uint8_t)dst_addr[5], dport);
 	return std::string(buf);
@@ -33,7 +33,7 @@ static std::string get_connect_session_name(const char *src_addr, uint16_t sport
 
 static std::string get_accept_session_name(const char *src_addr, uint16_t sport, const char *dst_addr, uint16_t dport){
 	char buf[128] = {0};
-	sprintf(buf, "PTP_ACCEPT %02x:%02x:%02x:%02x:%02x:%02x %u %02x:%02x:%02x:%02x:%02x:%02x %u",
+	snprintf(buf, sizeof(buf), "PTP_ACCEPT %02x:%02x:%02x:%02x:%02x:%02x %u %02x:%02x:%02x:%02x:%02x:%02x %u",
 			(uint8_t)src_addr[0], (uint8_t)src_addr[1], (uint8_t)src_addr[2], (uint8_t)src_addr[3], (uint8_t)src_addr[4], (uint8_t)src_addr[5], sport,
 			(uint8_t)dst_addr[0], (uint8_t)dst_addr[1], (uint8_t)dst_addr[2], (uint8_t)dst_addr[3], (uint8_t)dst_addr[4], (uint8_t)dst_addr[5], dport);
 	return std::string(buf);
@@ -41,7 +41,7 @@ static std::string get_accept_session_name(const char *src_addr, uint16_t sport,
 
 static std::string get_pdp_session_name(const char *mac, uint16_t port){
 	char buf[128] = {0};
-	sprintf(buf, "PDP %02x:%02x:%02x:%02x:%02x:%02x %u", (uint8_t)mac[0], (uint8_t)mac[1], (uint8_t)mac[2], (uint8_t)mac[3], (uint8_t)mac[4], (uint8_t)mac[5], port);
+	snprintf(buf, sizeof(buf), "PDP %02x:%02x:%02x:%02x:%02x:%02x %u", (uint8_t)mac[0], (uint8_t)mac[1], (uint8_t)mac[2], (uint8_t)mac[3], (uint8_t)mac[4], (uint8_t)mac[5], port);
 	return std::string(buf);
 }
 
@@ -92,7 +92,7 @@ PendingSessionPumpStatus PendingSession::pump(std::map<std::string, Session> &gl
 				std::string connect_session_name = get_connect_session_name(init->dst_addr, init->dport, init->src_addr, init->sport);
 				auto connect_session = global_sessions.find(connect_session_name);
 				if (connect_session == global_sessions.end() || connect_session->second.get_session_phase() != SessionPhase::PTP_CONNECTING){
-					LOG("%s: peer session %s not found, not creating ptp accept session for %s\n", __func__, connect_session_name, this->client_addr.c_str());
+					LOG("%s: peer session %s not found, not creating ptp accept session for %s\n", __func__, connect_session_name.c_str(), this->client_addr.c_str());
 					native_close(this->sock_fd);
 					return PendingSessionPumpStatus::SOCKET_CLOSED;
 				}else{
@@ -340,7 +340,7 @@ std::vector<SendListItem> Session::get_send_list(){
 DataQueueStatus Session::queue_send(const std::string &data){
 	to_client_data_buffer.append(data.data(), data.length());
 	if (to_client_data_buffer.length() >= this->config->data_queue_size_limit_byte){
-		LOG("%s: session %s from %s has reached receive data buffer limit %ub\n", __func__, this->get_identifier(), this->get_client_addr(), this->config->data_queue_size_limit_byte);
+		LOG("%s: session %s from %s has reached receive data buffer limit %ub\n", __func__, this->get_identifier().c_str(), this->get_client_addr().c_str(), this->config->data_queue_size_limit_byte);
 		return DataQueueStatus::MAX_DATA_REACHED;
 	}
 	return DataQueueStatus::SUCCESS;

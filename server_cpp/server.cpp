@@ -31,7 +31,7 @@ Server::Server(Config config){
 	}
 
 	if (this->sock_fd == -2){
-		this->sock_fd == -1;
+		this->sock_fd = -1;
 		LOG("%s: failed parsing %s as ipv6 nor ipv4\n", __func__, config.ip_addr.c_str());
 		return;
 	}
@@ -165,6 +165,8 @@ void Server::pump_connect_and_from_clients(int set){
 
 		pump_status = session->pump_from_client();
 		switch(pump_status){
+			case SessionPumpStatus::TIMEOUT:
+			case SessionPumpStatus::CONNECTED:
 			case SessionPumpStatus::SUCCESS:
 				break;
 			case SessionPumpStatus::SOCKET_CLOSED:
@@ -238,7 +240,7 @@ ServerPumpStatus Server::pump(){
 				break;
 			}
 			LOG("%s: failed accepting connection, 0x%x\n", __func__, error);
-			close(this->sock_fd);
+			native_close(this->sock_fd);
 			this->sock_fd = -1;
 			return ServerPumpStatus::LISTEN_SOCK_DEAD;
 		}

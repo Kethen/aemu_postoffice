@@ -111,7 +111,7 @@ void test_pdp(){
 	sleep(1);
 	int next_size = pdp_peek_next_size(pdp_handle_b);
 	if (next_size != sizeof(test_data)){
-		LOG("%s: failed peeking pdp size, expected %d, got %d\n", __func__, sizeof(test_data), next_size);
+		LOG("%s: failed peeking pdp size, expected %lu, got %d\n", __func__, sizeof(test_data), next_size);
 		exit(1);
 	}
 
@@ -370,12 +370,12 @@ void test_ptp(){
 	pthread_join(accept_thread_b, &accept_handle_b);
 
 	if (accept_handle_a == NULL){
-		LOG("%s: failed accepting connection from b to a\n");
+		LOG("%s: failed accepting connection from b to a\n", __func__);
 		exit(1);
 	}
 
 	if (accept_handle_b == NULL){
-		LOG("%s: failed accepting connection from a to b\n");
+		LOG("%s: failed accepting connection from a to b\n", __func__);
 		exit(1);
 	}
 
@@ -409,15 +409,15 @@ void test_ptp(){
 		recv_size = sizeof(recv_buf);
 		recv_status = ptp_recv(b_to_a, recv_buf, &recv_size, false);
 		if (recv_status != 0){
-			LOG("%s: failed receiving from a accept to b\n");
+			LOG("%s: failed receiving from a accept to b\n", __func__);
 			exit(1);
 		}
 		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
-			LOG("%s: receiving from a accept to b has bad data\n");
+			LOG("%s: receiving from a accept to b has bad data\n", __func__);
 			exit(1);
 		}
 		if (recv_size != sizeof(recv_buf)){
-			LOG("%s: receiving from a accept to b has bad data size\n");
+			LOG("%s: receiving from a accept to b has bad data size\n", __func__);
 			exit(1);
 		}
 
@@ -431,22 +431,22 @@ void test_ptp(){
 		sleep(1);
 		int next_size = ptp_peek_next_size(accept_handle_a);
 		if (next_size != sizeof(recv_buf)){
-			LOG("%s: failed peeking ptp size, expected %d, got %d\n", __func__, sizeof(recv_buf), next_size);
+			LOG("%s: failed peeking ptp size, expected %lu, got %d\n", __func__, sizeof(recv_buf), next_size);
 			exit(1);
 		}
 
 		recv_size = sizeof(recv_buf);
 		recv_status = ptp_recv(accept_handle_a, recv_buf, &recv_size, false);
 		if (recv_status != 0){
-			LOG("%s: failed receiving from b connect to a\n");
+			LOG("%s: failed receiving from b connect to a\n", __func__);
 			exit(1);
 		}
 		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
-			LOG("%s: receiving from b connect to b has bad data\n");
+			LOG("%s: receiving from b connect to b has bad data\n", __func__);
 			exit(1);
 		}
 		if (recv_size != sizeof(recv_buf)){
-			LOG("%s: receiving from b connect to b has bad data size\n");
+			LOG("%s: receiving from b connect to b has bad data size\n", __func__);
 			exit(1);
 		}
 
@@ -460,7 +460,7 @@ void test_ptp(){
 		recv_size = sizeof(recv_buf);
 		recv_status = ptp_recv(a_to_b, recv_buf, &recv_size, false);
 		if (recv_status != 0){
-			LOG("%s: failed receiving from b accept to a\n");
+			LOG("%s: failed receiving from b accept to a\n", __func__);
 			exit(1);
 		}
 		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
@@ -493,7 +493,7 @@ void test_ptp(){
 		}
 
 		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
-			LOG("%s: receiving from a connect to b has bad data\n");
+			LOG("%s: receiving from a connect to b has bad data\n", __func__);
 			exit(1);
 		}
 	}

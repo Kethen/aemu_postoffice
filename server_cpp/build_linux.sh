@@ -2,7 +2,7 @@ set -xe
 
 SRC="log native_socket_linux session server semaphore main"
 
-BUILD_FLAGS="-g -O2 -fPIC --std=c++20"
+BUILD_FLAGS="-g -O2 -fPIC --std=c++20 -Wformat"
 LINK_FLAGS=""
 
 CPPC=g++
