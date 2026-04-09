@@ -116,6 +116,11 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sockopt, sizeof(sockopt));
 	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, sizeof(sockopt));
 
+	#ifndef __linux__
+	sockopt = 1;
+	setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &sockopt, sizeof(sockopt));
+	#endif
+
 	// Show some socket options
 	unsigned int opt_len = sizeof(sockopt);
 	sockopt = 0;
@@ -132,6 +137,13 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, &opt_len);
 	LOG("%s: SO_RCVBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? errno : 0);
 
+	#ifndef __linux__
+	opt_len = sizeof(sockopt);
+	sockopt = 0;
+	get_ret = getsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &sockopt, &opt_len);
+	LOG("%s: SO_NOSIGPIPE is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? errno : 0);
+	#endif
+
 	return sock;
 }
 
@@ -141,7 +153,11 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool
 		if (*abort){
 			return NATIVE_SOCK_ABORTED;
 		}
+		#ifdef __linux__
+		int write_status = send(fd, &buf[write_offset], len - write_offset, MSG_NOSIGNAL);
+		#else
 		int write_status = send(fd, &buf[write_offset], len - write_offset, 0);
+		#endif
 		if (write_status == -1){
 			int err = errno;
 			if (err == EAGAIN || err == EWOULDBLOCK){
