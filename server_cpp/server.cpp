@@ -10,6 +10,8 @@
 
 #include "native_socket.h"
 
+namespace aemu_postoffice_server {
+
 static void set_thread_name(std::string name){
 	#if __unix__
 	pthread_t tid = pthread_self();
@@ -355,4 +357,6 @@ ServerPumpStatus Server::pump(){
 	}
 
 	return ServerPumpStatus::SUCCESS;
+}
+
 }

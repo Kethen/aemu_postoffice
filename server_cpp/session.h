@@ -10,6 +10,8 @@
 
 #include "config.h"
 
+namespace aemu_postoffice_server {
+
 class Session;
 
 enum class PendingSessionPumpStatus{
@@ -113,6 +115,7 @@ class Session{
 		std::string client_addr;
 };
 
+}
 // Session loop phases
 // 1. accept connections to spawn new pending sessions
 // 2. Process pending sessions to spawn new sessions/remove timed out pending sessions

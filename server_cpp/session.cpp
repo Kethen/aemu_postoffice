@@ -7,6 +7,8 @@
 
 #include "../aemu_postoffice_packets.h"
 
+namespace aemu_postoffice_server {
+
 PendingSession::PendingSession(int sock_fd, std::string client_addr, Config *config){
 	this->sock_fd = sock_fd;
 	this->client_addr = client_addr;
@@ -415,4 +417,6 @@ void Session::close_socket(){
 
 std::string Session::get_client_addr(){
 	return this->client_addr;
+}
+
 }

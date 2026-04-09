@@ -11,6 +11,8 @@
 #include "session.h"
 #include "semaphore.h"
 
+namespace aemu_postoffice_server {
+
 enum class ServerPumpStatus{
 	SUCCESS,
 	LISTEN_SOCK_DEAD,
@@ -56,4 +58,5 @@ class Server{
 		void pump_to_clients(int set);
 };
 
+}
 #endif

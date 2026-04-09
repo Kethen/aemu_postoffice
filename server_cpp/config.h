@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+namespace aemu_postoffice_server {
+
 struct Config {
 	// ip address to bind to, will be decoded using OS provided inet_pton
 	// if a v4 address is provided, the socket will only listen to v4
@@ -27,4 +29,5 @@ struct Config {
 	uint64_t target_tick_interval_ms = 8;
 };
 
+}
 #endif

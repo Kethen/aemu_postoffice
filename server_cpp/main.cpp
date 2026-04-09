@@ -26,13 +26,13 @@ int main(){
 	#endif
 
 	{
-		Config config;
-		Server server(config);
+		aemu_postoffice_server::Config config;
+		aemu_postoffice_server::Server server(config);
 
 		while(!should_stop){
 			auto begin = std::chrono::high_resolution_clock::now();
-			ServerPumpStatus pump_status = server.pump();
-			if (pump_status != ServerPumpStatus::SUCCESS){
+			aemu_postoffice_server::ServerPumpStatus pump_status = server.pump();
+			if (pump_status != aemu_postoffice_server::ServerPumpStatus::SUCCESS){
 				exit(1);
 			}
 			auto timespent = std::chrono::high_resolution_clock::now() - begin;
