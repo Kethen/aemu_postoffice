@@ -135,6 +135,10 @@ Server::~Server(){
 	for(auto &session : this->sessions){
 		session.second.close_socket();
 	}
+
+	for(auto &pending_session : this->pending_sessions){
+		pending_session.close_socket();
+	}
 }
 
 void Server::pump_pending_sessions(int set){

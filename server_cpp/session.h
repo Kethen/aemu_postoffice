@@ -28,6 +28,7 @@ class PendingSession{
 		PendingSessionPumpStatus pump(std::map<std::string, Session> &global_sessions);
 		// The pending session should be discarded after creating a session
 		Session create_session(std::map<std::string, Session> &global_sessions);
+		void close_socket();
 
 	private:
 		std::string init_data_buffer;

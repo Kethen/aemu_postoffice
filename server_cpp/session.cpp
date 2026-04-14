@@ -148,6 +148,13 @@ Session PendingSession::create_session(std::map<std::string, Session> &global_se
 	}
 }
 
+void PendingSession::close_socket(){
+	if (this->sock_fd != -1){
+		native_close(this->sock_fd);
+		this->sock_fd = -1;
+	}
+}
+
 Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, Config *config){
 	this->mode = mode;
 	this->config = config;
