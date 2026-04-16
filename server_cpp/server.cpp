@@ -36,6 +36,8 @@ Server::Server(Config config){
 		return;
 	}
 
+	this->stopping = false;
+
 	for(int i = 0;i < config.num_threads;i++){
 		this->pending_sessions_pump_worker_semas.push_back(Semaphore());
 		this->pending_sessions_pump_worker_done_semas.push_back(Semaphore());

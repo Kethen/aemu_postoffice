@@ -1,6 +1,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+namespace aemu_postoffice_server {
+
 void log_default(const char *format, ...){
 	va_list args;
 	va_start(args, format);
@@ -13,3 +15,5 @@ void log_default(const char *format, ...){
 }
 
 void (*LOG)(const char *format, ...) = log_default;
+
+}

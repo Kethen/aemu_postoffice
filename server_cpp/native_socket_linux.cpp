@@ -13,6 +13,8 @@
 
 #include <stdint.h>
 
+namespace aemu_postoffice_server {
+
 int native_recv(int fd, void *buf, int buflen){
 	return recv(fd, buf, buflen, 0);
 }
@@ -138,4 +140,6 @@ int native_accept(int sock_fd, std::string *peer_addr, uint16_t *peer_port){
 
 void native_close(int sock_fd){
 	close(sock_fd);
+}
+
 }

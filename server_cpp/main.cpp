@@ -38,7 +38,7 @@ int main(){
 		};
 		int set_limit_status = setrlimit(RLIMIT_NOFILE, &num_file_limit);
 		if (set_limit_status == -1){
-			LOG("%s: failed changing number of opened files (including sockets) limit, 0x%x\n", __func__, errno);
+			aemu_postoffice_server::LOG("%s: failed changing number of opened files (including sockets) limit, 0x%x\n", __func__, errno);
 		}
 		#endif
 
@@ -56,7 +56,7 @@ int main(){
 		}
 	}
 
-	LOG("%s: server stopped\n", __func__);
+	aemu_postoffice_server::LOG("%s: server stopped\n", __func__);
 
 	return 0;
 }
