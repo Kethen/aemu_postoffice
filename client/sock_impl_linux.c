@@ -177,19 +177,35 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool
 	return write_offset;
 }
 
+int native_recv(int fd, char *buf, int len){
+	int recv_status = recv(fd, buf, len, 0);
+	if (recv_status == 0){
+		return recv_status;
+	}
+	if (recv_status < 0){
+		int err = errno;
+		if (err == EAGAIN || err == EWOULDBLOCK){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+		// Other errors
+		LOG("%s: failed receving, %s\n", __func__, strerror(errno));
+		return recv_status;
+	}
+	return recv_status;
+}
+
 int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abort){
 	int read_offset = 0;
 	while(read_offset != len){
 		if (*abort){
 			return NATIVE_SOCK_ABORTED;
 		}
-		int recv_status = recv(fd, &buf[read_offset], len - read_offset, 0);
+		int recv_status = native_recv(fd, &buf[read_offset], len - read_offset);
 		if (recv_status == 0){
 			return recv_status;
 		}
 		if (recv_status < 0){
-			int err = errno;
-			if (err == EAGAIN || err == EWOULDBLOCK){
+			if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 				if (non_block && read_offset == 0){
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
@@ -197,8 +213,6 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abor
 				sleep(0);
 				continue;
 			}
-			// Other errors
-			LOG("%s: failed receving, %s\n", __func__, strerror(errno));
 			return recv_status;
 		}
 		read_offset += recv_status;

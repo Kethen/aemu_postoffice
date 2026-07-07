@@ -32,9 +32,10 @@ struct ptp_session{
 	int sock;
 	bool dead;
 	bool abort;
-	char recv_buf[AEMU_POSTOFFICE_PTP_BLOCK_MAX];
-	int outstanding_data_size;
-	int outstanding_data_offset;
+	char recv_ring_buf[AEMU_POSTOFFICE_PTP_BLOCK_MAX];
+	int recv_ring_buf_start;
+	int recv_ring_buf_used;
+	int bytes_till_next_header;
 	bool recving;
 	bool sending;
 };
