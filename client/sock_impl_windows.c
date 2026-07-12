@@ -91,11 +91,12 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	init_winsock2();
 
 	native_sock_addr *native_addr = addr;
-	int sock = socket(native_addr->sin_family, SOCK_STREAM, 0);
-	if (sock == -1){
+	SOCKET win_sock = socket(native_addr->sin_family, SOCK_STREAM, 0);
+	if (win_sock == INVALID_SOCKET){
 		LOG("%s: failed creating socket, %d\n", __func__, WSAGetLastError());
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
+	int sock = win_sock;
 
 	// XXX need to simulate timeout on windows, there's no sockopt for that
 	// this also restricts latency to 500ms, if a server is even further away, connection won't be possible
