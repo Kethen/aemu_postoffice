@@ -106,6 +106,11 @@ static void *pdp_create(void *addr, int addrlen, const char *pdp_mac, int pdp_po
 	session->abort = false;
 	session->recving = false;
 	session->sending = false;
+	session->recv_ring_buf_start = 0;
+	session->recv_ring_buf_used = 0;
+	session->buffered_data = 0;
+	session->bytes_till_next_header = 0;
+	session->last_block_size = 0;
 
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	return session;
@@ -134,7 +139,7 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	if (len > sizeof(session->recv_buf)){
+	if (len > AEMU_POSTOFFICE_PDP_BLOCK_MAX){
 		LOG("%s: failed sending data, data too big, %d\n", __func__, len);
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
@@ -184,6 +189,119 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 	return AEMU_POSTOFFICE_CLIENT_OK;
 }
 
+static int peek_ring_buf(uint8_t *dst, int dst_size, const uint8_t *ring_buf, int ring_buf_size, int ring_buf_begin, int ring_buf_used){
+	int to_peek = dst_size > ring_buf_used ? ring_buf_used : dst_size;
+	for (int i = 0;i < to_peek;i++){
+		int ring_buf_offset = (ring_buf_begin + i) % ring_buf_size;
+		dst[i] = ring_buf[ring_buf_offset];
+	}
+	return to_peek;
+}
+
+static int consume_ring_buf(uint8_t *dst, int dst_size, const uint8_t *ring_buf, int ring_buf_size, int *ring_buf_begin, int *ring_buf_used){
+	int peeked = peek_ring_buf(dst, dst_size, ring_buf, ring_buf_size, *ring_buf_begin, *ring_buf_used);
+	*ring_buf_begin = (*ring_buf_begin + peeked) % ring_buf_size;
+	*ring_buf_used = *ring_buf_used - peeked;
+	return peeked;
+}
+
+static int pdp_drain_blocks_to_ring_buf(struct pdp_session *session){
+	while (true){
+		int ring_buf_free = sizeof(session->recv_ring_buf) - session->recv_ring_buf_used;
+		if (session->bytes_till_next_header == 0){
+			if (session->last_block_size != 0){
+				session->buffered_data = session->buffered_data + session->last_block_size;
+				session->last_block_size = 0;
+			}
+			if (ring_buf_free < sizeof(aemu_postoffice_pdp)){
+				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+			}
+
+			aemu_postoffice_pdp header;
+			int peek_len = native_peek(session->sock, (char *)&header, sizeof(header));
+			if (peek_len == 0){
+				LOG("%s: remote closed the socket\n", __func__);
+				native_close_tcp_sock(session->sock);
+				session->dead = true;
+				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			}
+			if (peek_len == -1){
+				LOG("%s: failed peeking header\n", __func__);
+				native_close_tcp_sock(session->sock);
+				session->dead = true;
+				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			}
+			if (peek_len != sizeof(header)){
+				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+			}
+
+			int recv_status = native_recv(session->sock, (char *)&header, sizeof(header));
+			if (recv_status == 0){
+				LOG("%s: remote closed the socket\n", __func__);
+				native_close_tcp_sock(session->sock);
+				session->dead = true;
+				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			}
+			if (recv_status == -1){
+				LOG("%s: failed receiving header\n", __func__);
+				native_close_tcp_sock(session->sock);
+				session->dead = true;
+				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			}
+			if (header.size > AEMU_POSTOFFICE_PDP_BLOCK_MAX){
+				LOG("%s: remote sent unexpected amount of data\n", __func__);
+				native_close_tcp_sock(session->sock);
+				session->dead = true;
+				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			}
+
+			session->bytes_till_next_header = header.size;
+			session->last_block_size = header.size;
+			uint8_t *header_bytes = (uint8_t *)&header;
+			int ring_buf_end = (session->recv_ring_buf_start + session->recv_ring_buf_used) % sizeof(session->recv_ring_buf);
+			for (int i = 0;i < sizeof(header);i++){
+				int ring_buf_offset = (ring_buf_end + i) % sizeof(session->recv_ring_buf);
+				session->recv_ring_buf[ring_buf_offset] = header_bytes[i];
+			}
+			session->recv_ring_buf_used = session->recv_ring_buf_used + sizeof(header);
+			continue;
+		}
+
+		int ring_buf_end = (session->recv_ring_buf_start + session->recv_ring_buf_used) % sizeof(session->recv_ring_buf);
+		int linear_size_from_end = sizeof(session->recv_ring_buf) - ring_buf_end;
+		int to_consume = ring_buf_free;
+		if (to_consume > linear_size_from_end){
+			to_consume = linear_size_from_end;
+		}
+		if (to_consume > session->bytes_till_next_header){
+			to_consume = session->bytes_till_next_header;
+		}
+
+		if (to_consume == 0){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+
+		int recv_status = native_recv(session->sock, &session->recv_ring_buf[ring_buf_end], to_consume);
+		if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+		if (recv_status == 0){
+			LOG("%s: remote closed the socket\n", __func__);
+			native_close_tcp_sock(session->sock);
+			session->dead = true;
+			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+		}
+		if (recv_status == -1){
+			LOG("%s: failed receiving data\n", __func__);
+			native_close_tcp_sock(session->sock);
+			session->dead = true;
+			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+		}
+		session->recv_ring_buf_used = session->recv_ring_buf_used + recv_status;
+		session->bytes_till_next_header = session->bytes_till_next_header - recv_status;
+	}
+}
+
 int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len, bool non_block){
 	if (pdp_handle == NULL){
 		return -1;
@@ -193,100 +311,55 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	if (*len > sizeof(session->recv_buf)){
-		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
-	}
-
-	struct aemu_postoffice_pdp pdp_header;
-
-	if (non_block){
-		// take a peek at the message
-		int peek_len = native_peek(session->sock, (char *)&pdp_header, sizeof(pdp_header));
-		if (peek_len == -1){
-			native_close_tcp_sock(session->sock);
-			session->dead = true;
+	while (true){
+		if (session->abort){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		}
-		if (peek_len != sizeof(pdp_header)){
-			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
-		}
-
-		int full_message_len = pdp_header.size + sizeof(pdp_header);
-		int min_len = full_message_len > 2048 ? 2048 : full_message_len;
-
-		peek_len = native_peek(session->sock, session->recv_buf, min_len);
-		if (peek_len == -1){
-			native_close_tcp_sock(session->sock);
-			session->dead = true;
+		int drain_result = pdp_drain_blocks_to_ring_buf(session);
+		if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		}
-		if (peek_len != min_len){
-			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		// AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK
+
+		aemu_postoffice_pdp header;
+		int peeked = peek_ring_buf((uint8_t *)&header, sizeof(header), (uint8_t *)session->recv_ring_buf, sizeof(session->recv_ring_buf), session->recv_ring_buf_start, session->recv_ring_buf_used);
+		if (peeked != sizeof(header)){
+			if (non_block){
+				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+			}else{
+				// yield so that on the PSP new data can get into the recv buffer
+				delay(0);
+				continue;
+			}
 		}
+
+		int total_size = sizeof(header) + header.size;
+		if (total_size > session->recv_ring_buf_used){
+			if (non_block){
+				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+			}else{
+				// yield so that on the PSP new data can get into the recv buffer
+				delay(0);
+				continue;
+			}
+		}
+
+		break;
 	}
 
-	session->recving = true;
-	int recv_status = native_recv_till_done(session->sock, (char *)&pdp_header, sizeof(pdp_header), non_block, &session->abort);
-	session->recving = false;
-	if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
-	}
-	if (recv_status == NATIVE_SOCK_ABORTED){
-		// getting aborted
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	if (recv_status == 0){
-		LOG("%s: remote closed the socket\n", __func__);
-		native_close_tcp_sock(session->sock);
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	if (recv_status == -1){
-		LOG("%s: failed receiving data\n", __func__);
-		native_close_tcp_sock(session->sock);
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	// We have a header
-	if (pdp_header.size > sizeof(session->recv_buf)){
-		// The other side is sending packets that are too big
-		LOG("%s: failed receiving data, data too big %d\n", __func__, pdp_header.size);
-		native_close_tcp_sock(session->sock);
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	if (pdp_mac != NULL)
-		memcpy(pdp_mac, pdp_header.addr, 6);
-	if (pdp_port != NULL)
-		*pdp_port = pdp_header.port;
-
-	session->recving = true;
-	recv_status = native_recv_till_done(session->sock, session->recv_buf, pdp_header.size, false, &session->abort);
-	session->recving = false;
-	if (recv_status == NATIVE_SOCK_ABORTED){
-		// getting aborted
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	if (recv_status == 0){
-		LOG("%s: remote closed the socket\n", __func__);
-		native_close_tcp_sock(session->sock);
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	if (recv_status == -1){
-		LOG("%s: failed receiving data\n", __func__);
-		native_close_tcp_sock(session->sock);
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	// We have data
-	memcpy(buf, session->recv_buf, pdp_header.size > *len ? *len : pdp_header.size);
-	if (pdp_header.size > *len){
+	aemu_postoffice_pdp header;
+	peek_ring_buf((uint8_t *)&header, sizeof(header), (uint8_t *)session->recv_ring_buf, sizeof(session->recv_ring_buf), session->recv_ring_buf_start, session->recv_ring_buf_used);
+	*pdp_port = header.port;
+	memcpy(pdp_mac, header.addr, 6);
+	if (header.size > *len){
+		*len = header.size;
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC;
 	}
-	*len = pdp_header.size;
+	consume_ring_buf((uint8_t *)&header, sizeof(header), (uint8_t *)session->recv_ring_buf, sizeof(session->recv_ring_buf), &session->recv_ring_buf_start, &session->recv_ring_buf_used);
+	consume_ring_buf((uint8_t *)buf, header.size, (uint8_t *)session->recv_ring_buf, sizeof(session->recv_ring_buf), &session->recv_ring_buf_start, &session->recv_ring_buf_used);
+	session->buffered_data = session->buffered_data - header.size;
+	*len = header.size;
+
 	return AEMU_POSTOFFICE_CLIENT_OK;
 }
 
@@ -316,28 +389,36 @@ int pdp_peek_next_size(void *pdp_handle){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	aemu_postoffice_pdp header = {0};
-	session->recving = true;
-	int peek_result = native_peek(session->sock, (char *)&header, sizeof(header));
-	session->recving = false;
-	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
-		return 0;
-	}
-	if (session->abort){
+	int drain_result = pdp_drain_blocks_to_ring_buf(session);
+	if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	if (peek_result <= 0){
-		session->dead = true;
-		native_close_tcp_sock(session->sock);
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	if (peek_result != sizeof(header)){
+	if (session->recv_ring_buf_used < sizeof(aemu_postoffice_pdp)){
 		return 0;
 	}
 
-	return header.size;
+	aemu_postoffice_pdp header;
+	peek_ring_buf((uint8_t *)&header, sizeof(header), session->recv_ring_buf, sizeof(session->recv_ring_buf), session->recv_ring_buf_start, session->recv_ring_buf_used);
+	if (session->buffered_data >= header.size){
+		return header.size;
+	}
+	return 0;
+}
+
+int pdp_buffered_data_size(void *pdp_handle){
+	struct pdp_session *session = pdp_handle;
+
+	if (session->dead || session->abort){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	int drain_result = pdp_drain_blocks_to_ring_buf(session);
+	if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	return session->buffered_data;
 }
 
 static void *ptp_listen(void *addr, int addrlen, const char *ptp_mac, int ptp_port, int *state){
@@ -636,17 +717,6 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 	return AEMU_POSTOFFICE_CLIENT_OK;
 }
 
-static int consume_ring_buf(uint8_t *dst, int dst_size, const uint8_t *ring_buf, int ring_buf_size, int *ring_buf_begin, int *ring_buf_used){
-	int to_consume = dst_size > *ring_buf_used ? *ring_buf_used : dst_size;
-	for (int i = 0;i < to_consume;i++){
-		int ring_buf_offset = (*ring_buf_begin + i) % ring_buf_size;
-		dst[i] = ring_buf[ring_buf_offset];
-	}
-	*ring_buf_begin = (*ring_buf_begin + to_consume) % ring_buf_size;
-	*ring_buf_used = *ring_buf_used - to_consume;
-	return to_consume;
-}
-
 static int ptp_drain_blocks_to_ring_buf(struct ptp_session *session){
 	while(true){
 		if (session->bytes_till_next_header == 0){
@@ -679,6 +749,13 @@ static int ptp_drain_blocks_to_ring_buf(struct ptp_session *session){
 			}
 			if (recv_status == -1){
 				LOG("%s: failed reading header\n", __func__);
+				native_close_tcp_sock(session->sock);
+				session->dead = true;
+				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			}
+
+			if (header.size > AEMU_POSTOFFICE_PTP_BLOCK_MAX){
+				LOG("%s: remote sent unexpected amount of data\n", __func__);
 				native_close_tcp_sock(session->sock);
 				session->dead = true;
 				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
