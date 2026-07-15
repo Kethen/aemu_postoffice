@@ -547,7 +547,11 @@ void test_ptp(){
 			LOG("%s: receiving from b accept to a has bad data size\n", __func__);
 			exit(1);
 		}
-		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
+		if (memcmp(recv_buf_2, test_data, sizeof(test_data)) != 0){
+			LOG("%s: receiving from b accept to a has bad data\n", __func__);
+			exit(1);
+		}
+		if (memcmp(&recv_buf_2[sizeof(test_data)], test_data, sizeof(test_data)) != 0){
 			LOG("%s: receiving from b accept to a has bad data\n", __func__);
 			exit(1);
 		}
