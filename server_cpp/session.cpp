@@ -62,15 +62,17 @@ PendingSessionPumpStatus PendingSession::pump(std::map<std::string, Session> &gl
 	}
 	if (recv_status < 0){
 		int error = native_get_last_socket_error();
-		if (native_error_is_would_block(error)){
-			return PendingSessionPumpStatus::SUCCESS;
+		if (!native_error_is_would_block(error)){
+			LOG("%s: client %s has socket error 0x%x during init\n", __func__, this->client_addr.c_str(), error);
+			native_close(this->sock_fd);
+			return PendingSessionPumpStatus::SOCKET_CLOSED;
 		}
-		LOG("%s: client %s has socket error 0x%x during init\n", __func__, this->client_addr.c_str(), error);
-		native_close(this->sock_fd);
-		return PendingSessionPumpStatus::SOCKET_CLOSED;
+	}
+	if (recv_status > 0){
+		// can be <0 if we got a would block, which happens during connect wait
+		init_data_buffer.append(buf, recv_status);
 	}
 
-	init_data_buffer.append(buf, recv_status);
 	if (init_data_buffer.length() >= sizeof(aemu_postoffice_init)){
 		const aemu_postoffice_init *init = (const aemu_postoffice_init *)init_data_buffer.data();
 		switch(init->init_type){
