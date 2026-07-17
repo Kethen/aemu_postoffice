@@ -147,3 +147,26 @@ int native_peek(int fd, char *buf, int len){
 	}
 	return read_result;
 }
+
+// bits from aemu pspnet_inet.h
+typedef struct SceNetInetPollfd {
+	int fd;
+	short events;
+	short revents;
+} SceNetInetPollfd;
+
+#define INET_POLLWRNORM 0x0004
+
+int sceNetInetPoll(struct SceNetInetPollfd *fds, size_t nfds, int timeout);
+
+bool native_send_buf_not_full(int fd){
+	struct SceNetInetPollfd pfd;
+	pfd.fd = fd;
+	pfd.events = INET_POLLWRNORM;
+	pfd.revents = 0;
+	sceNetInetPoll(&pfd, 1, 0);
+	if (pfd.revents & INET_POLLWRNORM){
+		return true;
+	}
+	return false;
+}

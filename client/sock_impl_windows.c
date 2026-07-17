@@ -227,3 +227,15 @@ int native_peek(int fd, char *buf, int len){
 	}
 	return read_result;
 }
+
+bool native_send_buf_not_full(int fd){
+	WSAPOLLFD pfd;
+	pfd.fd = fd;
+	pfd.events = POLLWRNORM;
+	pfd.revents = 0;
+	WSAPoll(&pfd, 1, 0);
+	if (pfd.revents & POLLWRNORM){
+		return true;
+	}
+	return false;
+}

@@ -66,9 +66,14 @@ void test_pdp(){
 	sleep(1);
 
 	void *pdp_handle_a = pdp_create_v4(&local_addr, pdp_mac_a, port_a, &state);
-	
+
 	if (pdp_handle_a == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
+		exit(1);
+	}
+
+	if (!pdp_send_buf_not_full(pdp_handle_a)){
+		LOG("%s: pdp send buffer is somehow already full\n", __func__);
 		exit(1);
 	}
 
@@ -297,10 +302,17 @@ struct connection_accept_task{
 
 void *accept_ptp_connection(void *arg){
 	struct connection_accept_task *task = (struct connection_accept_task *)arg;
-	void *listen_handle = *(void **)arg;
 	int state = 0;
 	int port = 0;
 	char mac[6];
+
+	sleep(1);
+	int has_listen_request = ptp_listen_has_request(task->listen_handle);
+	if (has_listen_request == 0){
+		LOG("%s: listen request expceted but is not ready\n", __func__);
+		exit(1);
+	}
+
 	void *accept_handle = ptp_accept(task->listen_handle, mac, &port, false, &state);
 
 	if (port != task->expected_port){
@@ -347,13 +359,23 @@ void test_ptp(){
 		exit(1);
 	}
 
+	int has_listen_request = ptp_listen_has_request(listen_handle_a);
+	if (has_listen_request != 0){
+		LOG("%s: listen handle a unexpectly already has a listen request, %d\n", __func__, has_listen_request);
+		exit(1);
+	}
+
 	ptp_accept(listen_handle_b, mac, &port, true, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		LOG("%s: unexpected state %d on non block accept\n", __func__, state);
 		exit(1);
-	}	
+	}
 
-	sleep(2);
+	has_listen_request = ptp_listen_has_request(listen_handle_b);
+	if (has_listen_request != 0){
+		LOG("%s: listen handle b unexpectly already has a listen request, %d\n", __func__, has_listen_request);
+		exit(1);
+	}
 
 	pthread_t accept_thread_a;
 	pthread_t accept_thread_b;
@@ -367,15 +389,16 @@ void test_ptp(){
 		.expected_port = port_a
 	};
 	memcpy(task_b.expected_mac, ptp_mac_a, 6);
-	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &task_a);
-	pthread_create(&accept_thread_b, NULL, accept_ptp_connection, &task_b);
 
+
+	pthread_create(&accept_thread_b, NULL, accept_ptp_connection, &task_b);
 	void *a_to_b = ptp_connect_v4(&local_addr, ptp_mac_a, port_a, ptp_mac_b, port_b, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from a to b\n", __func__);
 		exit(1);
 	}
 
+	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &task_a);
 	void *b_to_a = ptp_connect_v4(&local_addr, ptp_mac_b, port_b, ptp_mac_a, port_a, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from b to a\n", __func__);
@@ -386,6 +409,11 @@ void test_ptp(){
 	void *accept_handle_b;
 	pthread_join(accept_thread_a, &accept_handle_a);
 	pthread_join(accept_thread_b, &accept_handle_b);
+
+	if (!ptp_send_buf_not_full(a_to_b)){
+		LOG("%s: ptp send buffer is somehow already full\n", __func__);
+		exit(1);
+	}
 
 	if (accept_handle_a == NULL){
 		LOG("%s: failed accepting connection from b to a\n", __func__);

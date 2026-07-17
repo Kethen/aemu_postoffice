@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <poll.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -238,4 +239,16 @@ int native_peek(int fd, char *buf, int len){
 		return -1;
 	}
 	return read_result;
+}
+
+bool native_send_buf_not_full(int fd){
+	struct pollfd pfd;
+	pfd.fd = fd;
+	pfd.events = POLLWRNORM;
+	pfd.revents = 0;
+	poll(&pfd, 1, 0);
+	if (pfd.revents & POLLWRNORM){
+		return true;
+	}
+	return false;
 }

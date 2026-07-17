@@ -421,6 +421,16 @@ int pdp_buffered_data_size(void *pdp_handle){
 	return session->buffered_data;
 }
 
+int pdp_send_buf_not_full(void *pdp_handle){
+	struct pdp_session *session = pdp_handle;
+
+	if (session->dead || session->abort){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	return native_send_buf_not_full(session->sock);
+}
+
 static void *ptp_listen(void *addr, int addrlen, const char *ptp_mac, int ptp_port, int *state){
 	struct ptp_listen_session* session = NULL;
 	lock_sock_alloc_mutex();
@@ -908,4 +918,47 @@ int ptp_peek_next_size(void *ptp_handle){
 	// AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK
 
 	return session->recv_ring_buf_used;
+}
+
+int ptp_send_buf_not_full(void *ptp_handle){
+	struct ptp_session *session = ptp_handle;
+
+	if (session->dead || session->abort){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	return native_send_buf_not_full(session->sock);
+}
+
+int ptp_listen_has_request(void *ptp_listen_handle){
+	if (ptp_listen_handle == NULL){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
+	if (session->dead){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	struct aemu_postoffice_ptp_connect connect_packet;
+	int peek_result = native_peek(session->sock, (char *)&connect_packet, sizeof(connect_packet));
+	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
+		return 0;
+	}
+	if (peek_result == 0){
+		LOG("%s: the other side closed the listen socket\n", __func__);
+		session->dead = true;
+		native_close_tcp_sock(session->sock);
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+	if (peek_result <= 0){
+		LOG("%s: socket error\n", __func__);
+		session->dead = true;
+		native_close_tcp_sock(session->sock);
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+	if (peek_result != sizeof(connect_packet)){
+		return 0;
+	}
+	return 1;
 }
