@@ -77,10 +77,19 @@ void test_pdp(){
 		exit(1);
 	}
 
+	if (pdp_is_dead(pdp_handle_a)){
+		LOG("%s: pdp session is somehow dead already\n", __func__);
+		exit(1);
+	}
+
 	int dead_len = 0;
 	int dead_status = pdp_recv(pdp_handle_a_replace, NULL, NULL, NULL, &dead_len, false);
 	if (dead_status != AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 		LOG("%s: expected dead session is not dead!\n", __func__);
+		exit(1);
+	}
+	if (!pdp_is_dead(pdp_handle_a_replace)){
+		LOG("%s: pdp session is somehow not dead yet\n", __func__);
 		exit(1);
 	}
 
@@ -345,6 +354,11 @@ void test_ptp(){
 		exit(1);
 	}
 
+	if (ptp_listen_is_dead(listen_handle_a)){
+		LOG("%s: a's listen handle is somehow already dead\n", __func__);
+		exit(1);
+	}
+
 	void *listen_handle_b = ptp_listen_v4(&local_addr, ptp_mac_b, port_b, &state);
 	if (listen_handle_b == NULL){
 		LOG("%s: failed opening listen handle for b\n", __func__);
@@ -395,6 +409,11 @@ void test_ptp(){
 	void *a_to_b = ptp_connect_v4(&local_addr, ptp_mac_a, port_a, ptp_mac_b, port_b, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from a to b\n", __func__);
+		exit(1);
+	}
+
+	if (ptp_is_dead(a_to_b)){
+		LOG("%s: a connect to be handle is somehow already dead\n", __func__);
 		exit(1);
 	}
 

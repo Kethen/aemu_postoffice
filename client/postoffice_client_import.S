@@ -2,7 +2,7 @@
 
 #include "pspstub.s"
 
-	STUB_START "aemu_postoffice_client",0x00090011,0x00140005
+	STUB_START "aemu_postoffice_client",0x00090011,0x00170005
 	STUB_FUNC  0x1,pdp_create_v4
 	STUB_FUNC  0x2,pdp_delete
 	STUB_FUNC  0x3,pdp_send
@@ -11,6 +11,7 @@
 	STUB_FUNC  0x6,pdp_peek_next_size
 	STUB_FUNC  0x7,pdp_buffered_data_size
 	STUB_FUNC  0x8,pdp_send_buf_not_full
+	STUB_FUNC  0x9,pdp_is_dead
 
 	STUB_FUNC  0x101,ptp_listen_v4
 	STUB_FUNC  0x102,ptp_accept
@@ -24,4 +25,6 @@
 	STUB_FUNC  0x10A,ptp_peek_next_size
 	STUB_FUNC  0x10B,ptp_send_buf_not_full
 	STUB_FUNC  0x10C,ptp_listen_has_request
+	STUB_FUNC  0x10D,ptp_is_dead
+	STUB_FUNC  0x10E,ptp_listen_is_dead
 	STUB_END

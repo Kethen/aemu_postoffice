@@ -431,6 +431,19 @@ int pdp_send_buf_not_full(void *pdp_handle){
 	return native_send_buf_not_full(session->sock);
 }
 
+int pdp_is_dead(void *pdp_handle){
+	if (pdp_handle == NULL){
+		return 1;
+	}
+
+	struct pdp_session *session = (struct pdp_session *)pdp_handle;
+	if (session->dead || session->abort){
+		return 1;
+	}
+
+	return 0;
+}
+
 static void *ptp_listen(void *addr, int addrlen, const char *ptp_mac, int ptp_port, int *state){
 	struct ptp_listen_session* session = NULL;
 	lock_sock_alloc_mutex();
@@ -961,4 +974,30 @@ int ptp_listen_has_request(void *ptp_listen_handle){
 		return 0;
 	}
 	return 1;
+}
+
+int ptp_is_dead(void *ptp_handle){
+	if (ptp_handle == NULL){
+		return 1;
+	}
+
+	struct ptp_session *session = (struct ptp_session *)ptp_handle;
+	if (session->dead || session->abort){
+		return 1;
+	}
+
+	return 0;
+}
+
+int ptp_listen_is_dead(void *ptp_listen_handle){
+	if (ptp_listen_handle == NULL){
+		return 1;
+	}
+
+	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
+	if (session->dead){
+		return 1;
+	}
+
+	return 0;
 }
