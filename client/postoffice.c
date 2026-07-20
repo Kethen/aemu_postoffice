@@ -431,16 +431,6 @@ int pdp_buffered_data_size(void *pdp_handle){
 	return session->buffered_data;
 }
 
-int pdp_send_buf_not_full(void *pdp_handle){
-	struct pdp_session *session = pdp_handle;
-
-	if (session->dead || session->abort){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	return native_send_buf_not_full(session->sock);
-}
-
 int pdp_is_dead(void *pdp_handle){
 	if (pdp_handle == NULL){
 		return 1;
@@ -451,7 +441,24 @@ int pdp_is_dead(void *pdp_handle){
 		return 1;
 	}
 
+	if (native_hung_up(session->sock)){
+		LOG("%s: the other side closed the listen socket\n", __func__);
+		session->dead = true;
+		native_close_tcp_sock(session->sock);
+		return 1;
+	}
+
 	return 0;
+}
+
+int pdp_send_buf_not_full(void *pdp_handle){
+	if (pdp_is_dead(pdp_handle)){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	struct pdp_session *session = pdp_handle;
+
+	return native_send_buf_not_full(session->sock);
 }
 
 static void *ptp_listen(void *addr, int addrlen, const char *ptp_mac, int ptp_port, int *state){
@@ -952,14 +959,54 @@ int ptp_peek_next_size(void *ptp_handle){
 	return session->recv_ring_buf_used;
 }
 
-int ptp_send_buf_not_full(void *ptp_handle){
-	struct ptp_session *session = ptp_handle;
+int ptp_is_dead(void *ptp_handle){
+	if (ptp_handle == NULL){
+		return 1;
+	}
 
+	struct ptp_session *session = (struct ptp_session *)ptp_handle;
 	if (session->dead || session->abort){
+		return 1;
+	}
+
+	if (native_hung_up(session->sock)){
+		LOG("%s: the other side closed the listen socket\n", __func__);
+		session->dead = true;
+		native_close_tcp_sock(session->sock);
+		return 1;
+	}
+
+	return 0;
+}
+
+int ptp_send_buf_not_full(void *ptp_handle){
+	if (ptp_is_dead(ptp_handle)){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
+	struct ptp_session *session = ptp_handle;
+
 	return native_send_buf_not_full(session->sock);
+}
+
+int ptp_listen_is_dead(void *ptp_listen_handle){
+	if (ptp_listen_handle == NULL){
+		return 1;
+	}
+
+	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
+	if (session->dead){
+		return 1;
+	}
+
+	if (native_hung_up(session->sock)){
+		LOG("%s: the other side closed the listen socket\n", __func__);
+		session->dead = true;
+		native_close_tcp_sock(session->sock);
+		return 1;
+	}
+
+	return 0;
 }
 
 int ptp_listen_has_request(void *ptp_listen_handle){
@@ -967,10 +1014,11 @@ int ptp_listen_has_request(void *ptp_listen_handle){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
-	if (session->dead){
+	if (ptp_listen_is_dead(ptp_listen_handle)){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
+
+	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
 
 	struct aemu_postoffice_ptp_connect connect_packet;
 	int peek_result = native_peek(session->sock, (char *)&connect_packet, sizeof(connect_packet));
@@ -993,30 +1041,4 @@ int ptp_listen_has_request(void *ptp_listen_handle){
 		return 0;
 	}
 	return 1;
-}
-
-int ptp_is_dead(void *ptp_handle){
-	if (ptp_handle == NULL){
-		return 1;
-	}
-
-	struct ptp_session *session = (struct ptp_session *)ptp_handle;
-	if (session->dead || session->abort){
-		return 1;
-	}
-
-	return 0;
-}
-
-int ptp_listen_is_dead(void *ptp_listen_handle){
-	if (ptp_listen_handle == NULL){
-		return 1;
-	}
-
-	struct ptp_listen_session *session = (struct ptp_listen_session *)ptp_listen_handle;
-	if (session->dead){
-		return 1;
-	}
-
-	return 0;
 }

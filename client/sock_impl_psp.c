@@ -156,6 +156,8 @@ typedef struct SceNetInetPollfd {
 } SceNetInetPollfd;
 
 #define INET_POLLWRNORM 0x0004
+#define INET_POLLRDNORM 0x0040
+#define INET_POLLHUP 0x0010
 
 int sceNetInetPoll(struct SceNetInetPollfd *fds, size_t nfds, int timeout);
 
@@ -169,4 +171,15 @@ bool native_send_buf_not_full(int fd){
 		return true;
 	}
 	return false;
+}
+
+bool native_hung_up(int fd){
+	uint8_t buf;
+	int peek_result = native_peek(fd, &buf, sizeof(buf));
+	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK ||
+		peek_result == sizeof(buf)
+	){
+		return false;
+	}
+	return true;
 }

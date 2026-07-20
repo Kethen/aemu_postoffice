@@ -35,5 +35,6 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abor
 int native_recv(int fd, char *buf, int len);
 int native_peek(int fd, char *buf, int len);
 bool native_send_buf_not_full(int fd);
+bool native_hung_up(int fd);
 
 #endif

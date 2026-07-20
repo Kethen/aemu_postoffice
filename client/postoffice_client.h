@@ -71,6 +71,7 @@ int ptp_is_dead(void *ptp_handle);
 int pdp_get_native_sock(void *pdp_handle);
 int ptp_get_native_sock(void *ptp_handle);
 int ptp_listen_get_native_sock(void *ptp_listen_handle);
+int ptp_listen_is_dead(void *ptp_listen_handle);
 
 #ifdef __cplusplus
 }
