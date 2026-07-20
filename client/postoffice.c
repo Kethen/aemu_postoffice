@@ -29,6 +29,7 @@ int aemu_post_office_init(){
 		}
 
 		init_sock_alloc_mutex();
+		init_drain_mutex();
 	}else{
 		// re-run, close all opened sessions
 		for (int i = 0;i < NUM_PDP_SESSIONS;i++){
@@ -302,6 +303,15 @@ static int pdp_drain_blocks_to_ring_buf(struct pdp_session *session){
 	}
 }
 
+static int pdp_drain_blocks_to_ring_buf_locked(struct pdp_session *session){
+	session->recving = true;
+	lock_drain_mutex();
+	int result = pdp_drain_blocks_to_ring_buf(session);
+	unlock_drain_mutex();
+	session->recving = false;
+	return result;
+}
+
 int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len, bool non_block){
 	if (pdp_handle == NULL){
 		return -1;
@@ -315,7 +325,7 @@ int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len
 		if (session->abort){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		}
-		int drain_result = pdp_drain_blocks_to_ring_buf(session);
+		int drain_result = pdp_drain_blocks_to_ring_buf_locked(session);
 		if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		}
@@ -389,7 +399,7 @@ int pdp_peek_next_size(void *pdp_handle){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	int drain_result = pdp_drain_blocks_to_ring_buf(session);
+	int drain_result = pdp_drain_blocks_to_ring_buf_locked(session);
 	if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
@@ -413,7 +423,7 @@ int pdp_buffered_data_size(void *pdp_handle){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	int drain_result = pdp_drain_blocks_to_ring_buf(session);
+	int drain_result = pdp_drain_blocks_to_ring_buf_locked(session);
 	if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
@@ -822,6 +832,15 @@ static int ptp_drain_blocks_to_ring_buf(struct ptp_session *session){
 	}
 }
 
+static int ptp_drain_blocks_to_ring_buf_locked(struct ptp_session *session){
+	session->recving = true;
+	lock_drain_mutex();
+	int result = ptp_drain_blocks_to_ring_buf(session);
+	unlock_drain_mutex();
+	session->recving = false;
+	return result;
+}
+
 int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	if (ptp_handle == NULL){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
@@ -836,7 +855,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 		if (session->abort){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		}
-		int drain_result = ptp_drain_blocks_to_ring_buf(session);
+		int drain_result = ptp_drain_blocks_to_ring_buf_locked(session);
 		if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		}
@@ -924,7 +943,7 @@ int ptp_peek_next_size(void *ptp_handle){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	int drain_result = ptp_drain_blocks_to_ring_buf(session);
+	int drain_result = ptp_drain_blocks_to_ring_buf_locked(session);
 	if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
