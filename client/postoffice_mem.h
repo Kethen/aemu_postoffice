@@ -5,6 +5,7 @@
 #include "sock_impl.h"
 
 #include "postoffice_client.h"
+#include "../aemu_postoffice_packets.h"
 
 struct pdp_session{
 	char *pdp_mac[6];
@@ -12,7 +13,12 @@ struct pdp_session{
 	int sock;
 	bool dead;
 	bool abort;
-	char recv_buf[AEMU_POSTOFFICE_PDP_BLOCK_MAX];
+	char recv_ring_buf[AEMU_POSTOFFICE_PDP_BLOCK_MAX + sizeof(aemu_postoffice_pdp)];
+	int recv_ring_buf_start;
+	int recv_ring_buf_used;
+	int buffered_data;
+	int bytes_till_next_header;
+	int last_block_size;
 	bool recving;
 	bool sending;
 };
@@ -32,9 +38,10 @@ struct ptp_session{
 	int sock;
 	bool dead;
 	bool abort;
-	char recv_buf[AEMU_POSTOFFICE_PTP_BLOCK_MAX];
-	int outstanding_data_size;
-	int outstanding_data_offset;
+	char recv_ring_buf[AEMU_POSTOFFICE_PTP_BLOCK_MAX];
+	int recv_ring_buf_start;
+	int recv_ring_buf_used;
+	int bytes_till_next_header;
 	bool recving;
 	bool sending;
 };

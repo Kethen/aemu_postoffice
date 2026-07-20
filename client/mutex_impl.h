@@ -9,6 +9,10 @@ void init_sock_alloc_mutex();
 void lock_sock_alloc_mutex();
 void unlock_sock_alloc_mutex();
 
+void init_drain_mutex();
+void lock_drain_mutex();
+void unlock_drain_mutex();
+
 #ifdef __cplusplus
 }
 #endif

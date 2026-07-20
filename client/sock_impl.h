@@ -32,6 +32,9 @@ int native_connect_tcp_sock(void *addr, int addrlen);
 int native_close_tcp_sock(int sock);
 int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool *abort);
 int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abort);
+int native_recv(int fd, char *buf, int len);
 int native_peek(int fd, char *buf, int len);
+bool native_send_buf_not_full(int fd);
+bool native_hung_up(int fd);
 
 #endif

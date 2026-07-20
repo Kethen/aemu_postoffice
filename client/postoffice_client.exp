@@ -13,6 +13,9 @@ PSP_EXPORT_FUNC_NID(pdp_send, 0x3)
 PSP_EXPORT_FUNC_NID(pdp_recv, 0x4)
 PSP_EXPORT_FUNC_NID(pdp_get_native_sock, 0x5)
 PSP_EXPORT_FUNC_NID(pdp_peek_next_size, 0x6)
+PSP_EXPORT_FUNC_NID(pdp_buffered_data_size, 0x7)
+PSP_EXPORT_FUNC_NID(pdp_send_buf_not_full, 0x8)
+PSP_EXPORT_FUNC_NID(pdp_is_dead, 0x9)
 
 PSP_EXPORT_FUNC_NID(ptp_listen_v4, 0x101)
 PSP_EXPORT_FUNC_NID(ptp_accept, 0x102)
@@ -24,6 +27,10 @@ PSP_EXPORT_FUNC_NID(ptp_listen_close, 0x107)
 PSP_EXPORT_FUNC_NID(ptp_get_native_sock, 0x108)
 PSP_EXPORT_FUNC_NID(ptp_listen_get_native_sock, 0x109)
 PSP_EXPORT_FUNC_NID(ptp_peek_next_size, 0x10A)
+PSP_EXPORT_FUNC_NID(ptp_send_buf_not_full, 0x10B)
+PSP_EXPORT_FUNC_NID(ptp_listen_has_request, 0x10C)
+PSP_EXPORT_FUNC_NID(ptp_is_dead, 0x10D)
+PSP_EXPORT_FUNC_NID(ptp_listen_is_dead, 0x10E)
 PSP_EXPORT_END
 
 PSP_END_EXPORTS

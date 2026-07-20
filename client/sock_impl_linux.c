@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <poll.h>
 
 #include <string.h>
 #include <stdio.h>
@@ -177,19 +178,35 @@ int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool
 	return write_offset;
 }
 
+int native_recv(int fd, char *buf, int len){
+	int recv_status = recv(fd, buf, len, 0);
+	if (recv_status == 0){
+		return recv_status;
+	}
+	if (recv_status < 0){
+		int err = errno;
+		if (err == EAGAIN || err == EWOULDBLOCK){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+		// Other errors
+		LOG("%s: failed receving, %s\n", __func__, strerror(errno));
+		return recv_status;
+	}
+	return recv_status;
+}
+
 int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abort){
 	int read_offset = 0;
 	while(read_offset != len){
 		if (*abort){
 			return NATIVE_SOCK_ABORTED;
 		}
-		int recv_status = recv(fd, &buf[read_offset], len - read_offset, 0);
+		int recv_status = native_recv(fd, &buf[read_offset], len - read_offset);
 		if (recv_status == 0){
 			return recv_status;
 		}
 		if (recv_status < 0){
-			int err = errno;
-			if (err == EAGAIN || err == EWOULDBLOCK){
+			if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 				if (non_block && read_offset == 0){
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
@@ -197,8 +214,6 @@ int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abor
 				sleep(0);
 				continue;
 			}
-			// Other errors
-			LOG("%s: failed receving, %s\n", __func__, strerror(errno));
 			return recv_status;
 		}
 		read_offset += recv_status;
@@ -224,4 +239,30 @@ int native_peek(int fd, char *buf, int len){
 		return -1;
 	}
 	return read_result;
+}
+
+bool native_send_buf_not_full(int fd){
+	struct pollfd pfd;
+	pfd.fd = fd;
+	pfd.events = POLLWRNORM;
+	pfd.revents = 0;
+	poll(&pfd, 1, 0);
+	if (pfd.revents & POLLHUP){
+		return false;
+	}
+	if (pfd.revents & POLLWRNORM){
+		return true;
+	}
+	return false;
+}
+
+bool native_hung_up(int fd){
+	uint8_t buf;
+	int peek_result = native_peek(fd, &buf, sizeof(buf));
+	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK ||
+		peek_result == sizeof(buf)
+	){
+		return false;
+	}
+	return true;
 }

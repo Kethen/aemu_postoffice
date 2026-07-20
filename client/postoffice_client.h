@@ -51,6 +51,9 @@ void pdp_delete(void *pdp_handle);
 int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *buf, int len, bool non_block);
 int pdp_recv(void *pdp_handle, char *pdp_mac, int *pdp_port, char *buf, int *len, bool non_block);
 int pdp_peek_next_size(void *pdp_handle);
+int pdp_buffered_data_size(void *pdp_handle);
+int pdp_send_buf_not_full(void *pdp_handle);
+int pdp_is_dead(void *ptp_handle);
 void *ptp_listen_v6(const struct aemu_post_office_sock6_addr *addr, const char *ptp_mac, int ptp_port, int *state);
 void *ptp_listen_v4(const struct aemu_post_office_sock_addr *addr, const char *ptp_mac, int ptp_port, int *state);
 void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool nonblock, int *state);
@@ -61,10 +64,14 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block);
 void ptp_close(void *ptp_handle);
 void ptp_listen_close(void *ptp_listen_handle);
 int ptp_peek_next_size(void *ptp_handle);
+int ptp_send_buf_not_full(void *pdp_handle);
+int ptp_listen_has_request(void *pdp_listen_handler);
+int ptp_is_dead(void *ptp_handle);
 
 int pdp_get_native_sock(void *pdp_handle);
 int ptp_get_native_sock(void *ptp_handle);
 int ptp_listen_get_native_sock(void *ptp_listen_handle);
+int ptp_listen_is_dead(void *ptp_listen_handle);
 
 #ifdef __cplusplus
 }
