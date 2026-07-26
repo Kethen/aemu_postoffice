@@ -1,7 +1,7 @@
 #ifndef __SERVER_H
 #define __SERVER_H
 
-#include <map>
+#include <unordered_map>
 #include <list>
 #include <thread>
 #include <semaphore>
@@ -27,7 +27,7 @@ class Server{
 
 	private:
 		std::list<PendingSession> pending_sessions;
-		std::map<std::string, Session> sessions;
+		std::unordered_map<std::string, Session> sessions;
 
 		bool stopping;
 
@@ -43,7 +43,7 @@ class Server{
 		std::vector<std::thread> session_from_client_pump_workers;
 		std::vector<std::list<Session *>> sessions_to_pump;
 		std::vector<std::set<std::string>> sessions_to_remove;
-		std::vector<std::map<std::string, std::list<SendListItem>>> send_list;
+		std::vector<std::unordered_map<std::string, std::list<SendListItem>>> send_list;
 
 		std::vector<Semaphore> session_to_client_pump_worker_semas;
 		std::vector<Semaphore> session_to_client_pump_worker_done_semas;

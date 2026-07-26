@@ -84,7 +84,7 @@ Server::Server(Config config){
 		}));
 		this->sessions_to_pump.push_back(std::list<Session *>());
 		this->sessions_to_remove.push_back(std::set<std::string>());
-		this->send_list.push_back(std::map<std::string, std::list<SendListItem>>());
+		this->send_list.push_back(std::unordered_map<std::string, std::list<SendListItem>>());
 	}
 
 	for(int i = 0;i < config.num_threads;i++){

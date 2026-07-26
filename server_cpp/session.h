@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
-#include <map>
+#include <unordered_map>
 
 #include "config.h"
 
@@ -25,9 +25,9 @@ enum class PendingSessionPumpStatus{
 class PendingSession{
 	public:
 		PendingSession(int sock_fd, std::string client_addr, Config *config);
-		PendingSessionPumpStatus pump(std::map<std::string, Session> &global_sessions);
+		PendingSessionPumpStatus pump(std::unordered_map<std::string, Session> &global_sessions);
 		// The pending session should be discarded after creating a session
-		Session create_session(std::map<std::string, Session> &global_sessions);
+		Session create_session(std::unordered_map<std::string, Session> &global_sessions);
 		void close_socket();
 
 	private:

@@ -45,7 +45,7 @@ static std::string get_pdp_session_name(const char *mac, uint16_t port){
 	return std::string(buf);
 }
 
-PendingSessionPumpStatus PendingSession::pump(std::map<std::string, Session> &global_sessions){
+PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Session> &global_sessions){
 	char buf[sizeof(aemu_postoffice_init)];
 
 	if ((std::chrono::high_resolution_clock::now() - this->create_time) / std::chrono::milliseconds(1) > this->config->session_init_time_limit_ms){
@@ -112,7 +112,7 @@ PendingSessionPumpStatus PendingSession::pump(std::map<std::string, Session> &gl
 	return PendingSessionPumpStatus::SUCCESS;
 }
 
-Session PendingSession::create_session(std::map<std::string, Session> &global_sessions){
+Session PendingSession::create_session(std::unordered_map<std::string, Session> &global_sessions){
 	aemu_postoffice_init init;
 	memcpy(&init, this->init_data_buffer.data(), sizeof(init));
 	this->init_data_buffer.erase(0, sizeof(init));
