@@ -175,7 +175,7 @@ bool native_send_buf_not_full(int fd){
 
 bool native_hung_up(int fd){
 	uint8_t buf;
-	int peek_result = native_peek(fd, &buf, sizeof(buf));
+	int peek_result = native_peek(fd, (char *)&buf, sizeof(buf));
 	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK ||
 		peek_result == sizeof(buf)
 	){

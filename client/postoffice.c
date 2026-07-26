@@ -409,7 +409,7 @@ int pdp_peek_next_size(void *pdp_handle){
 	}
 
 	aemu_postoffice_pdp header;
-	peek_ring_buf((uint8_t *)&header, sizeof(header), session->recv_ring_buf, sizeof(session->recv_ring_buf), session->recv_ring_buf_start, session->recv_ring_buf_used);
+	peek_ring_buf((uint8_t *)&header, sizeof(header), (uint8_t *)session->recv_ring_buf, sizeof(session->recv_ring_buf), session->recv_ring_buf_start, session->recv_ring_buf_used);
 	if (session->buffered_data >= header.size){
 		return header.size;
 	}

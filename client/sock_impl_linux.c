@@ -40,7 +40,7 @@ static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_m
 	clock_gettime(CLOCK_MONOTONIC, &begin);
 
 	while(1){
-		int result = connect(sock, addr, addrlen);
+		int result = connect(sock, (struct sockaddr *)addr, addrlen);
 		if (result == 0){
 			ret = 0;
 			break;
@@ -107,7 +107,7 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	}
 
 	// Set socket options
-	int sockopt = 1;
+	socklen_t sockopt = 1;
 	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, sizeof(sockopt));
 	int flags = fcntl(sock, F_GETFL, 0);
 	flags |= O_NONBLOCK;
@@ -258,7 +258,7 @@ bool native_send_buf_not_full(int fd){
 
 bool native_hung_up(int fd){
 	uint8_t buf;
-	int peek_result = native_peek(fd, &buf, sizeof(buf));
+	int peek_result = native_peek(fd, (char *)&buf, sizeof(buf));
 	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK ||
 		peek_result == sizeof(buf)
 	){

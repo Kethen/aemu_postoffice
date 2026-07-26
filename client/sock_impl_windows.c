@@ -48,7 +48,7 @@ static int connect_with_timeout(int sock, native_sock_addr *addr, int addrlen, i
 	QueryPerformanceFrequency(&ticks_per_seconds);
 
 	while(1){
-		int result = connect(sock, addr, addrlen);
+		int result = connect(sock, (struct sockaddr *)addr, addrlen);
 		if (result == 0){
 			ret = 0;
 			break;
@@ -112,28 +112,28 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 
 	// Set socket options
 	int sockopt = 1;
-	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, sizeof(sockopt));
+	setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&sockopt, sizeof(sockopt));
 	u_long ioctlopt = 1;
 	ioctlsocket(sock, FIONBIO, &ioctlopt);
 
 	sockopt = 2626560;
-	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sockopt, sizeof(sockopt));
-	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, sizeof(sockopt));
+	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *)&sockopt, sizeof(sockopt));
+	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)&sockopt, sizeof(sockopt));
 
 	// Show some socket options
 	int opt_len = sizeof(sockopt);
 	sockopt = 0;
-	int get_ret = getsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &sockopt, &opt_len);
+	int get_ret = getsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&sockopt, &opt_len);
 	LOG("%s: TCP_NODELAY is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	opt_len = sizeof(sockopt);
 	sockopt = 0;
-	get_ret = getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &sockopt, &opt_len);
+	get_ret = getsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *)&sockopt, &opt_len);
 	LOG("%s: SO_SNDBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	opt_len = sizeof(sockopt);
 	sockopt = 0;
-	get_ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &sockopt, &opt_len);
+	get_ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)&sockopt, &opt_len);
 	LOG("%s: SO_RCVBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
 
 	return sock;
@@ -245,7 +245,7 @@ bool native_send_buf_not_full(int fd){
 
 bool native_hung_up(int fd){
 	uint8_t buf;
-	int peek_result = native_peek(fd, &buf, sizeof(buf));
+	int peek_result = native_peek(fd, (char *)&buf, sizeof(buf));
 	if (peek_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK ||
 		peek_result == sizeof(buf)
 	){
