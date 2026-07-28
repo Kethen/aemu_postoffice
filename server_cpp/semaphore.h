@@ -1,5 +1,4 @@
-#ifndef __SEMAPHORE_H
-#define __SEMAPHORE_H
+#pragma once
 
 #include <semaphore>
 
@@ -13,5 +12,3 @@ class Semaphore{
 	private:
 		std::counting_semaphore<65535> sema;
 };
-
-#endif

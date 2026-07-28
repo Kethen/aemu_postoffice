@@ -1,5 +1,4 @@
-#ifndef __NATIVE_SOCKET_H
-#define __NATIVE_SOCKET_H
+#pragma once
 
 #include <stdint.h>
 
@@ -20,5 +19,3 @@ int native_tcp_listen(std::string ip, uint16_t port);
 int native_accept(int sock_fd, std::string *peer_addr, uint16_t *peer_port);
 
 }
-
-#endif

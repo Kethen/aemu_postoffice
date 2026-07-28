@@ -1,5 +1,4 @@
-#ifndef __SERVER_H
-#define __SERVER_H
+#pragma once
 
 #include <unordered_map>
 #include <list>
@@ -59,4 +58,3 @@ class Server{
 };
 
 }
-#endif

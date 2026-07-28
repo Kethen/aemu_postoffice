@@ -1,5 +1,4 @@
-#ifndef __CONFIG_H
-#define __CONFIG_H
+#pragma once
 
 #include <string>
 
@@ -34,4 +33,3 @@ struct Config {
 };
 
 }
-#endif

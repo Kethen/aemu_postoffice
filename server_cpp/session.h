@@ -1,5 +1,4 @@
-	#ifndef __SESSION_H
-#define __SESSION_H
+#pragma once
 
 #include <stdint.h>
 
@@ -127,5 +126,3 @@ class Session{
 // 7. pump send to clients, tag for removal if socket close/error
 // 8. remove sessions that are tagged for removal
 // 9. rest based on target tick rate and time spent
-
-#endif
