@@ -14,6 +14,7 @@ namespace aemu_postoffice_server {
 
 enum class ServerPumpStatus{
 	SUCCESS,
+	IDLE,
 	LISTEN_SOCK_DEAD,
 };
 
