@@ -139,25 +139,34 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	return sock;
 }
 
+int native_send(int fd, const char *buf, int len){
+	int write_status = send(fd, buf, len, 0);
+	if (write_status == -1){
+		int err = WSAGetLastError();
+		if (err == WSAEWOULDBLOCK || err == WSAEINPROGRESS){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+		LOG("%s: failed sending, %d\n", __func__, err);
+		return write_status;
+	}
+	return write_status;
+}
+
 int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool *abort){
 	int write_offset = 0;
 	while(write_offset != len){
 		if (*abort){
 			return NATIVE_SOCK_ABORTED;
 		}
-		int write_status = send(fd, &buf[write_offset], len - write_offset, 0);
-		if (write_status == -1){
-			int err = WSAGetLastError();
-			if (err == WSAEWOULDBLOCK || err == WSAEINPROGRESS){
-				if (non_block && write_offset == 0){
-					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
-				}
-				// Continue block sending, either in block mode or we already received part of the message
-				Sleep(0);
-				continue;
+		int write_status = native_send(fd, &buf[write_offset], len - write_offset);
+		if (write_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
+			if (non_block && write_offset == 0){
+				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 			}
-			// Other errors
-			LOG("%s: failed sending, %d\n", __func__, err);
+			Sleep(0);
+			continue;
+		}
+		if (write_status == -1){
 			return write_status;
 		}
 		write_offset += write_status;

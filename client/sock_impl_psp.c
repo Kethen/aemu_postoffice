@@ -57,26 +57,34 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	return sock;
 }
 
+int native_send(int fd, const char *buf, int len){
+	int write_status = sceNetInetSend(fd, buf, len, MSG_DONTWAIT);
+	if (write_status == -1){
+		int err = sceNetInetGetErrno();
+		if (err == EAGAIN || err == EWOULDBLOCK){
+			return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		}
+		LOG("%s: failed sending, 0x%x\n", __func__, err);
+		return write_status;
+	}
+	return write_status;
+}
+
 int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool *abort){
 	int write_offset = 0;
 	while(write_offset != len){
 		if (*abort){
 			return NATIVE_SOCK_ABORTED;
 		}
-		int write_status = sceNetInetSend(fd, &buf[write_offset], len - write_offset, MSG_DONTWAIT);
-		if (write_status == -1){
-			int err = sceNetInetGetErrno();
-			if (err == EAGAIN || err == EWOULDBLOCK){
-				if (non_block && write_offset == 0){
-					sceKernelDelayThread(0);
-					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
-				}
-				// Continue block sending, either in block mode or we already received part of the message
-				sceKernelDelayThread(0);
-				continue;
+		int write_status = native_send(fd, &buf[write_offset], len - write_offset);
+		if (write_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
+			if (non_block && write_offset == 0){
+				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 			}
-			// Other errors
-			LOG("%s: failed sending, 0x%x\n", __func__, err);
+			sceKernelDelayThread(0);
+			continue;
+		}
+		if (write_status == -1){
 			return write_status;
 		}
 		write_offset += write_status;

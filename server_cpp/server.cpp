@@ -264,6 +264,10 @@ ServerPumpStatus Server::pump(){
 		pending_sessions.push_back(PendingSession(accept_status, peer_addr, &this->config));
 	}
 
+	if (pending_sessions.size() == 0 && sessions.size() == 0){
+		return ServerPumpStatus::IDLE;
+	}
+
 	// pump pending sessions in workers
 	for(auto &to_pump_pending_session_set : this->to_pump_pending_sessions){
 		to_pump_pending_session_set.clear();
