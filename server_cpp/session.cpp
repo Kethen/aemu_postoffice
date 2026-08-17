@@ -340,10 +340,9 @@ SessionPumpStatus Session::pump_from_client(){
 	return ret;
 }
 
-std::vector<SendListItem> Session::get_send_list(){
-	std::vector<SendListItem> ret = std::move(this->send_list);
-	this->send_list = std::vector<SendListItem>();
-	return ret;
+void Session::get_send_list(std::vector<SendListItem> &container){
+	std::swap(container, this->send_list);
+	this->send_list.clear();
 }
 
 DataQueueStatus Session::queue_send(const std::string &data){

@@ -181,7 +181,9 @@ void Server::pump_connect_and_from_clients(int set){
 				break;
 		}
 
-		for(auto &send : session->get_send_list()){
+		std::vector<SendListItem> send_list;
+		session->get_send_list(send_list);
+		for(auto &send : send_list){
 			auto send_list_by_session_name = this->send_list[set].find(send.session_name);
 			if (send_list_by_session_name != this->send_list[set].end()){
 				send_list_by_session_name->second.push_back(send);

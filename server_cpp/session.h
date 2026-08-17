@@ -74,7 +74,7 @@ class Session{
 		~Session();
 		SessionPumpStatus pump_connect(); // 0. connect session has to be pumped until a connect accept pair is formed
 		SessionPumpStatus pump_from_client(); // 1. fetch data from client socket into buffer and put read data into send list
-		std::vector<SendListItem> get_send_list(); // 2. fetch the send list
+		void get_send_list(std::vector<SendListItem> &container); // 2. fetch the send list
 		DataQueueStatus queue_send(const std::string &data); // 3. queue data to be sent to client
 		SessionPumpStatus pump_to_client(); // 4. pump data into client socket
 		std::string get_identifier(); // session name for logging and hashing
