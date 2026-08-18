@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "client.h"
+#include "snapshot.h"
 #include "../../server_cpp/config.h"
 #include "../../server_cpp/semaphore.h"
 
@@ -32,6 +33,7 @@ class Server {
 		~Server();
 
 		ServerPumpStatus pump();
+		struct snapshot get_snapshot();
 
 	private:
 		std::unordered_map<std::string, Client> pending_clients; // clients that have connected but not logged in, keyed with {ip:port}

@@ -80,7 +80,7 @@ class Client {
 		ClientPumpStatus pump_to_client(); // push server -> client operations to clients
 
 		std::string get_ip();
-		uint16_t get_port;
+		uint16_t get_port();
 		std::string get_socket_name();
 		bool is_logged_in();
 		std::string get_mac();

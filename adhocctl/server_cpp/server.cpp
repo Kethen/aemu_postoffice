@@ -262,12 +262,6 @@ void Server::remove_client(std::string mac){
 	clients.erase(target);
 }
 
-static std::string make_group_key(int channel, std::string group_name){
-	char buf[128] = {0};
-	sprintf(buf, "%d_%s", channel, group_name.c_str());
-	return std::string(buf);
-}
-
 void Server::connect_client(std::string mac, std::string group_name, bool groupless_group){
 	disconnect_client(mac);
 	auto target = clients.find(mac);
@@ -501,6 +495,21 @@ ServerPumpStatus Server::pump(){
 	}
 
 	return ServerPumpStatus::SUCCESS;
+}
+
+struct snapshot Server::get_snapshot(){
+	struct snapshot new_snapshot;
+	for (auto game = games.begin();game != games.end();game++){
+		struct snapshot_game &game_snapshot = snapshot_add_game(new_snapshot, game->first);
+		for (auto group = game->second.groups.begin();group != game->second.groups.end();group++){
+			struct snapshot_group &group_snapshot = snapshot_add_group(game_snapshot, group->second.channel, group->second.name);
+			for (auto member = group->second.members.begin();member != group->second.members.end();member++){
+				snapshot_add_client(new_snapshot, game_snapshot, group_snapshot, member->first, member->second->get_ip(), member->second->get_port(), member->second->get_nickname());
+			}
+		}
+	}
+
+	return new_snapshot;
 }
 
 }

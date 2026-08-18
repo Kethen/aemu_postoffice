@@ -69,14 +69,22 @@ int main(){
 			aemu_postoffice_adhocctl_server::Server adhocctl_server(config);
 
 			auto adhocctl_thread = std::thread([&config, &adhocctl_server] {
+				auto last_dump = std::chrono::high_resolution_clock::now();
 				while(!should_stop){
 					auto begin = std::chrono::high_resolution_clock::now();
+
 					aemu_postoffice_adhocctl_server::ServerPumpStatus pump_status = adhocctl_server.pump();
 					uint64_t interval_ms = config.adhocctl_target_tick_interval_ms;
 					if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::IDLE){
 						interval_ms = config.adhocctl_target_tick_interval_idle_ms;
 					} else if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::ERROR){
 						break;
+					} else if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::SUCCESS){
+						if ((begin - last_dump) / std::chrono::seconds(1) >= 5){
+							last_dump = begin;
+							auto snapshot = adhocctl_server.get_snapshot();
+							aemu_postoffice_adhocctl_server::dump_snapshot_to_log(snapshot);
+						}
 					}
 					auto timespent = std::chrono::high_resolution_clock::now() - begin;
 					int64_t wait_ms = config.target_tick_interval_ms - timespent / std::chrono::milliseconds(1);
