@@ -26,6 +26,8 @@ Client::Client(int sock_fd, std::string ip, uint16_t port, std::string socket_na
 
 	this->create_time = std::chrono::high_resolution_clock::now();
 	this->last_seen = std::chrono::high_resolution_clock::now();
+
+	LOG("%s: client with socket name %s created\n", __func__, socket_name.c_str());
 }
 
 void Client::close_socket(){
@@ -240,6 +242,9 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				channel = V1_PROTOCOL_DEFAULT_CHANNEL;
 				logged_in = true;
 
+				// TODO might need sanity checks
+				LOG("%s: client %s logged in game %s with mac address %s channel %d\n", __func__, socket_name.c_str(), game_code.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
+
 				break;
 			}
 			case OPCODE_PING:{
@@ -256,6 +261,9 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				// v1 protocol has no channel
 				op.connect.channel = channel;
 				client_ops.push_back(op);
+
+				LOG("%s: client %s %s on channel %d joining group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel, game_code.c_str(), op.connect.group.c_str());
+
 				break;
 			}
 			case OPCODE_DISCONNECT:{
@@ -264,6 +272,8 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				op.op = ClientOp::DISCONNECT;
 				op.disconnect.channel = channel;
 				client_ops.push_back(op);
+
+				LOG("%s: client %s %s disconnecting from group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), game_code.c_str(), group.c_str());
 				break;
 			}
 			case OPCODE_SCAN:{
@@ -271,6 +281,8 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				op.mac = mac;
 				op.op = ClientOp::SCAN;
 				client_ops.push_back(op);
+
+				LOG("%s: client %s %s on channel %d requesting scan\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
 				break;
 			}
 			case OPCODE_CHAT:{
@@ -282,6 +294,8 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				strncpy(buf, packet->message, sizeof(packet->message));
 				op.chat.msg = std::string(buf);
 				client_ops.push_back(op);
+
+				LOG("%s: client %s %s sending message [%s] to group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), buf, game_code.c_str(), group.c_str());
 				break;
 			}
 			default:
