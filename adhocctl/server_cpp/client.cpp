@@ -396,6 +396,10 @@ std::string Client::get_mac(){
 	return mac;
 }
 
+uint16_t Client::get_port(){
+	return port;
+}
+
 int Client::get_protocol_revision(){
 	return protocol_revision;
 }
