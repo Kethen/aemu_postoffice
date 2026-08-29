@@ -204,10 +204,10 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 	this->mode = mode;
 	this->config = config;
 
-	memcpy(this->from_mac, from_mac, 6);
+	this->from_mac = std::string(from_mac, 6);
 	this->from_port = from_port;
 	if (to_mac != NULL){
-		memcpy(this->to_mac, to_mac, 6);
+		this->to_mac = std::string(to_mac, 6);
 	}
 	this->to_port = to_port;
 	this->sock_fd = sock_fd;
@@ -221,10 +221,11 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 	if (mode == SessionMode::PTP_CONNECT){
 		// queue listen session notification
 		aemu_postoffice_ptp_connect to_listen_session = {0};
-		memcpy(to_listen_session.addr, this->from_mac, 6);
+		memcpy(to_listen_session.addr, this->from_mac.data(), 6);
 		to_listen_session.port = this->from_port;
 		SendListItem send_req = {
 			peer_session->get_identifier(),
+			this->from_mac,
 			std::string((char *)&to_listen_session, sizeof(to_listen_session)),
 		};
 		this->send_list.push_back(send_req);
@@ -235,17 +236,19 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 		aemu_postoffice_ptp_connect packet = {0};
 
 		// queue data mode activation
-		memcpy(packet.addr, this->from_mac, 6);
+		memcpy(packet.addr, this->from_mac.data(), 6);
 		packet.port = this->from_port;
 		SendListItem send_req = {
 			peer_session->get_identifier(),
+			this->from_mac,
 			std::string((char *)&packet, sizeof(packet)),
 		};
 		this->send_list.push_back(send_req);
 
-		memcpy(packet.addr, peer_session->from_mac, 6);
+		memcpy(packet.addr, peer_session->from_mac.data(), 6);
 		packet.port = peer_session->from_port;
 		send_req.session_name = this->get_identifier();
+		send_req.from_mac = peer_session->get_from_mac();
 		send_req.data = std::string((char *)&packet, sizeof(packet));
 		peer_session->send_list.push_back(send_req);
 
@@ -342,11 +345,12 @@ SessionPumpStatus Session::pump_from_client(){
 					this->from_client_data_buffer.erase(0, this->data_size);
 
 					aemu_postoffice_pdp *header = (aemu_postoffice_pdp *)buf;
-					memcpy(header->addr, this->from_mac, 6);
+					memcpy(header->addr, this->from_mac.data(), 6);
 					header->port = this->from_port;
 					header->size = this->data_size;
 					SendListItem send_req = {
 						this->pdp_data_target,
+						this->from_mac,
 						std::string(buf, sizeof(aemu_postoffice_pdp) + this->data_size),
 					};
 					free(buf);
@@ -368,6 +372,7 @@ SessionPumpStatus Session::pump_from_client(){
 					header->size = this->data_size;
 					SendListItem send_req = {
 						this->get_peer_identifier(),
+						this->from_mac,
 						std::string(buf, sizeof(aemu_postoffice_ptp_data) + this->data_size),
 					};
 					free(buf);
@@ -420,16 +425,16 @@ SessionPumpStatus Session::pump_to_client(){
 std::string Session::get_identifier(){
 	switch(this->mode){
 		case SessionMode::PDP:{
-			return get_pdp_session_name(this->from_mac, this->from_port);
+			return get_pdp_session_name(this->from_mac.data(), this->from_port);
 		}
 		case SessionMode::PTP_LISTEN:{
-			return get_listen_session_name(this->from_mac, this->from_port);
+			return get_listen_session_name(this->from_mac.data(), this->from_port);
 		}
 		case SessionMode::PTP_CONNECT:{
-			return get_connect_session_name(this->from_mac, this->from_port, this->to_mac, this->to_port);
+			return get_connect_session_name(this->from_mac.data(), this->from_port, this->to_mac.data(), this->to_port);
 		}
 		case SessionMode::PTP_ACCEPT:{
-			return get_accept_session_name(this->from_mac, this->from_port, this->to_mac, this->to_port);
+			return get_accept_session_name(this->from_mac.data(), this->from_port, this->to_mac.data(), this->to_port);
 		}
 	}
 	LOG("%s: bad session mode 0x%x, debug this\n", __func__, this->mode);
@@ -443,10 +448,10 @@ std::string Session::get_peer_identifier(){
 			return std::string("");
 		}
 		case SessionMode::PTP_CONNECT:{
-			return get_accept_session_name(this->to_mac, this->to_port, this->from_mac, this->from_port);
+			return get_accept_session_name(this->to_mac.data(), this->to_port, this->from_mac.data(), this->from_port);
 		}
 		case SessionMode::PTP_ACCEPT:{
-			return get_connect_session_name(this->to_mac, this->to_port, this->from_mac, this->from_port);
+			return get_connect_session_name(this->to_mac.data(), this->to_port, this->from_mac.data(), this->from_port);
 		}
 	}
 	return std::string("");
@@ -469,6 +474,14 @@ void Session::close_socket(){
 
 std::string Session::get_client_addr(){
 	return this->client_addr;
+}
+
+std::string Session::get_from_mac(){
+	return from_mac;
+}
+
+std::string Session::get_to_mac(){
+	return to_mac;
 }
 
 }

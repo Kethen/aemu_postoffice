@@ -199,6 +199,21 @@ void Server::pump_connect_and_from_clients(int set){
 void Server::pump_to_clients(int set){
 	for(auto &session : this->sessions_to_pump[set]){
 		std::string identifier = session->get_identifier();
+		auto to_client = adhocctl_snapshot.clients.find(session->get_from_mac());
+
+		if (config.strict_mode){
+			if (to_client == adhocctl_snapshot.clients.end()){
+				// client left on adhocctl
+				sessions_to_remove[set].insert(identifier);
+				continue;
+			}
+			auto to_game = adhocctl_snapshot.games.find(to_client->second.game_code);
+			auto to_group = to_game->second.groups.find(to_client->second.group_key);
+			if (to_group->second.channel < 0){
+				// non grouped clients do not get data
+				continue;
+			}
+		}
 
 		DataQueueStatus queue_status = DataQueueStatus::SUCCESS;
 		for(auto &send_list_set : this->send_list){
@@ -207,12 +222,22 @@ void Server::pump_to_clients(int set){
 				continue;
 			}
 			for(auto &send : my_send_list->second){
-				if (send.session_name == identifier){
-					DataQueueStatus queue_status = session->queue_send(send.data);
-					if (queue_status == DataQueueStatus::MAX_DATA_REACHED){
-						sessions_to_remove[set].insert(identifier);
-						break;
+				auto from_client = adhocctl_snapshot.clients.find(send.from_mac);
+				if (config.strict_mode){
+					if (from_client == adhocctl_snapshot.clients.end()){
+						// the source client not found on adhocctl
+						continue;
 					}
+					if (from_client->second.game_code != to_client->second.game_code || from_client->second.group_key != to_client->second.group_key){
+						// the source client is not in the same group
+						continue;
+					}
+				}
+
+				DataQueueStatus queue_status = session->queue_send(send.data);
+				if (queue_status == DataQueueStatus::MAX_DATA_REACHED){
+					sessions_to_remove[set].insert(identifier);
+					break;
 				}
 			}
 			if (queue_status == DataQueueStatus::MAX_DATA_REACHED){

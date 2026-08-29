@@ -53,6 +53,7 @@ enum class DataQueueStatus{
 
 struct SendListItem{
 	std::string session_name;
+	std::string from_mac;
 	std::string data;
 };
 
@@ -85,15 +86,17 @@ class Session{
 		SessionPhase get_session_phase();
 		std::string get_client_addr();
 		void close_socket();
+		std::string get_from_mac();
+		std::string get_to_mac();
 
 	protected:
 		// processed data from client to be sent to other sessions
 		std::vector<SendListItem> send_list;
 
 		// session identifier
-		char from_mac[6];
+		std::string from_mac;
 		uint16_t from_port;
-		char to_mac[6];
+		std::string to_mac;
 		uint16_t to_port;
 
 		SessionPhase phase;
