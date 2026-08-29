@@ -4,6 +4,7 @@
 
 #include <chrono>
 #include <thread>
+#include <mutex>
 
 #ifdef __unix__
 #include <signal.h>
@@ -33,6 +34,7 @@ int main(){
 	{
 		aemu_postoffice_server::Config config;
 		aemu_postoffice_server::Server server(config);
+		std::mutex relay_mutex;
 
 		#ifdef __unix__
 		struct rlimit num_file_limit = {
@@ -45,12 +47,12 @@ int main(){
 		}
 		#endif
 
-		std::vector<std::thread> threads;
-
-		auto relay_thread = std::thread([&config, &server] {
+		auto relay_thread = std::thread([&config, &server, &relay_mutex] {
 			while(!should_stop){
 				auto begin = std::chrono::high_resolution_clock::now();
+				relay_mutex.lock();
 				aemu_postoffice_server::ServerPumpStatus pump_status = server.pump();
+				relay_mutex.unlock();
 				uint64_t interval_ms = config.target_tick_interval_ms;
 				if (pump_status == aemu_postoffice_server::ServerPumpStatus::IDLE){
 					interval_ms = config.target_tick_interval_idle_ms;
@@ -68,15 +70,27 @@ int main(){
 		if (config.enable_adhocctl){
 			aemu_postoffice_adhocctl_server::Server adhocctl_server(config);
 
-			auto adhocctl_thread = std::thread([&config, &adhocctl_server] {
+			auto adhocctl_thread = std::thread([&config, &adhocctl_server, &relay_mutex, &server] {
+				auto last_dump = std::chrono::high_resolution_clock::now();
+				auto last_sync = std::chrono::high_resolution_clock::now();
 				while(!should_stop){
 					auto begin = std::chrono::high_resolution_clock::now();
+
 					aemu_postoffice_adhocctl_server::ServerPumpStatus pump_status = adhocctl_server.pump();
 					uint64_t interval_ms = config.adhocctl_target_tick_interval_ms;
 					if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::IDLE){
 						interval_ms = config.adhocctl_target_tick_interval_idle_ms;
 					} else if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::ERROR){
 						break;
+					} else if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::SUCCESS){
+						auto snapshot = adhocctl_server.get_snapshot();
+						if ((begin - last_dump) / std::chrono::seconds(1) >= 5){
+							last_dump = begin;
+							aemu_postoffice_adhocctl_server::dump_snapshot_to_log(snapshot);
+						}
+						relay_mutex.lock();
+						server.update_adhocctl_data(snapshot);
+						relay_mutex.unlock();
 					}
 					auto timespent = std::chrono::high_resolution_clock::now() - begin;
 					int64_t wait_ms = config.target_tick_interval_ms - timespent / std::chrono::milliseconds(1);

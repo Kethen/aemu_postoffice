@@ -1,8 +1,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include <mutex>
+
 namespace aemu_postoffice_adhocctl_server {
 
+std::mutex log_default_mutex;
 void log_default(const char *format, ...){
 	va_list args;
 	va_start(args, format);
@@ -11,7 +14,10 @@ void log_default(const char *format, ...){
 	vsnprintf(buf, sizeof(buf), format, args);
 	va_end(args);
 
-	fprintf(stdout, "%s", buf);
+	{
+		const std::lock_guard<std::mutex> lock(log_default_mutex);
+		fprintf(stdout, "%s", buf);
+	}
 }
 
 void (*LOG)(const char *format, ...) = log_default;
