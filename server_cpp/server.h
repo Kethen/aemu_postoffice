@@ -24,6 +24,7 @@ class Server{
 		~Server();
 		// pump server processing
 		ServerPumpStatus pump();
+		void update_adhocctl_data(const aemu_postoffice_adhocctl_server::snapshot &snapshot);
 
 	private:
 		std::list<PendingSession> pending_sessions;
@@ -50,8 +51,8 @@ class Server{
 		std::vector<std::thread> session_to_client_pump_workers;
 
 		int sock_fd;
-
 		Config config;
+		aemu_postoffice_adhocctl_server::snapshot adhocctl_snapshot;
 
 		void pump_pending_sessions(int set);
 		void pump_connect_and_from_clients(int set);

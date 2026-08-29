@@ -1,14 +1,34 @@
 set -xe
-GCC=x86_64-w64-mingw32-gcc
-GPP=x86_64-w64-mingw32-g++
 
-$GCC -fPIC -g -c log_impl_stdc.c -o log_impl_stdc.o -O0
-$GCC -fPIC -g -c test.c -o test.o -O0
-$GCC -fPIC -g -c postoffice.c -o postoffice.o -O2
-$GCC -fPIC -g -c sock_impl_windows.c -o sock_impl_windows.o -O2
-$GPP -fPIC -g -c mutex_impl_cpp.cpp -o mutex_impl_cpp.o -O2
-$GPP -fPIC -g -c delay_impl_cpp.cpp -o delay_impl_cpp.o -O2
-$GCC -fPIC -g -c postoffice_mem_stdc.c -o postoffice_mem_stdc.o -O2
+CC=x86_64-w64-mingw32-gcc
+CPPC=x86_64-w64-mingw32-g++
 
-$GPP -O0 -static log_impl_stdc.o test.o postoffice.o sock_impl_windows.o mutex_impl_cpp.o delay_impl_cpp.o postoffice_mem_stdc.o -lws2_32 -lpthread -o test.exe
-$GPP -fPIC -shared -static log_impl_stdc.o postoffice.o sock_impl_windows.o mutex_impl_cpp.o delay_impl_cpp.o postoffice_mem_stdc.o -lws2_32 -o libaemu_postoffice_client.dll
+BUILD_FLAGS="-fPIC -g -O2 -Wformat"
+
+C_SRC="log_impl_stdc postoffice sock_impl_windows postoffice_mem_stdc ../adhocctl/client/adhocctl"
+CPP_SRC="mutex_impl_cpp delay_impl_cpp"
+C_SRC_TEST="test"
+
+lib_objs=""
+
+for f in $C_SRC
+do
+	$CC $BUILD_FLAGS -c ${f}.c -o ${f}.o
+	lib_objs="$lib_objs ${f}.o"
+done
+
+for f in $CPP_SRC
+do
+	$CPPC $BUILD_FLAGS -c ${f}.cpp -o ${f}.o
+	lib_objs="$lib_objs ${f}.o"
+done
+
+test_objs=""
+for f in $C_SRC_TEST
+do
+	$CC $BUILD_FLAGS -c ${f}.c -o ${f}.o
+	test_objs="$test_objs ${f}.o"
+done
+
+$CPPC $BUILD_FLAGS -static $lib_objs $test_objs -lws2_32 -lpthread -o test.exe
+$CPPC $BUILD_FLAGS -shared -static $lib_objs -lws2_32 -o libaemu_postoffice_client.dll

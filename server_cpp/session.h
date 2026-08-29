@@ -8,6 +8,7 @@
 #include <unordered_map>
 
 #include "config.h"
+#include "../adhocctl/server_cpp/snapshot.h"
 
 namespace aemu_postoffice_server {
 
@@ -23,8 +24,8 @@ enum class PendingSessionPumpStatus{
 
 class PendingSession{
 	public:
-		PendingSession(int sock_fd, std::string client_addr, Config *config);
-		PendingSessionPumpStatus pump(std::unordered_map<std::string, Session> &global_sessions);
+		PendingSession(int sock_fd, std::string client_addr, int client_port, Config *config);
+		PendingSessionPumpStatus pump(std::unordered_map<std::string, Session> &global_sessions, const aemu_postoffice_adhocctl_server::snapshot &adhocctl_snapshot);
 		// The pending session should be discarded after creating a session
 		Session create_session(std::unordered_map<std::string, Session> &global_sessions);
 		void close_socket();
@@ -34,6 +35,7 @@ class PendingSession{
 		int sock_fd;
 		std::chrono::high_resolution_clock::time_point create_time;
 		std::string client_addr;
+		int client_port;
 		Config *config;
 };
 
@@ -70,7 +72,7 @@ enum class SessionPhase{
 
 class Session{
 	public:
-		Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, Config *config);
+		Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, Config *config);
 		~Session();
 		SessionPumpStatus pump_connect(); // 0. connect session has to be pumped until a connect accept pair is formed
 		SessionPumpStatus pump_from_client(); // 1. fetch data from client socket into buffer and put read data into send list
@@ -113,6 +115,7 @@ class Session{
 		uint64_t data_size;
 
 		std::string client_addr;
+		int client_port;
 };
 
 }

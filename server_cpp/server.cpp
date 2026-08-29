@@ -145,7 +145,7 @@ Server::~Server(){
 
 void Server::pump_pending_sessions(int set){
 	for(auto &pending_session : this->to_pump_pending_sessions[set]){
-		PendingSessionPumpStatus pump_status = pending_session->pump(this->sessions);
+		PendingSessionPumpStatus pump_status = pending_session->pump(this->sessions, this->adhocctl_snapshot);
 		switch(pump_status){
 			case PendingSessionPumpStatus::SUCCESS:
 				continue;
@@ -263,7 +263,7 @@ ServerPumpStatus Server::pump(){
 			continue;
 		}
 
-		pending_sessions.push_back(PendingSession(accept_status, peer_addr, &this->config));
+		pending_sessions.push_back(PendingSession(accept_status, peer_addr, peer_port, &this->config));
 	}
 
 	if (pending_sessions.size() == 0 && sessions.size() == 0){
@@ -381,6 +381,10 @@ ServerPumpStatus Server::pump(){
 	}
 
 	return ServerPumpStatus::SUCCESS;
+}
+
+void Server::update_adhocctl_data(const aemu_postoffice_adhocctl_server::snapshot &snapshot){
+	this->adhocctl_snapshot = snapshot;
 }
 
 }

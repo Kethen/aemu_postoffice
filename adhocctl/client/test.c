@@ -9,8 +9,8 @@
 
 void sleep_ms(int ms){
 	struct timespec sleep_time = {
-		.tv_sec = 0,
-		.tv_nsec = ms * 1000000,
+		.tv_sec = ms / 1000,
+		.tv_nsec = (ms % 1000) * 1000000,
 	};
 	nanosleep(&sleep_time, NULL);
 }

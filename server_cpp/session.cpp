@@ -9,9 +9,10 @@
 
 namespace aemu_postoffice_server {
 
-PendingSession::PendingSession(int sock_fd, std::string client_addr, Config *config){
+PendingSession::PendingSession(int sock_fd, std::string client_addr, int client_port, Config *config){
 	this->sock_fd = sock_fd;
 	this->client_addr = client_addr;
+	this->client_port = client_port;
 	this->create_time = std::chrono::high_resolution_clock::now();
 	this->config = config;
 	LOG("%s: %s connecting\n", __func__, client_addr.c_str());
@@ -45,7 +46,7 @@ static std::string get_pdp_session_name(const char *mac, uint16_t port){
 	return std::string(buf);
 }
 
-PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Session> &global_sessions){
+PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Session> &global_sessions, const aemu_postoffice_adhocctl_server::snapshot &adhocctl_snapshot){
 	char buf[sizeof(aemu_postoffice_init)];
 
 	if ((std::chrono::high_resolution_clock::now() - this->create_time) / std::chrono::milliseconds(1) > this->config->session_init_time_limit_ms){
@@ -75,10 +76,52 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 
 	if (init_data_buffer.length() >= sizeof(aemu_postoffice_init)){
 		const aemu_postoffice_init *init = (const aemu_postoffice_init *)init_data_buffer.data();
+		auto strict_mode_check = [this, init, &adhocctl_snapshot] () -> bool{
+			if (!this->config->strict_mode){
+				return true;
+			}
+
+			std::string src_mac(init->src_addr, 6);
+			auto src_client = adhocctl_snapshot.clients.find(src_mac);
+			if (src_client == adhocctl_snapshot.clients.end()){
+				// src client not found (yet)
+				return false;
+			}
+
+			if (client_addr != src_client->second.ip){
+				// ip does not match (yet)
+				return false;
+			}
+
+			if (init->init_type == AEMU_POSTOFFICE_INIT_PTP_ACCEPT || init->init_type == AEMU_POSTOFFICE_INIT_PTP_CONNECT){
+				// in the case of ptp accept and connect, make sure both are in the same group
+				std::string dst_mac(init->dst_addr, 6);
+				auto game = adhocctl_snapshot.games.find(src_client->second.game_code);
+				auto group = game->second.groups.find(src_client->second.group_key);
+
+				if (group->second.channel < 0){
+					// client has not joined a group (yet)
+					return false;
+				}
+
+				bool dst_found_in_group = false;
+				for (auto &member_mac : group->second.members){
+					if (member_mac == dst_mac){
+						dst_found_in_group = true;
+						break;
+					}
+				}
+				if (!dst_found_in_group){
+					// dst is not in the same group (yet)
+					return false;
+				}
+			}
+			return true;
+		};
 		switch(init->init_type){
 			case AEMU_POSTOFFICE_INIT_PTP_LISTEN:
 			case AEMU_POSTOFFICE_INIT_PDP:{
-				return PendingSessionPumpStatus::SESSION_READY;
+				return strict_mode_check() ? PendingSessionPumpStatus::SESSION_READY : PendingSessionPumpStatus::SUCCESS;
 			}
 			case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
 				std::string listen_session_name = get_listen_session_name(init->dst_addr, init->dport);
@@ -87,7 +130,7 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 					return PendingSessionPumpStatus::SUCCESS;
 				}else{
 					// one must call create_session before changes happen to the global session map
-					return PendingSessionPumpStatus::SESSION_READY;
+					return strict_mode_check() ? PendingSessionPumpStatus::SESSION_READY : PendingSessionPumpStatus::SUCCESS;
 				}
 			}
 			case AEMU_POSTOFFICE_INIT_PTP_ACCEPT:{
@@ -99,7 +142,7 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 					return PendingSessionPumpStatus::SOCKET_CLOSED;
 				}else{
 					// one must call create_session before changes happen to the global session map
-					return PendingSessionPumpStatus::SESSION_READY;
+					return strict_mode_check() ? PendingSessionPumpStatus::SESSION_READY : PendingSessionPumpStatus::SUCCESS;
 				}
 			}
 			default:{
@@ -118,11 +161,11 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 	this->init_data_buffer.erase(0, sizeof(init));
 	switch(init.init_type){
 		case AEMU_POSTOFFICE_INIT_PDP:{
-			return Session(SessionMode::PDP, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->config);
+			return Session(SessionMode::PDP, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
 			this->init_data_buffer = std::string("");
-			return Session(SessionMode::PTP_LISTEN, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->config);
+			return Session(SessionMode::PTP_LISTEN, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
 			std::string listen_session_name = get_listen_session_name(init.dst_addr, init.dport);
@@ -131,7 +174,7 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 				LOG("%s: critical, ptp listen session removed during ptp connect session creation, fix this\n", __func__);
 				exit(1);
 			}
-			return Session(SessionMode::PTP_CONNECT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &listen_session->second, this->client_addr, this->config);
+			return Session(SessionMode::PTP_CONNECT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &listen_session->second, this->client_addr, this->client_port, this->config);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_ACCEPT:{
 			std::string connect_session_name = get_connect_session_name(init.dst_addr, init.dport, init.src_addr, init.sport);
@@ -140,12 +183,12 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 				LOG("%s: critical, ptp connect session removed during accept session creation, fix this\n", __func__);
 				exit(1);
 			}
-			return Session(SessionMode::PTP_ACCEPT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &connect_session->second, this->client_addr, this->config);
+			return Session(SessionMode::PTP_ACCEPT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &connect_session->second, this->client_addr, this->client_port, this->config);
 		}
 		default:{
 			LOG("%s: critical, unknown init type %d during session creation, fix this\n", __func__, init.init_type);
 			exit(1);
-			return Session(SessionMode::PDP, NULL, 0, NULL, 0, std::string(""), 0, NULL, std::string(""), NULL);
+			return Session(SessionMode::PDP, NULL, 0, NULL, 0, std::string(""), 0, NULL, std::string(""), 0, NULL);
 		}
 	}
 }
@@ -157,7 +200,7 @@ void PendingSession::close_socket(){
 	}
 }
 
-Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, Config *config){
+Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, Config *config){
 	this->mode = mode;
 	this->config = config;
 
@@ -170,6 +213,7 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 	this->sock_fd = sock_fd;
 	this->create_time = std::chrono::high_resolution_clock::now();
 	this->client_addr = client_addr;
+	this->client_port = client_port;
 	this->phase = SessionPhase::HEADER;
 	if (mode != SessionMode::PTP_LISTEN){
 		this->from_client_data_buffer = initial_data_buffer;

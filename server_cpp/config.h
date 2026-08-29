@@ -37,6 +37,9 @@ struct Config {
 	// maximum number of pending and active sessions before new connections are rejceted
 	int max_num_sessions = 5000;
 
+	// restrict session creation and data communication based on data from integrated adhocctl server
+	bool strict_mode = true;
+
 	// -- adhocctl settings --
 	// enable built-in adhocctl
 	bool enable_adhocctl = true;

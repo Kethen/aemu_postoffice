@@ -5,13 +5,30 @@ CPPC=g++
 
 BUILD_FLAGS="-fPIC -g -O2 -Wformat"
 
-$CC $BUILD_FLAGS -c log_impl_stdc.c -o log_impl_stdc.o
-$CC $BUILD_FLAGS -c test.c -o test.o
-$CC $BUILD_FLAGS -c postoffice.c -o postoffice.o
-$CC $BUILD_FLAGS -c sock_impl_linux.c -o sock_impl_linux.o
-$CPPC $BUILD_FLAGS -c mutex_impl_cpp.cpp -o mutex_impl_cpp.o
-$CPPC $BUILD_FLAGS -c delay_impl_cpp.cpp -o delay_impl_cpp.o
-$CC $BUILD_FLAGS -c postoffice_mem_stdc.c -o postoffice_mem_stdc.o
+C_SRC="log_impl_stdc postoffice sock_impl_linux postoffice_mem_stdc ../adhocctl/client/adhocctl"
+CPP_SRC="mutex_impl_cpp delay_impl_cpp"
+C_SRC_TEST="test"
 
-$CPPC $BUILD_FLAGS log_impl_stdc.o test.o postoffice.o sock_impl_linux.o mutex_impl_cpp.o delay_impl_cpp.o postoffice_mem_stdc.o -o test.out
-$CPPC $BUILD_FLAGS -shared log_impl_stdc.o postoffice.o sock_impl_linux.o mutex_impl_cpp.o delay_impl_cpp.o postoffice_mem_stdc.o -o libaemu_postoffice_client.so
+lib_objs=""
+
+for f in $C_SRC
+do
+	$CC $BUILD_FLAGS -c ${f}.c -o ${f}.o
+	lib_objs="$lib_objs ${f}.o"
+done
+
+for f in $CPP_SRC
+do
+	$CPPC $BUILD_FLAGS -c ${f}.cpp -o ${f}.o
+	lib_objs="$lib_objs ${f}.o"
+done
+
+test_objs=""
+for f in $C_SRC_TEST
+do
+	$CC $BUILD_FLAGS -c ${f}.c -o ${f}.o
+	test_objs="$test_objs ${f}.o"
+done
+
+$CPPC $BUILD_FLAGS $lib_objs $test_objs -o test.out
+$CPPC $BUILD_FLAGS -shared $lib_objs -o libaemu_postoffice_client.so
