@@ -6,7 +6,7 @@
 
 namespace aemu_postoffice_server {
 
-struct Config {
+struct config {
 	// -- main --
 	// target packet processing tick rate
 	uint64_t target_tick_interval_ms = 8;

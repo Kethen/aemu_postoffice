@@ -678,7 +678,9 @@ void adhocctl_init(){
 	char nickname_a[128] = "a";
 	char nickname_b[128] = "b";
 	char nickname_c[128] = "c";
-	char gamecode[] = "abcd12345";
+	// these are expected to be cross linked
+	char gamecode[] = "UCUS98632";
+	char gamecode_2[] = "UCES01245";
 	char group[8] = "abcd1234";
 	int channel = 1;
 
@@ -696,7 +698,7 @@ void adhocctl_init(){
 		exit(1);
 	}
 
-	void *adhocctl_handle_b = create_adhocctl_session_v4(&adhocctl_addr, 1, gamecode, nickname_b, mac_b, channel);
+	void *adhocctl_handle_b = create_adhocctl_session_v4(&adhocctl_addr, 1, gamecode_2, nickname_b, mac_b, channel);
 	if (adhocctl_handle_b == NULL){
 		LOG("%s: failed creating adhocctl session for b\n", __func__);
 		exit(1);
@@ -713,7 +715,7 @@ void adhocctl_init(){
 	// create the rest of adhocctl sessions, the success case will be tested later
 	adhocctl_connect(adhocctl_handle_b, group);
 
-	void *adhocctl_handle_c = create_adhocctl_session_v4(&adhocctl_addr, 1, gamecode, nickname_c, mac_c, channel);
+	void *adhocctl_handle_c = create_adhocctl_session_v4(&adhocctl_addr, 1, gamecode_2, nickname_c, mac_c, channel);
 	if (adhocctl_handle_c == NULL){
 		LOG("%s: failed creating adhocctl session for c\n", __func__);
 		exit(1);

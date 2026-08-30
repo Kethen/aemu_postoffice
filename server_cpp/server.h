@@ -20,7 +20,7 @@ enum class ServerPumpStatus{
 
 class Server{
 	public:
-		Server(Config config);
+		Server(struct config config);
 		~Server();
 		// pump server processing
 		ServerPumpStatus pump();
@@ -51,7 +51,7 @@ class Server{
 		std::vector<std::thread> session_to_client_pump_workers;
 
 		int sock_fd;
-		Config config;
+		struct config config;
 		aemu_postoffice_adhocctl_server::snapshot adhocctl_snapshot;
 
 		void pump_pending_sessions(int set);

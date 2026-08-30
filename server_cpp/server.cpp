@@ -21,7 +21,7 @@ static void set_thread_name(std::string name){
 	#endif
 }
 
-Server::Server(Config config){
+Server::Server(struct config config){
 	this->config = config;
 	this->sock_fd = native_tcp_listen(config.ip_addr, config.port);
 

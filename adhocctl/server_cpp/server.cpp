@@ -21,13 +21,14 @@ static void set_thread_name(std::string name){
 	#endif
 }
 
-Server::Server(aemu_postoffice_server::Config config){
+Server::Server(const struct aemu_postoffice_server::config &config, const struct game_db &game_db){
 	this->config = config;
+	this->game_db = game_db;
 
 	switch (get_addr_family(config.ip_addr)){
 		case AddrFamily::IPV6:
 			LOG("%s: starting adhocctl server in ipv4 ipv6 mixed mode, P2P is current NOT supported, only relay mode is supported\n", __func__);
-			config.adhocctl_relay_only = true;
+			this->config.adhocctl_relay_only = true;
 			break;
 		case AddrFamily::IPV4:
 			LOG("%s: starting adhocctl server in ipv4 mode\n", __func__);
@@ -267,7 +268,13 @@ void Server::connect_client(std::string mac, std::string group_name, bool groupl
 	auto target = clients.find(mac);
 	std::string game_code = target->second.game_code;
 
-	// TODO resolve cross linking here and update the client's game code
+	// resolve crosslinking
+	auto crosslink = game_db.crosslinks.find(game_code);
+	if (crosslink != game_db.crosslinks.end()){
+		LOG("%s: client %s %s crosslinked from %s to %s\n", __func__, target->second.get_socket_name().c_str(), mac_bytes_to_mac_string(target->second.get_mac()).c_str(), game_code.c_str(), crosslink->second.c_str());
+		game_code = crosslink->second;
+		target->second.game_code = crosslink->second;
+	}
 
 	auto game = games.find(game_code);
 
@@ -510,6 +517,14 @@ struct snapshot Server::get_snapshot(){
 	}
 
 	return new_snapshot;
+}
+
+void Server::set_config(const struct aemu_postoffice_server::config &config){
+	this->config = config;
+}
+
+void Server::set_game_db(const struct game_db &game_db){
+	this->game_db = game_db;
 }
 
 }

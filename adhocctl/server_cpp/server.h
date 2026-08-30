@@ -7,6 +7,7 @@
 #include "snapshot.h"
 #include "../../server_cpp/config.h"
 #include "../../server_cpp/semaphore.h"
+#include "game_db.h"
 
 namespace aemu_postoffice_adhocctl_server {
 
@@ -29,11 +30,13 @@ struct game {
 
 class Server {
 	public:
-		Server(aemu_postoffice_server::Config config);
+		Server(const struct aemu_postoffice_server::config &config, const struct game_db &game_db);
 		~Server();
 
 		ServerPumpStatus pump();
 		struct snapshot get_snapshot();
+		void set_config(const struct aemu_postoffice_server::config &config);
+		void set_game_db(const struct game_db &game_db);
 
 	private:
 		std::unordered_map<std::string, Client> pending_clients; // clients that have connected but not logged in, keyed with {ip:port}
@@ -61,7 +64,8 @@ class Server {
 
 		// the grouping tree
 		std::unordered_map<std::string, game> games;
-		aemu_postoffice_server::Config config;
+		struct aemu_postoffice_server::config config;
+		struct game_db game_db;
 		int sock_fd;
 
 		void disconnect_client(std::string mac);
