@@ -9,7 +9,7 @@
 
 namespace aemu_postoffice_server {
 
-PendingSession::PendingSession(int sock_fd, std::string client_addr, int client_port, Config *config){
+PendingSession::PendingSession(int sock_fd, std::string client_addr, int client_port, struct config *config){
 	this->sock_fd = sock_fd;
 	this->client_addr = client_addr;
 	this->client_port = client_port;
@@ -200,7 +200,7 @@ void PendingSession::close_socket(){
 	}
 }
 
-Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, Config *config){
+Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config){
 	this->mode = mode;
 	this->config = config;
 

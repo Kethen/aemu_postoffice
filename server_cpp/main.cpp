@@ -1,6 +1,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+
+// mingw-w64 only on windows, not available in msvc
+#include <libgen.h>
+#include <unistd.h>
 
 #include <chrono>
 #include <thread>
@@ -20,19 +25,24 @@ bool should_stop = false;
 
 #ifdef __unix__
 void handle_sigterm(int signum){
-	printf("%s: terminating\n", __func__);
+	aemu_postoffice_server::LOG("%s: terminating\n", __func__);
 	should_stop = true;
 }
 #endif
 
-int main(){
+int main(int argc, char **argv){
 	#ifdef __unix__
 	signal(SIGTERM, handle_sigterm);
 	signal(SIGINT, handle_sigterm);
 	#endif
 
+	char exe_path[strlen(argv[0]) + 1] = {0};
+	strcpy(exe_path, argv[0]);
+	dirname(exe_path);
+	chdir(exe_path);
+
 	{
-		aemu_postoffice_server::Config config;
+		struct aemu_postoffice_server::config config;
 		aemu_postoffice_server::Server server(config);
 		std::mutex relay_mutex;
 
@@ -43,7 +53,7 @@ int main(){
 		};
 		int set_limit_status = setrlimit(RLIMIT_NOFILE, &num_file_limit);
 		if (set_limit_status == -1){
-			printf("%s: failed changing number of opened files (including sockets) limit, 0x%x\n", __func__, errno);
+			aemu_postoffice_server::LOG("%s: failed changing number of opened files (including sockets) limit, 0x%x\n", __func__, errno);
 		}
 		#endif
 
@@ -68,7 +78,13 @@ int main(){
 		});
 
 		if (config.enable_adhocctl){
-			aemu_postoffice_adhocctl_server::Server adhocctl_server(config);
+			struct aemu_postoffice_adhocctl_server::game_db game_db;
+			bool parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json("./game_db.json", game_db);
+			if (!parse_result){
+				aemu_postoffice_server::LOG("%s: game db parsing failed!\n", __func__);
+				exit(1);
+			}
+			aemu_postoffice_adhocctl_server::Server adhocctl_server(config, game_db);
 
 			auto adhocctl_thread = std::thread([&config, &adhocctl_server, &relay_mutex, &server] {
 				auto last_dump = std::chrono::high_resolution_clock::now();

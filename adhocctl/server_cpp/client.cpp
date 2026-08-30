@@ -12,7 +12,7 @@ using namespace aemu_postoffice_server;
 
 namespace aemu_postoffice_adhocctl_server {
 
-Client::Client(int sock_fd, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, aemu_postoffice_server::Config *config){
+Client::Client(int sock_fd, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, struct aemu_postoffice_server::config *config){
 	this->sock_fd = sock_fd;
 	this->ip = ip;
 	this->port = port;
@@ -38,7 +38,7 @@ Client::~Client(){
 
 }
 
-static bool client_sent_too_much(const std::string &recv_buf, aemu_postoffice_server::Config *config, Client *client){
+static bool client_sent_too_much(const std::string &recv_buf, struct aemu_postoffice_server::config *config, Client *client){
 	if (recv_buf.length() > config->adhocctl_data_queue_size_limit_byte){
 		LOG("%s: client %s %s is sending too much data\n", __func__, mac_bytes_to_mac_string(client->get_mac()).c_str(), client->get_socket_name().c_str());
 		return true;
@@ -46,7 +46,7 @@ static bool client_sent_too_much(const std::string &recv_buf, aemu_postoffice_se
 	return false;
 }
 
-static ServerToClientOpQueueStatus check_send_queue_size(const std::string &send_buf, aemu_postoffice_server::Config *config, Client *client){
+static ServerToClientOpQueueStatus check_send_queue_size(const std::string &send_buf, struct aemu_postoffice_server::config *config, Client *client){
 	if (send_buf.length() > config->adhocctl_data_queue_size_limit_byte){
 		LOG("%s: client %s %s is not receiving data timely\n", __func__, mac_bytes_to_mac_string(client->get_mac()).c_str(), client->get_socket_name().c_str());
 		return ServerToClientOpQueueStatus::OVERFLOW;
@@ -239,6 +239,8 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				game_code = std::string((char *)packet->game.data, sizeof(packet->game.data));
 				nickname.push_back('\0');
 				game_code.push_back('\0');
+				// re-string it so that crosslink lookup works
+				game_code = std::string(game_code.c_str());
 				channel = V1_PROTOCOL_DEFAULT_CHANNEL;
 				logged_in = true;
 

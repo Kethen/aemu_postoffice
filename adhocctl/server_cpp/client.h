@@ -64,7 +64,7 @@ enum class ServerToClientOpQueueStatus {
 
 class Client {
 	public:
-		Client(int sock_fd, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, aemu_postoffice_server::Config *config);
+		Client(int sock_fd, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, struct aemu_postoffice_server::config *config);
 		void close_socket();
 		~Client();
 
@@ -100,7 +100,7 @@ class Client {
 		uint16_t port;
 		std::string socket_name;
 		int protocol_revision;
-		aemu_postoffice_server::Config *config;
+		struct aemu_postoffice_server::config *config;
 		int channel;
 
 		bool logged_in;
