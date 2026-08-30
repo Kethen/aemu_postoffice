@@ -28,6 +28,8 @@ jobs:
         bash build_podman.sh
         cd ../server_cpp
         bash build_podman.sh
+        cd ../
+        cp adhocctl/server_cpp/db_convert.js server_cpp
 
     - name: Push package artifact
       uses: actions/upload-artifact@v4
@@ -44,4 +46,6 @@ jobs:
            client/libaemu_postoffice_client.so
            client/libaemu_postoffice_client.dll
            server_cpp/aemu_postoffice
+           server_cpp/game_db.json
+           server_cpp/db_convert.js
         if-no-files-found: error
