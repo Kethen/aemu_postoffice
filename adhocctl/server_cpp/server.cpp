@@ -337,11 +337,17 @@ ServerPumpStatus Server::pump(){
 				break;
 			}
 			if (native_error_is_emfile(err)){
-				LOG("%s: warning, new connection dropped as system limit has reached\n", __func__);
+				LOG("%s: warning, new adhocctl connection dropped as system limit has been reached\n", __func__);
 				break;
 			}
 			LOG("%s: accept call failed, 0x%x\n", __func__, err);
 			return ServerPumpStatus::ERROR;
+		}
+
+		if (pending_clients.size() + clients.size() >= config.adhocctl_max_num_sessions){
+			LOG("%s: warning, new connection from %s dropped as maximum number of adhocctl sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.adhocctl_max_num_sessions);
+			native_close(accept_status);
+			continue;
 		}
 
 		char socket_name_buf[128] = {0};
@@ -520,7 +526,14 @@ struct snapshot Server::get_snapshot(){
 }
 
 void Server::set_config(const struct aemu_postoffice_server::config &config){
+	struct aemu_postoffice_server::config old_config = this->config;
 	this->config = config;
+
+	// these cannot be changed runtime
+	this->config.ip_addr = old_config.ip_addr;
+	this->config.adhocctl_relay_only = old_config.adhocctl_relay_only;
+	this->config.adhocctl_num_threads = old_config.adhocctl_num_threads;
+	this->config.adhocctl_port = old_config.adhocctl_port;
 }
 
 void Server::set_game_db(const struct game_db &game_db){

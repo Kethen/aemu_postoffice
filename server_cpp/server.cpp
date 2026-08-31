@@ -21,7 +21,7 @@ static void set_thread_name(std::string name){
 	#endif
 }
 
-Server::Server(struct config config){
+Server::Server(const struct config &config){
 	this->config = config;
 	this->sock_fd = native_tcp_listen(config.ip_addr, config.port);
 
@@ -273,7 +273,7 @@ ServerPumpStatus Server::pump(){
 				break;
 			}
 			if (native_error_is_emfile(error)){
-				LOG("%s: warning, new connection dropped as system limit has reached\n", __func__);
+				LOG("%s: warning, new relay connection dropped as system limit has been reached\n", __func__);
 				break;
 			}
 			LOG("%s: failed accepting connection, 0x%x\n", __func__, error);
@@ -283,7 +283,7 @@ ServerPumpStatus Server::pump(){
 		}
 
 		if (this->pending_sessions.size() + this->sessions.size() >= this->config.max_num_sessions){
-			LOG("%s: session limit %d reached, rejecting connection from %s\n", __func__, this->config.max_num_sessions, peer_addr.c_str());
+			LOG("%s: warning, new relay connection from %s dropped as maximum number of sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.max_num_sessions);
 			native_close(accept_status);
 			continue;
 		}
@@ -410,6 +410,16 @@ ServerPumpStatus Server::pump(){
 
 void Server::update_adhocctl_data(const aemu_postoffice_adhocctl_server::snapshot &snapshot){
 	this->adhocctl_snapshot = snapshot;
+}
+
+void Server::set_config(const struct config &config){
+	const struct config old_config = this->config;
+	this->config = config;
+
+	// these cannot be changed runtime
+	this->config.ip_addr = old_config.ip_addr;
+	this->config.port = old_config.port;
+	this->config.num_threads = old_config.num_threads;
 }
 
 }
