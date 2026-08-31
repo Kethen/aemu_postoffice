@@ -48,8 +48,8 @@ int main(int argc, char **argv){
 
 		#ifdef __unix__
 		struct rlimit num_file_limit = {
-			(rlim_t)(config.max_num_sessions + 10),
-			(rlim_t)(config.max_num_sessions + 10)
+			(rlim_t)(config.max_num_sessions + config.adhocctl_max_num_sessions + 10),
+			(rlim_t)(config.max_num_sessions + config.adhocctl_max_num_sessions + 10)
 		};
 		int set_limit_status = setrlimit(RLIMIT_NOFILE, &num_file_limit);
 		if (set_limit_status == -1){
