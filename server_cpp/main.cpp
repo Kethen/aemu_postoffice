@@ -43,6 +43,18 @@ int main(int argc, char **argv){
 
 	{
 		struct aemu_postoffice_server::config config;
+		bool config_parse_result = aemu_postoffice_server::parse_config_from_json("./config.json", config);
+		if (!config_parse_result){
+			aemu_postoffice_server::LOG("%s: config parse failed\n", __func__);
+			exit(1);
+		}
+		dump_config_to_log(config);
+		struct aemu_postoffice_adhocctl_server::game_db game_db;
+		bool game_db_parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json("./game_db.json", game_db);
+		if (!game_db_parse_result){
+			aemu_postoffice_server::LOG("%s: game db parsing failed!\n", __func__);
+			exit(1);
+		}
 		aemu_postoffice_server::Server server(config);
 		std::mutex relay_mutex;
 
@@ -78,12 +90,6 @@ int main(int argc, char **argv){
 		});
 
 		if (config.enable_adhocctl){
-			struct aemu_postoffice_adhocctl_server::game_db game_db;
-			bool parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json("./game_db.json", game_db);
-			if (!parse_result){
-				aemu_postoffice_server::LOG("%s: game db parsing failed!\n", __func__);
-				exit(1);
-			}
 			aemu_postoffice_adhocctl_server::Server adhocctl_server(config, game_db);
 
 			auto adhocctl_thread = std::thread([&config, &adhocctl_server, &relay_mutex, &server] {

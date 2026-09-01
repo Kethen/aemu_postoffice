@@ -1,0 +1,21 @@
+{
+    "target_tick_interval_ms":8,
+    "target_tick_interval_idle_ms":500,
+    "ip_addr":"::FFFF:0.0.0.0",
+    "port":27313,
+    "num_threads":4,
+    "session_init_time_limit_ms":5000,
+    "data_queue_size_limit_byte":512000,
+    "connect_time_limit_ms":5000,
+    "max_num_sessions":4000,
+    "strict_mode":true,
+    "enable_adhocctl":true,
+    "adhocctl_target_tick_interval_ms":33,
+    "adhocctl_target_tick_interval_idle_ms":500,
+    "adhocctl_port":27312,
+    "adhocctl_num_threads":4,
+    "adhocctl_data_queue_size_limit_byte":512000,
+    "adhocctl_relay_only":true,
+    "adhocctl_timeout_ms":30000,
+    "adhocctl_max_num_sessions":1000
+}
