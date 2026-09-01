@@ -241,6 +241,8 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				game_code.push_back('\0');
 				// re-string it so that crosslink lookup works
 				game_code = std::string(game_code.c_str());
+				// re-string it to not waste space
+				nickname = std::string(nickname.c_str());
 				channel = V1_PROTOCOL_DEFAULT_CHANNEL;
 				logged_in = true;
 
@@ -260,6 +262,8 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				op.op = ClientOp::CONNECT;
 				op.connect.group = std::string((char *)packet->group.data, sizeof(packet->group.data));
 				op.connect.group.push_back('\0');
+				// restring this to not waste space
+				op.connect.group = std::string(op.connect.group.c_str());
 				// v1 protocol has no channel
 				op.connect.channel = channel;
 				client_ops.push_back(op);

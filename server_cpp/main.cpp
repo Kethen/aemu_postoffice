@@ -21,6 +21,7 @@
 #include "server.h"
 #include "log.h"
 #include "../adhocctl/server_cpp/server.h"
+#include "http_status_server.h"
 
 bool should_stop = false;
 
@@ -73,8 +74,10 @@ int main(int argc, char **argv){
 	std::mutex relay_mutex;
 	aemu_postoffice_adhocctl_server::Server *adhocctl_server = NULL;
 	std::mutex adhocctl_mutex;
+	aemu_postoffice_server::HttpStatusServer *http_status_server = NULL;
+	std::mutex http_status_server_mutex;
 
-	threads.emplace_back([&config, &server, &relay_mutex] {
+	threads.emplace_back([&config, &server, &relay_mutex, &http_status_server, &http_status_server_mutex] {
 		auto last_dump = std::chrono::high_resolution_clock::now();
 		while(!should_stop){
 			auto begin = std::chrono::high_resolution_clock::now();
@@ -84,6 +87,11 @@ int main(int argc, char **argv){
 			uint64_t interval_ms = config.target_tick_interval_ms;
 			if (pump_status == aemu_postoffice_server::ServerPumpStatus::IDLE){
 				interval_ms = config.target_tick_interval_idle_ms;
+				if (http_status_server != NULL){
+					http_status_server_mutex.lock();
+					http_status_server->update_relay_snapshot(aemu_postoffice_server::snapshot());
+					http_status_server_mutex.unlock();
+				}
 			} else if (pump_status == aemu_postoffice_server::ServerPumpStatus::LISTEN_SOCK_DEAD){
 				should_stop = true;
 				break;
@@ -92,6 +100,11 @@ int main(int argc, char **argv){
 					last_dump = begin;
 					struct aemu_postoffice_server::snapshot snapshot = server.get_snapshot();
 					aemu_postoffice_server::dump_snapshot_to_log(snapshot);
+					if (http_status_server != NULL){
+						http_status_server_mutex.lock();
+						http_status_server->update_relay_snapshot(snapshot);
+						http_status_server_mutex.unlock();
+					}
 				}
 			}
 			auto timespent = std::chrono::high_resolution_clock::now() - begin;
@@ -104,8 +117,9 @@ int main(int argc, char **argv){
 
 	if (config.enable_adhocctl){
 		adhocctl_server = new aemu_postoffice_adhocctl_server::Server(config, game_db);
+		http_status_server = new aemu_postoffice_server::HttpStatusServer(config, game_db);
 
-		threads.emplace_back([&config, &adhocctl_server, &relay_mutex, &server, &adhocctl_mutex] {
+		threads.emplace_back([&config, &adhocctl_server, &relay_mutex, &server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex] {
 			auto last_dump = std::chrono::high_resolution_clock::now();
 			auto last_sync = std::chrono::high_resolution_clock::now();
 			while(!should_stop){
@@ -117,6 +131,11 @@ int main(int argc, char **argv){
 				uint64_t interval_ms = config.adhocctl_target_tick_interval_ms;
 				if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::IDLE){
 					interval_ms = config.adhocctl_target_tick_interval_idle_ms;
+					if (http_status_server != NULL){
+						http_status_server_mutex.lock();
+						http_status_server->update_adhocctl_snapshot(aemu_postoffice_adhocctl_server::snapshot());
+						http_status_server_mutex.unlock();
+					}
 				} else if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::ERROR){
 					should_stop = true;
 					break;
@@ -125,6 +144,11 @@ int main(int argc, char **argv){
 					if ((begin - last_dump) / std::chrono::seconds(1) >= 5){
 						last_dump = begin;
 						aemu_postoffice_adhocctl_server::dump_snapshot_to_log(snapshot);
+						if (http_status_server != NULL){
+							http_status_server_mutex.lock();
+							http_status_server->update_adhocctl_snapshot(snapshot);
+							http_status_server_mutex.unlock();
+						}
 					}
 					relay_mutex.lock();
 					server.update_adhocctl_data(snapshot);
@@ -137,6 +161,19 @@ int main(int argc, char **argv){
 				}
 			}
 		});
+
+		threads.emplace_back([&http_status_server, &http_status_server_mutex] {
+			while(!should_stop){
+				{
+					std::lock_guard<std::mutex> lg(http_status_server_mutex);
+					if (!http_status_server->is_server_running()){
+						should_stop = true;
+						break;
+					}
+				}
+				std::this_thread::sleep_for(std::chrono::milliseconds(250));
+			}
+		});
 	}
 
 	for (auto &thread : threads){
@@ -144,6 +181,9 @@ int main(int argc, char **argv){
 	}
 	if (adhocctl_server != NULL){
 		delete(adhocctl_server);
+	}
+	if (http_status_server != NULL){
+		delete(http_status_server);
 	}
 
 	aemu_postoffice_server::LOG("%s: server stopped\n", __func__);
