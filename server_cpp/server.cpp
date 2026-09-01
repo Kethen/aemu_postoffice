@@ -422,4 +422,43 @@ void Server::set_config(const struct config &config){
 	this->config.num_threads = old_config.num_threads;
 }
 
+struct snapshot Server::get_snapshot(){
+	struct snapshot ret;
+	for (auto session = sessions.begin();session != sessions.end();session++){
+		std::string mac = session->second.get_from_mac();
+
+		auto client_entry = ret.clients.find(mac);
+		if (client_entry == ret.clients.end()){
+			struct snapshot_client new_client;
+			new_client.mac = mac;
+			new_client.ip = session->second.get_client_addr();
+			new_client.port = session->second.get_client_port();
+			ret.clients.insert_or_assign(mac, new_client);
+			client_entry = ret.clients.find(mac);
+		}
+
+		uint16_t from_port = session->second.get_from_port();
+		SessionMode session_mode = session->second.get_session_mode();
+		switch(session_mode){
+			case SessionMode::PDP:
+				client_entry->second.pdp_ports.push_back(from_port);
+				break;
+			case SessionMode::PTP_LISTEN:
+				client_entry->second.ptp_listen_ports.push_back(from_port);
+				break;
+			case SessionMode::PTP_CONNECT:
+				client_entry->second.ptp_connect_ports.push_back(from_port);
+				break;
+			case SessionMode::PTP_ACCEPT:
+				client_entry->second.ptp_accept_ports.push_back(from_port);
+				break;
+			default:
+				LOG("%s: bad session mode %d, debug this\n", __func__, session_mode);
+				exit(1);
+		}
+	}
+
+	return ret;
+}
+
 }

@@ -4,7 +4,7 @@
 #include "client.h"
 #include "log.h"
 #include "../../server_cpp/native_socket.h"
-#include "common.h"
+#include "../../server_cpp/common.h"
 
 #include "../packets_v1.h"
 

@@ -9,6 +9,8 @@
 #include "config.h"
 #include "session.h"
 #include "semaphore.h"
+#include "../adhocctl/server_cpp/snapshot.h"
+#include "snapshot.h"
 
 namespace aemu_postoffice_server {
 
@@ -26,6 +28,7 @@ class Server{
 		ServerPumpStatus pump();
 		void update_adhocctl_data(const aemu_postoffice_adhocctl_server::snapshot &snapshot);
 		void set_config(const struct config &config);
+		struct snapshot get_snapshot();
 
 	private:
 		std::list<PendingSession> pending_sessions;

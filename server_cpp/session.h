@@ -88,6 +88,9 @@ class Session{
 		void close_socket();
 		std::string get_from_mac();
 		std::string get_to_mac();
+		uint16_t get_from_port();
+		uint16_t get_to_port();
+		int get_client_port();
 
 	protected:
 		// processed data from client to be sent to other sessions

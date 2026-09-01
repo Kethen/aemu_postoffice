@@ -484,4 +484,16 @@ std::string Session::get_to_mac(){
 	return to_mac;
 }
 
+uint16_t Session::get_from_port(){
+	return from_port;
+}
+
+uint16_t Session::get_to_port(){
+	return to_port;
+}
+
+int Session::get_client_port(){
+	return client_port;
+}
+
 }

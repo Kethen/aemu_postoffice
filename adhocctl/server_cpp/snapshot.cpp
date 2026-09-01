@@ -2,7 +2,7 @@
 
 #include "snapshot.h"
 #include "log.h"
-#include "common.h"
+#include "../../server_cpp/common.h"
 
 namespace aemu_postoffice_adhocctl_server {
 
@@ -56,14 +56,14 @@ void dump_snapshot_to_log(const struct snapshot &snapshot){
 	if (snapshot.games.size() == 0){
 		return;
 	}
-	LOG("--- begin snapshot dump ---\n");
+	LOG("--- begin adhocctl snapshot dump ---\n");
 	for (auto game = snapshot.games.begin();game != snapshot.games.end();game++){
 		LOG("Game %s:\n", game->second.game_code.c_str());
 		for (auto group = game->second.groups.begin();group != game->second.groups.end();group++){
 			LOG("  Group %s channel %d:\n", group->second.name.c_str(), group->second.channel);
 			for (auto member_mac : group->second.members){
 				auto member_entry = snapshot.clients.find(member_mac);
-				LOG("    %s: %s %s %d\n", mac_bytes_to_mac_string(member_mac).c_str(), member_entry->second.nickname.c_str(), member_entry->second.ip.c_str(), member_entry->second.port);
+				LOG("    %s: %s %s %d\n", aemu_postoffice_server::mac_bytes_to_mac_string(member_mac).c_str(), member_entry->second.nickname.c_str(), member_entry->second.ip.c_str(), member_entry->second.port);
 			}
 		}
 	}
