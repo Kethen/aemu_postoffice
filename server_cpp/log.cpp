@@ -1,7 +1,11 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include <mutex>
+
 namespace aemu_postoffice_server {
+
+static std::mutex log_default_mutex;
 
 void log_default(const char *format, ...){
 	va_list args;
@@ -11,7 +15,9 @@ void log_default(const char *format, ...){
 	vsnprintf(buf, sizeof(buf), format, args);
 	va_end(args);
 
+	log_default_mutex.lock();
 	fprintf(stdout, "%s", buf);
+	log_default_mutex.unlock();
 }
 
 void (*LOG)(const char *format, ...) = log_default;

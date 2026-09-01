@@ -48,4 +48,5 @@ jobs:
            server_cpp/aemu_postoffice
            server_cpp/game_db.json
            server_cpp/db_convert.js
+           server_cpp/config.json
         if-no-files-found: error

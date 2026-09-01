@@ -68,4 +68,7 @@ struct config {
 	int adhocctl_max_num_sessions = 1000;
 };
 
+bool parse_config_from_json(std::string path, struct config &out);
+void dump_config_to_log(const struct config &config);
+
 }

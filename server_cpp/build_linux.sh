@@ -1,6 +1,6 @@
 set -xe
 
-SRC="log native_socket_linux session server semaphore main ../adhocctl/server_cpp/log ../adhocctl/server_cpp/common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db"
+SRC="log native_socket_linux session server semaphore main ../adhocctl/server_cpp/log ../adhocctl/server_cpp/common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config"
 
 BUILD_FLAGS="-g -O2 -fPIC --std=c++20 -Wformat"
 LINK_FLAGS=""
