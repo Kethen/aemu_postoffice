@@ -85,6 +85,7 @@ std::string read_file_to_string(std::string path){
 	}
 
 	std::string ret = read_all_to_string(file);
+	fclose(file);
 	return ret;
 }
 
