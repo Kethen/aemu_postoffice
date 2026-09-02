@@ -40,6 +40,7 @@ struct config {
 	// restrict session creation and data communication based on data from integrated adhocctl server
 	bool strict_mode = true;
 
+
 	// -- adhocctl settings --
 	// enable built-in adhocctl
 	bool enable_adhocctl = true;
@@ -66,6 +67,11 @@ struct config {
 
 	// maximum number of pending and active adhocctl sessions before new connections are rejected
 	int adhocctl_max_num_sessions = 1000;
+
+
+	// -- http status page settings --
+	int http_status_server_port = 8888;
+
 };
 
 bool parse_config_from_json(std::string path, struct config &out);
