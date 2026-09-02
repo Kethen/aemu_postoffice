@@ -123,7 +123,7 @@ int main(int argc, char **argv){
 				if ((begin - last_dump) / std::chrono::seconds(1) >= 5) {
 					last_dump = begin;
 					struct aemu_postoffice_server::snapshot snapshot = server.get_snapshot();
-					aemu_postoffice_server::dump_snapshot_to_log(snapshot);
+					//aemu_postoffice_server::dump_snapshot_to_log(snapshot);
 					if (http_status_server != NULL){
 						http_status_server_mutex.lock();
 						http_status_server->update_relay_snapshot(snapshot);
@@ -169,7 +169,7 @@ int main(int argc, char **argv){
 					auto snapshot = adhocctl_server->get_snapshot();
 					if ((begin - last_dump) / std::chrono::seconds(1) >= 5){
 						last_dump = begin;
-						aemu_postoffice_adhocctl_server::dump_snapshot_to_log(snapshot);
+						//aemu_postoffice_adhocctl_server::dump_snapshot_to_log(snapshot);
 						if (http_status_server != NULL){
 							http_status_server_mutex.lock();
 							http_status_server->update_adhocctl_snapshot(snapshot);
