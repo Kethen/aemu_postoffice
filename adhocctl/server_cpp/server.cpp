@@ -195,6 +195,13 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 }
 
 Server::~Server(){
+	// close listen socket
+	if (sock_fd >= 0){
+		native_close(sock_fd);
+	} else {
+		return;
+	}
+
 	// cleanup threads
 	stopping = true;
 	for (int i = 0;i < config.adhocctl_num_threads;i++){
@@ -212,9 +219,6 @@ Server::~Server(){
 	for (auto client = clients.begin();client != clients.end();client++){
 		client->second.close_socket();
 	}
-
-	// close listen socket
-	native_close(sock_fd);
 }
 
 void Server::disconnect_client(std::string mac){
