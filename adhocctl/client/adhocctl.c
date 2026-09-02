@@ -1,23 +1,10 @@
 #include <string.h>
 
 #include "adhocctl.h"
+#include "adhocctl_mem.h"
 #include "../../client/sock_impl.h"
 #include "../../client/log_impl.h"
 #include "../packets_v1.h"
-
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
-
-struct session {
-	bool in_use;
-	char game_code[9];
-	char nickname[128];
-	char mac[6];
-	int sock_fd;
-	int protocol_revision;
-};
-
-// the expectation right now is just, 1 session per process
-struct session sessions[8] = {0};
 
 #define SEND_PACKET(sock_fd, packet) { \
 	bool abort = false; \
@@ -41,17 +28,9 @@ static enum adhocctl_call_status login_v1(int sock_fd, const char *game_code, co
 	SEND_PACKET(sock_fd, packet);
 }
 
-static void *create_adhocctl_session(void *addr, int addrlen, int protocol_revision, const char *game_code, const char *nickname, const char *mac, int channel){
-	switch(protocol_revision){
-		case 1:
-			break;
-		default:
-			LOG("%s: unsupported protocol revision %d\n", __func__, protocol_revision);
-			return NULL;
-	}
-
+static void *create_adhocctl_v1_session(void *addr, int addrlen, const char *game_code, const char *nickname, const char *mac){
 	struct session *slot = NULL;
-	for (int i = 0;i < ARRAY_SIZE(sessions);i++){
+	for (int i = 0;i < *num_sessions;i++){
 		if (!sessions[i].in_use){
 			slot = &sessions[i];
 			memset(slot, 0, sizeof(struct session));
@@ -64,8 +43,7 @@ static void *create_adhocctl_session(void *addr, int addrlen, int protocol_revis
 		return NULL;
 	}
 
-
-	slot->protocol_revision = protocol_revision;
+	slot->protocol_revision = 1;
 
 	int sock_fd = native_connect_tcp_sock(addr, addrlen);
 	if (sock_fd < 0){
@@ -75,40 +53,32 @@ static void *create_adhocctl_session(void *addr, int addrlen, int protocol_revis
 	slot->sock_fd = sock_fd;
 
 	enum adhocctl_call_status call_status = ADHOCCTL_CALL_SUCCESS;
-	switch(protocol_revision){
-		case 1:
-			call_status = login_v1(sock_fd, game_code, nickname, mac);
-			if (call_status != ADHOCCTL_CALL_SUCCESS){
-				slot->in_use = false;
-				return NULL;
-			}
-			break;
-		default:
-			LOG("%s: unreachable code path, debug this\n", __func__);
-			slot->in_use = false;
-			return NULL;
+	call_status = login_v1(sock_fd, game_code, nickname, mac);
+	if (call_status != ADHOCCTL_CALL_SUCCESS){
+		slot->in_use = false;
+		return NULL;
 	}
 
 	return slot;
 }
 
-void *create_adhocctl_session_v4(const struct adhocctl_addr_v4 *addr, int protocol_revision, const char *game_code, const char *nickname, const char *mac, int channel){
+void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const char *game_code, const char *nickname, const char *mac){
 	struct aemu_post_office_sock_addr postoffice_addr = {
 		.addr = addr->ip,
 		.port = addr->port,
 	};
 	native_sock_addr native_addr = {0};
 	to_native_sock_addr(&native_addr, &postoffice_addr);
-	return create_adhocctl_session(&native_addr, sizeof(native_addr), protocol_revision, game_code, nickname, mac, channel);
+	return create_adhocctl_v1_session(&native_addr, sizeof(native_addr), game_code, nickname, mac);
 }
 
-void *create_adhocctl_session_v6(const struct adhocctl_addr_v6 *addr, int protocol_revision, const char *game_code, const char *nickname, const char *mac, int channel){
+void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const char *game_code, const char *nickname, const char *mac){
 	struct aemu_post_office_sock6_addr postoffice_addr = {0};
 	memcpy(postoffice_addr.addr, addr->ip, 16);
 	postoffice_addr.port = addr->port;
 	native_sock6_addr native_addr = {0};
 	to_native_sock6_addr(&native_addr, &postoffice_addr);
-	return create_adhocctl_session(&native_addr, sizeof(native_addr), protocol_revision, game_code, nickname, mac, channel);
+	return create_adhocctl_v1_session(&native_addr, sizeof(native_addr), game_code, nickname, mac);
 }
 
 void destroy_adhocctl_session(void *session){

@@ -27,7 +27,7 @@ int main() {
 	sprintf(nickname_a, "nickname a");
 	char mac_a[6];
 	memset(mac_a, 0xa, 6);
-	void *session_a = create_adhocctl_session_v4(&addr, 1, game_code, nickname_a, mac_a, 11);
+	void *session_a = create_adhocctl_v1_session_v4(&addr, game_code, nickname_a, mac_a);
 	if (session_a == NULL){
 		printf("%s: cannot create session a\n", __func__);
 		exit(1);
@@ -37,7 +37,7 @@ int main() {
 	sprintf(nickname_b, "nickname b");
 	char mac_b[6];
 	memset(mac_b, 0xb, 6);
-	void *session_b = create_adhocctl_session_v4(&addr, 1, game_code, nickname_b, mac_b, 11);
+	void *session_b = create_adhocctl_v1_session_v4(&addr, game_code, nickname_b, mac_b);
 	if (session_b == NULL){
 		printf("%s: cannot create session b\n", __func__);
 		exit(1);
