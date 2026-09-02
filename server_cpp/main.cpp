@@ -23,6 +23,20 @@
 #include "../adhocctl/server_cpp/server.h"
 #include "http_status_server.h"
 
+#ifdef __unix__
+// for naming threads
+#include <pthread.h>
+#endif
+
+static void set_thread_name(std::string name){
+	#if __unix__
+	pthread_t tid = pthread_self();
+	pthread_setname_np(tid, name.c_str());
+	#else
+	// hm, what do
+	#endif
+}
+
 bool should_stop = false;
 
 #ifdef __unix__
@@ -44,16 +58,24 @@ int main(int argc, char **argv){
 	chdir(exe_path);
 
 	struct aemu_postoffice_server::config config;
-	bool config_parse_result = aemu_postoffice_server::parse_config_from_json("./config.json", config);
-	if (!config_parse_result){
-		aemu_postoffice_server::LOG("%s: config parse failed\n", __func__);
-		exit(1);
-	}
-	dump_config_to_log(config);
 	struct aemu_postoffice_adhocctl_server::game_db game_db;
-	bool game_db_parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json("./game_db.json", game_db);
-	if (!game_db_parse_result){
-		aemu_postoffice_server::LOG("%s: game db parsing failed!\n", __func__);
+
+	auto parse_config_and_game_db = [&config, &game_db] () -> bool {
+		bool config_parse_result = aemu_postoffice_server::parse_config_from_json("./config.json", config);
+		if (!config_parse_result){
+			aemu_postoffice_server::LOG("%s: config parse failed\n", __func__);
+			return false;
+		}
+
+		bool game_db_parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json("./game_db.json", game_db);
+		if (!game_db_parse_result){
+			aemu_postoffice_server::LOG("%s: game db parsing failed!\n", __func__);
+			return false;
+		}
+		return true;
+	};
+
+	if (!parse_config_and_game_db()){
 		exit(1);
 	}
 
@@ -78,6 +100,8 @@ int main(int argc, char **argv){
 	std::mutex http_status_server_mutex;
 
 	threads.emplace_back([&config, &server, &relay_mutex, &http_status_server, &http_status_server_mutex] {
+		set_thread_name("relay main");
+
 		auto last_dump = std::chrono::high_resolution_clock::now();
 		while(!should_stop){
 			auto begin = std::chrono::high_resolution_clock::now();
@@ -120,6 +144,8 @@ int main(int argc, char **argv){
 		http_status_server = new aemu_postoffice_server::HttpStatusServer(config, game_db);
 
 		threads.emplace_back([&config, &adhocctl_server, &relay_mutex, &server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex] {
+			set_thread_name("adhocctl main");
+
 			auto last_dump = std::chrono::high_resolution_clock::now();
 			auto last_sync = std::chrono::high_resolution_clock::now();
 			while(!should_stop){
@@ -163,6 +189,8 @@ int main(int argc, char **argv){
 		});
 
 		threads.emplace_back([&http_status_server, &http_status_server_mutex] {
+			set_thread_name("status watchdog");
+
 			while(!should_stop){
 				{
 					std::lock_guard<std::mutex> lg(http_status_server_mutex);
@@ -175,6 +203,42 @@ int main(int argc, char **argv){
 			}
 		});
 	}
+
+	threads.emplace_back([&server, &relay_mutex, &adhocctl_server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex, &config, &game_db, &parse_config_and_game_db] () {
+		set_thread_name("config reload");
+
+		auto last_parse = std::chrono::high_resolution_clock::now();
+		while(!should_stop){
+			auto now = std::chrono::high_resolution_clock::now();
+			if ((now - last_parse) / std::chrono::seconds(1) < 5){
+				std::this_thread::sleep_for(std::chrono::milliseconds(250));
+				continue;
+			}
+
+			last_parse = now;
+			if (!parse_config_and_game_db()){
+				std::this_thread::sleep_for(std::chrono::milliseconds(250));
+				continue;
+			}
+
+			relay_mutex.lock();
+			server.set_config(config);
+			relay_mutex.unlock();
+			if (adhocctl_server != NULL){
+				adhocctl_mutex.lock();
+				adhocctl_server->set_config(config);
+				adhocctl_server->set_game_db(game_db);
+				adhocctl_mutex.unlock();
+			}
+			if (http_status_server != NULL){
+				http_status_server_mutex.lock();
+				http_status_server->set_game_db(game_db);
+				http_status_server_mutex.unlock();
+			}
+
+			std::this_thread::sleep_for(std::chrono::milliseconds(250));
+		}
+	});
 
 	for (auto &thread : threads){
 		thread.join();
