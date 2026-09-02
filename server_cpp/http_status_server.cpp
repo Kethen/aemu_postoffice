@@ -189,7 +189,7 @@ void HttpStatusServer::update_adhocctl_snapshot(const struct aemu_postoffice_adh
 	adhocctl_snapshot_mutex.unlock();
 }
 
-void HttpStatusServer::update_game_db(const struct aemu_postoffice_adhocctl_server::game_db &game_db){
+void HttpStatusServer::set_game_db(const struct aemu_postoffice_adhocctl_server::game_db &game_db){
 	game_db_mutex.lock();
 	this->game_db = game_db;
 	game_db_mutex.unlock();

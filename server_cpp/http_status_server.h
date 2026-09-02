@@ -18,7 +18,7 @@ class HttpStatusServer {
 		~HttpStatusServer();
 		void update_adhocctl_snapshot(const struct aemu_postoffice_adhocctl_server::snapshot &snapshot);
 		void update_relay_snapshot(const struct snapshot &snapshot);
-		void update_game_db(const struct aemu_postoffice_adhocctl_server::game_db &game_db);
+		void set_game_db(const struct aemu_postoffice_adhocctl_server::game_db &game_db);
 
 		bool is_server_running();
 		// currently it is not possible to dynamically change status page related configurations
