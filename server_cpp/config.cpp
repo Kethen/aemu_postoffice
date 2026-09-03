@@ -80,6 +80,7 @@ bool parse_config_from_json(std::string path, struct config &out){
 	PARSE_BOOL(adhocctl_relay_only);
 	PARSE_INTEGER(adhocctl_timeout_ms);
 	PARSE_INTEGER(adhocctl_max_num_sessions);
+	PARSE_INTEGER(adhocctl_max_num_sessions_per_ip);
 	PARSE_INTEGER(http_status_server_port);
 
 	#undef PARSE_INTEGER
@@ -121,6 +122,7 @@ void dump_config_to_log(const struct config &config){
 	DUMP_BOOL(adhocctl_relay_only);
 	DUMP_INTEGER(adhocctl_timeout_ms);
 	DUMP_INTEGER(adhocctl_max_num_sessions);
+	DUMP_INTEGER(adhocctl_max_num_sessions_per_ip);
 	DUMP_INTEGER(http_status_server_port);
 
 	#undef DUMP_INTEGER

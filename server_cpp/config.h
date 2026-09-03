@@ -70,6 +70,8 @@ struct config {
 	// maximum number of pending and active adhocctl sessions before new connections are rejected
 	int adhocctl_max_num_sessions = 1000;
 
+	// maximum number of sessions per ip
+	int adhocctl_max_num_sessions_per_ip = 16;
 
 	// -- http status page settings --
 	// http port serving the status page

@@ -41,6 +41,7 @@ class Server {
 	private:
 		std::unordered_map<std::string, Client> pending_clients; // clients that have connected but not logged in, keyed with {ip:port}
 		std::unordered_map<std::string, Client> clients; // logged in clients, keyed with mac address bytes
+		std::unordered_map<std::string, int> per_ip_client_count;
 
 		bool stopping;
 		std::vector<std::thread> pending_clients_workers;
@@ -71,6 +72,10 @@ class Server {
 		void disconnect_client(std::string mac);
 		void remove_client(std::string mac);
 		void connect_client(std::string mac, std::string group_name, bool groupless_group);
+
+		int get_per_ip_client_count(std::string ip);
+		void increment_per_ip_client_count(std::string ip);
+		void decrement_per_ip_client_count(std::string ip);
 };
 
 /* server loop
