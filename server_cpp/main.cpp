@@ -80,9 +80,12 @@ int main(int argc, char **argv){
 	}
 
 	#ifdef __unix__
+	static const int buffer_fds = 100;
+	static const int http_fds = 1000;
+	int file_limit = config.max_num_sessions + config.adhocctl_max_num_sessions + buffer_fds + http_fds;
 	struct rlimit num_file_limit = {
-		(rlim_t)(config.max_num_sessions + config.adhocctl_max_num_sessions + 10),
-		(rlim_t)(config.max_num_sessions + config.adhocctl_max_num_sessions + 10)
+		(rlim_t)file_limit,
+		(rlim_t)file_limit
 	};
 	int set_limit_status = setrlimit(RLIMIT_NOFILE, &num_file_limit);
 	if (set_limit_status == -1){
