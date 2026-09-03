@@ -33,6 +33,7 @@ class Server{
 	private:
 		std::list<PendingSession> pending_sessions;
 		std::unordered_map<std::string, Session> sessions;
+		std::unordered_map<std::string, int> per_mac_session_count;
 
 		bool stopping;
 

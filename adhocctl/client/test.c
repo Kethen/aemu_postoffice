@@ -15,7 +15,48 @@ void sleep_ms(int ms){
 	nanosleep(&sleep_time, NULL);
 }
 
-int main() {
+void test_too_many_sessions(){
+	struct adhocctl_addr_v4 addr = {
+		.ip = 0x0100007f,
+		.port = 0xb06a,
+	};
+
+	char game_code[] = "ABCD12345";
+	char nickname[128] = {0};
+
+	void *handles[17] = {0};
+	for (int i = 0;i < 17;i++){
+		char mac[6] = {0};
+		*(int *)mac = i + 1;
+		sprintf(nickname, "%d", i);
+		handles[i] = create_adhocctl_v1_session_v4(&addr, game_code, nickname, mac);
+		sleep_ms(120);
+	}
+
+	for (int i = 0;i < 16;i++){
+		struct adhocctl_event event = {0};
+		adhocctl_get_event(handles[i], &event);
+		if (event.type == ADHOCCTL_EVENT_ERROR){
+			printf("%s: session %d is somehow dead\n", __func__, i);
+			exit(1);
+		}
+	}
+
+	struct adhocctl_event event = {0};
+	adhocctl_get_event(handles[16], &event);
+	if (event.type != ADHOCCTL_EVENT_ERROR){
+		printf("%s: session %d is somehow not dead\n", __func__, 16);
+		exit(1);
+	}
+
+	for (int i = 0;i < 17;i++){
+		destroy_adhocctl_session(handles[i]);
+	}
+
+	sleep_ms(120);
+}
+
+void test_protocol(){
 	struct adhocctl_addr_v4 addr = {
 		.ip = 0x0100007f,
 		.port = 0xb06a,
@@ -185,6 +226,11 @@ int main() {
 		printf("%s: expected event ADHOCCTL_EVENT_DISCONNECT, got %d\n", __func__, event.type);
 		exit(1);
 	}
+}
+
+int main(){
+	test_too_many_sessions();
+	test_protocol();
 
 	printf("%s: test ok\n", __func__);
 }

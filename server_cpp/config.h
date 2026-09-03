@@ -40,6 +40,8 @@ struct config {
 	// restrict session creation and data communication based on data from integrated adhocctl server
 	bool strict_mode = true;
 
+	// maximum number of sessions per mac address
+	int max_num_sessions_per_mac = 20;
 
 	// -- adhocctl settings --
 	// enable built-in adhocctl
@@ -68,8 +70,11 @@ struct config {
 	// maximum number of pending and active adhocctl sessions before new connections are rejected
 	int adhocctl_max_num_sessions = 1000;
 
+	// maximum number of sessions per ip
+	int adhocctl_max_num_sessions_per_ip = 16;
 
 	// -- http status page settings --
+	// http port serving the status page
 	int http_status_server_port = 8888;
 
 };

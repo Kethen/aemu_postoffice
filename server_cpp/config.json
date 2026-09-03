@@ -9,6 +9,7 @@
     "connect_time_limit_ms":5000,
     "max_num_sessions":4000,
     "strict_mode":true,
+    "max_num_sessions_per_mac":20,
     "enable_adhocctl":true,
     "adhocctl_target_tick_interval_ms":33,
     "adhocctl_target_tick_interval_idle_ms":500,
@@ -18,5 +19,6 @@
     "adhocctl_relay_only":true,
     "adhocctl_timeout_ms":30000,
     "adhocctl_max_num_sessions":1000,
+    "adhocctl_max_num_sessions_per_ip":16,
     "http_status_server_port":8888
 }

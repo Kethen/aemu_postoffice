@@ -264,6 +264,7 @@ void Server::remove_client(std::string mac){
 	}
 	disconnect_client(mac);
 	target->second.close_socket();
+	decrement_per_ip_client_count(target->second.get_ip());
 	clients.erase(target);
 }
 
@@ -363,6 +364,7 @@ ServerPumpStatus Server::pump(){
 			existing_pending_client->second.close_socket();
 			pending_clients.erase(existing_pending_client);
 		}
+
 		pending_clients.insert_or_assign(socket_name, new_client);
 	}
 
@@ -429,6 +431,14 @@ ServerPumpStatus Server::pump(){
 				}
 			}
 
+			if (get_per_ip_client_count(target->second.get_ip()) >= config.adhocctl_max_num_sessions_per_ip){
+				// just evict the pending session
+				target->second.close_socket();
+				pending_clients.erase(target);
+				continue;
+			}
+
+			increment_per_ip_client_count(target->second.get_ip());
 			clients.insert_or_assign(mac, target->second);
 			connect_client(mac, "", true);
 
@@ -542,6 +552,31 @@ void Server::set_config(const struct aemu_postoffice_server::config &config){
 
 void Server::set_game_db(const struct game_db &game_db){
 	this->game_db = game_db;
+}
+
+int Server::get_per_ip_client_count(std::string ip){
+	auto count = per_ip_client_count.find(ip);
+	if (count == per_ip_client_count.end()){
+		return 0;
+	}
+	return count->second;
+}
+
+void Server::increment_per_ip_client_count(std::string ip){
+	auto count = per_ip_client_count.find(ip);
+	if (count == per_ip_client_count.end()){
+		per_ip_client_count[ip] = 1;
+		return;
+	}
+	count->second = count->second + 1;
+}
+
+void Server::decrement_per_ip_client_count(std::string ip){
+	auto count = per_ip_client_count.find(ip);
+	count->second = count->second - 1;
+	if (count->second == 0){
+		per_ip_client_count.erase(count);
+	}
 }
 
 }
