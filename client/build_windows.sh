@@ -5,7 +5,7 @@ CPPC=x86_64-w64-mingw32-g++
 
 BUILD_FLAGS="-fPIC -g -O2 -Wformat"
 
-C_SRC="log_impl_stdc postoffice sock_impl_windows postoffice_mem_stdc ../adhocctl/client/adhocctl"
+C_SRC="log_impl_stdc postoffice sock_impl_windows postoffice_mem_stdc ../adhocctl/client/adhocctl ../adhocctl/client/adhocctl_mem"
 CPP_SRC="mutex_impl_cpp delay_impl_cpp"
 C_SRC_TEST="test"
 
