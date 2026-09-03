@@ -70,6 +70,7 @@ bool parse_config_from_json(std::string path, struct config &out){
 	PARSE_INTEGER(connect_time_limit_ms);
 	PARSE_INTEGER(max_num_sessions);
 	PARSE_BOOL(strict_mode);
+	PARSE_INTEGER(max_num_sessions_per_mac);
 	PARSE_BOOL(enable_adhocctl);
 	PARSE_INTEGER(adhocctl_target_tick_interval_ms);
 	PARSE_INTEGER(adhocctl_target_tick_interval_idle_ms);
@@ -110,6 +111,7 @@ void dump_config_to_log(const struct config &config){
 	DUMP_INTEGER(connect_time_limit_ms);
 	DUMP_INTEGER(max_num_sessions);
 	DUMP_BOOL(strict_mode);
+	DUMP_INTEGER(max_num_sessions_per_mac);
 	DUMP_BOOL(enable_adhocctl);
 	DUMP_INTEGER(adhocctl_target_tick_interval_ms);
 	DUMP_INTEGER(adhocctl_target_tick_interval_idle_ms);

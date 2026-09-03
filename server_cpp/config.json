@@ -9,6 +9,7 @@
     "connect_time_limit_ms":5000,
     "max_num_sessions":4000,
     "strict_mode":true,
+    "max_num_sessions_per_mac":20,
     "enable_adhocctl":true,
     "adhocctl_target_tick_interval_ms":33,
     "adhocctl_target_tick_interval_idle_ms":500,

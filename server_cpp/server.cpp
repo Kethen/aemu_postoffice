@@ -305,6 +305,9 @@ ServerPumpStatus Server::pump(){
 	for(auto &ready_pending_sessions_set : this->ready_pending_sessions){
 		ready_pending_sessions_set.clear();
 	}
+	for(auto &sessions_to_remove_set : this->sessions_to_remove){
+		sessions_to_remove_set.clear();
+	}
 
 	int i = 0;
 	for(auto &pending_session : this->pending_sessions){
@@ -326,10 +329,33 @@ ServerPumpStatus Server::pump(){
 			Session new_session = ready_session->create_session(this->sessions);
 			std::string identifier = new_session.get_identifier();
 			auto old_session = this->sessions.find(identifier);
+			bool replaced = false;
 			if (old_session != this->sessions.end()){
 				LOG("%s: replacing session %s from %s by session from %s\n", __func__, identifier.c_str(), old_session->second.get_client_addr().c_str(), new_session.get_client_addr().c_str());
 				old_session->second.close_socket();
+				replaced = true;
 			}
+
+			std::string mac = new_session.get_from_mac();
+			auto count = per_mac_session_count.find(mac);
+			if (count == per_mac_session_count.end()){
+				per_mac_session_count[mac] = 1;
+			} else if (!replaced){
+				if (count->second >= config.max_num_sessions_per_mac){
+					this->pending_sessions_to_remove[0].push_back(ready_session);
+					new_session.close_socket();
+
+					// this is peer killing, we kill the connect if the accept pops the limit
+					std::string peer_identifier = new_session.get_peer_identifier();
+					if (peer_identifier != std::string("")){
+						sessions_to_remove[0].insert(peer_identifier);
+					}
+
+					continue;
+				}
+				count->second = count->second + 1;
+			}
+
 			this->sessions.insert_or_assign(identifier, new_session);
 			this->pending_sessions_to_remove[0].push_back(ready_session);
 		}
@@ -349,9 +375,6 @@ ServerPumpStatus Server::pump(){
 	// pump data from clients
 	for(auto &sessions_to_pump_set : this->sessions_to_pump){
 		sessions_to_pump_set.clear();
-	}
-	for(auto &sessions_to_remove_set : this->sessions_to_remove){
-		sessions_to_remove_set.clear();
 	}
 
 	i = 0;
@@ -391,6 +414,16 @@ ServerPumpStatus Server::pump(){
 				continue;
 			}
 			session->second.close_socket();
+
+			auto reduce_count = [this] (std::string mac) {
+				auto count = per_mac_session_count.find(mac);
+				count->second = count->second - 1;
+				if (count->second == 0){
+					per_mac_session_count.erase(count);
+				}
+			};
+			reduce_count(session->second.get_from_mac());
+
 			std::string peer_identifier = session->second.get_peer_identifier();
 			LOG("%s: removing %s of %s\n", __func__, session_name.c_str(), session->second.get_client_addr().c_str());
 			this->sessions.erase(session);
@@ -398,6 +431,7 @@ ServerPumpStatus Server::pump(){
 				auto peer_session = this->sessions.find(peer_identifier);
 				if (peer_session != this->sessions.end()){
 					peer_session->second.close_socket();
+					reduce_count(peer_session->second.get_from_mac());
 					LOG("%s: removing %s of %s by peer relation\n", __func__, peer_identifier.c_str(), peer_session->second.get_client_addr().c_str());
 					this->sessions.erase(peer_session);
 				}

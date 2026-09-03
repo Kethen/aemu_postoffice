@@ -54,6 +54,39 @@ void sleep_ms(int ms){
 	nanosleep(&sleep_time, NULL);
 }
 
+void test_too_many_sessions(){
+	static const uint8_t mac[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
+	struct aemu_post_office_sock_addr local_addr = {
+		.addr = htonl(TARGET_INADDR),
+		.port = htons(SERVER_PORT)
+	};
+
+	void *pdp_handles[21];
+	for (int i = 0;i < 21;i++){
+		int state;
+		pdp_handles[i] = pdp_create_v4(&local_addr, mac, i + 1, &state);
+		sleep_ms(60);
+	}
+
+	sleep_ms(100);
+
+	for (int i = 0;i < 20;i++){
+		if (pdp_is_dead(pdp_handles[i])){
+			LOG("%s: pdp handle %d died somehow\n", __func__, i);
+			exit(1);
+		}
+	}
+
+	if (!pdp_is_dead(pdp_handles[20])){
+		LOG("%s: pdp_handle %d is not dead somehow\n", __func__, 20);
+		exit(1);
+	}
+
+	for (int i = 0;i < 21;i++){
+		pdp_delete(pdp_handles[i]);
+	}
+}
+
 void test_pdp(){
 	struct aemu_post_office_sock_addr local_addr = {
 		.addr = htonl(TARGET_INADDR),
@@ -730,6 +763,7 @@ int main(){
 
 	adhocctl_init();
 
+	test_too_many_sessions();
 	test_pdp();
 	test_ptp();
 	LOG("%s: test ok\n", __func__);
