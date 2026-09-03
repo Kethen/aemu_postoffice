@@ -43,9 +43,11 @@ jobs:
            client/postoffice_client_import.S
            client/aemu_postoffice.prx
            client/postoffice_client.h
+           adhocctl/client/adhocctl.h
            client/libaemu_postoffice_client.so
            client/libaemu_postoffice_client.dll
            server_cpp/aemu_postoffice
+           server_cpp/aemu_postoffice.exe
            server_cpp/game_db.json
            server_cpp/db_convert.js
            server_cpp/config.json
