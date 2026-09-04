@@ -30,5 +30,5 @@ do
 	test_objs="$test_objs ${f}.o"
 done
 
-$CPPC $BUILD_FLAGS $lib_objs $test_objs -o test.out
-$CPPC $BUILD_FLAGS -shared $lib_objs -o libaemu_postoffice_client.so
+$CPPC $BUILD_FLAGS $lib_objs $test_objs -lpthread -o test.out
+$CPPC $BUILD_FLAGS -shared $lib_objs -lpthread -o libaemu_postoffice_client.so
