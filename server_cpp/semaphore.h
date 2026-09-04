@@ -2,6 +2,8 @@
 
 #include <semaphore>
 
+namespace aemu_postoffice_server {
+
 class Semaphore{
 	public:
 		Semaphore() : sema(0){}
@@ -12,3 +14,5 @@ class Semaphore{
 	private:
 		std::counting_semaphore<65535> sema;
 };
+
+}

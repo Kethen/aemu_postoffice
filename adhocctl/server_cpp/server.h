@@ -48,20 +48,20 @@ class Server {
 		std::vector<std::vector<Client *>>pending_client_work_queues;
 		std::vector<std::vector<std::string>> pending_clients_to_remove;
 		std::vector<std::vector<std::string>> pending_clients_to_upgrade;
-		std::vector<Semaphore> pending_clients_worker_start_sema;
-		std::vector<Semaphore> pending_clients_worker_finish_sema;
+		std::vector<aemu_postoffice_server::Semaphore> pending_clients_worker_start_sema;
+		std::vector<aemu_postoffice_server::Semaphore> pending_clients_worker_finish_sema;
 
 		std::vector<std::thread> clients_recv_workers;
 		std::vector<std::vector<struct group*>> client_recv_work_queue;
 		std::vector<std::vector<std::string>> clients_to_remove;
 		std::vector<std::vector<struct client_op>> client_connect_disconnect_ops;
-		std::vector<Semaphore> clients_recv_worker_start_sema;
-		std::vector<Semaphore> clients_recv_worker_finish_sema;
+		std::vector<aemu_postoffice_server::Semaphore> clients_recv_worker_start_sema;
+		std::vector<aemu_postoffice_server::Semaphore> clients_recv_worker_finish_sema;
 
 		std::vector<std::thread> clients_send_workers;
 		std::vector<std::vector<Client *>>client_send_work_queue;
-		std::vector<Semaphore> clients_send_worker_start_sema;
-		std::vector<Semaphore> clients_send_worker_finish_sema;
+		std::vector<aemu_postoffice_server::Semaphore> clients_send_worker_start_sema;
+		std::vector<aemu_postoffice_server::Semaphore> clients_send_worker_finish_sema;
 
 		// the grouping tree
 		std::unordered_map<std::string, game> games;

@@ -57,12 +57,12 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 	stopping = false;
 
 	for (int i = 0;i < config.adhocctl_num_threads;i++){
-		pending_clients_worker_start_sema.push_back(Semaphore());
-		pending_clients_worker_finish_sema.push_back(Semaphore());
-		clients_recv_worker_start_sema.push_back(Semaphore());
-		clients_recv_worker_finish_sema.push_back(Semaphore());
-		clients_send_worker_start_sema.push_back(Semaphore());
-		clients_send_worker_finish_sema.push_back(Semaphore());
+		pending_clients_worker_start_sema.push_back(aemu_postoffice_server::Semaphore());
+		pending_clients_worker_finish_sema.push_back(aemu_postoffice_server::Semaphore());
+		clients_recv_worker_start_sema.push_back(aemu_postoffice_server::Semaphore());
+		clients_recv_worker_finish_sema.push_back(aemu_postoffice_server::Semaphore());
+		clients_send_worker_start_sema.push_back(aemu_postoffice_server::Semaphore());
+		clients_send_worker_finish_sema.push_back(aemu_postoffice_server::Semaphore());
 	}
 
 	for (int i = 0;i < config.adhocctl_num_threads;i++){
