@@ -20,7 +20,7 @@ struct snapshot_game &snapshot_add_game(struct snapshot &snapshot, std::string g
 
 std::string make_group_key(int channel, std::string group_name){
 	char buf[128] = {0};
-	sprintf(buf, "%d_%s", channel, group_name.c_str());
+	snprintf(buf, sizeof(buf), "%d_%s", channel, group_name.c_str());
 	return std::string(buf);
 }
 

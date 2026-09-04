@@ -71,7 +71,7 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		this->pending_clients_to_upgrade.push_back(std::vector<std::string>());
 		pending_clients_workers.push_back(std::thread([this, i]{
 			char thread_name_buf[128] = {0};
-			sprintf(thread_name_buf, "adhocctl_%d", i);
+			snprintf(thread_name_buf, sizeof(thread_name_buf), "adhocctl_%d", i);
 			set_thread_name(std::string(thread_name_buf));
 
 			while(true){
@@ -101,7 +101,7 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		client_connect_disconnect_ops.push_back(std::vector<client_op>());
 		clients_recv_workers.push_back(std::thread([this, i]{
 			char thread_name_buf[128] = {0};
-			sprintf(thread_name_buf, "adhocctl_recv_%d", i);
+			snprintf(thread_name_buf, sizeof(thread_name_buf), "adhocctl_recv_%d", i);
 			set_thread_name(std::string(thread_name_buf));
 
 			while(true){
@@ -171,7 +171,7 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		client_send_work_queue.push_back(std::vector<Client *>());
 		clients_send_workers.push_back(std::thread([this, i]{
 			char thread_name_buf[128] = {0};
-			sprintf(thread_name_buf, "adhocctl_send_%d", i);
+			snprintf(thread_name_buf, sizeof(thread_name_buf), "adhocctl_send_%d", i);
 			set_thread_name(std::string(thread_name_buf));
 
 			while(true){
@@ -360,7 +360,7 @@ ServerPumpStatus Server::pump(){
 		}
 
 		char socket_name_buf[128] = {0};
-		sprintf(socket_name_buf, "%s:%u", peer_addr.c_str(), peer_port);
+		snprintf(socket_name_buf, sizeof(socket_name_buf), "%s:%u", peer_addr.c_str(), peer_port);
 		std::string socket_name = std::string(socket_name_buf);
 		Client new_client(accept_status, peer_addr, peer_port, socket_name, 1, &config);
 		auto existing_pending_client = pending_clients.find(socket_name);
