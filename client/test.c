@@ -64,7 +64,7 @@ void test_too_many_sessions(){
 	void *pdp_handles[21];
 	for (int i = 0;i < 21;i++){
 		int state;
-		pdp_handles[i] = pdp_create_v4(&local_addr, mac, i + 1, &state);
+		pdp_handles[i] = pdp_create_v4(&local_addr, (const char *)mac, i + 1, &state);
 		sleep_ms(60);
 	}
 
@@ -100,7 +100,7 @@ void test_pdp(){
 	static const int port_c = 34567;
 
 	int state;
-	void *pdp_handle_a_replace = pdp_create_v4(&local_addr, pdp_mac_a, port_a, &state);
+	void *pdp_handle_a_replace = pdp_create_v4(&local_addr, (const char *)pdp_mac_a, port_a, &state);
 	if (pdp_handle_a_replace == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -109,7 +109,7 @@ void test_pdp(){
 	// just so we know the last socket is the one gets replaced
 	sleep_ms(1000);
 
-	void *pdp_handle_a = pdp_create_v4(&local_addr, pdp_mac_a, port_a, &state);
+	void *pdp_handle_a = pdp_create_v4(&local_addr, (const char *)pdp_mac_a, port_a, &state);
 
 	if (pdp_handle_a == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
@@ -141,12 +141,12 @@ void test_pdp(){
 	sleep_ms(100);
 	pdp_delete(pdp_handle_a_replace);
 
-	void *pdp_handle_b = pdp_create_v4(&local_addr, pdp_mac_b, port_b, &state);
+	void *pdp_handle_b = pdp_create_v4(&local_addr, (const char *)pdp_mac_b, port_b, &state);
 	if (pdp_handle_b == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
 	}
-	void *pdp_handle_c = pdp_create_v4(&local_addr, pdp_mac_c, port_c, &state);
+	void *pdp_handle_c = pdp_create_v4(&local_addr, (const char *)pdp_mac_c, port_c, &state);
 	if (pdp_handle_c == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -162,14 +162,14 @@ void test_pdp(){
 		}
 		int send_status = 0;
 		for (int j = 0;j < 2;j++){
-			int send_status = pdp_send(pdp_handle_a, pdp_mac_b, port_b, test_data, sizeof(test_data), false);
+			int send_status = pdp_send(pdp_handle_a, (const char *)pdp_mac_b, port_b, test_data, sizeof(test_data), false);
 			if (send_status != 0){
 				LOG("%s: failed sending pdp packet from a to b, %d\n", __func__, send_status);
 				exit(1);
 			}
 		}
 
-		send_status = pdp_send(pdp_handle_b, pdp_mac_c, port_c, test_data, sizeof(test_data), false);
+		send_status = pdp_send(pdp_handle_b, (const char *)pdp_mac_c, port_c, test_data, sizeof(test_data), false);
 		if (send_status != 0){
 			LOG("%s: failed sending pdp packet from b to c, %d\n", __func__, send_status);
 			exit(1);
@@ -259,7 +259,7 @@ void test_pdp(){
 
 		sleep_ms(100);
 
-		send_status = pdp_send(pdp_handle_a, pdp_mac_c, port_c, test_data, sizeof(test_data), false);
+		send_status = pdp_send(pdp_handle_a, (const char *)pdp_mac_c, port_c, test_data, sizeof(test_data), false);
 		if (send_status != 0){
 			LOG("%s: failed sending pdp packet from a to c, %d\n", __func__, send_status);
 			exit(1);
@@ -303,7 +303,7 @@ void test_pdp(){
 			exit(1);
 		}
 
-		send_status = pdp_send(pdp_handle_c, pdp_mac_a, port_a, test_data, sizeof(test_data), true);
+		send_status = pdp_send(pdp_handle_c, (const char *)pdp_mac_a, port_a, test_data, sizeof(test_data), true);
 		if (send_status != 0){
 			LOG("%s: failed sending pdp packet from c to a, %d\n", __func__, send_status);
 			exit(1);
@@ -393,7 +393,7 @@ void test_ptp(){
 	static const int port_b = 23456;
 
 	int state;
-	void *listen_handle_a = ptp_listen_v4(&local_addr, ptp_mac_a, port_a, &state);
+	void *listen_handle_a = ptp_listen_v4(&local_addr, (const char *)ptp_mac_a, port_a, &state);
 	if (listen_handle_a == NULL){
 		LOG("%s: failed opening listen handle for a\n", __func__);
 		exit(1);
@@ -409,7 +409,7 @@ void test_ptp(){
 		exit(1);
 	}
 
-	void *listen_handle_b = ptp_listen_v4(&local_addr, ptp_mac_b, port_b, &state);
+	void *listen_handle_b = ptp_listen_v4(&local_addr, (const char *)ptp_mac_b, port_b, &state);
 	if (listen_handle_b == NULL){
 		LOG("%s: failed opening listen handle for b\n", __func__);
 		exit(1);
@@ -456,7 +456,7 @@ void test_ptp(){
 
 
 	pthread_create(&accept_thread_b, NULL, accept_ptp_connection, &task_b);
-	void *a_to_b = ptp_connect_v4(&local_addr, ptp_mac_a, port_a, ptp_mac_b, port_b, &state);
+	void *a_to_b = ptp_connect_v4(&local_addr, (const char *)ptp_mac_a, port_a, (const char *)ptp_mac_b, port_b, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from a to b\n", __func__);
 		exit(1);
@@ -468,7 +468,7 @@ void test_ptp(){
 	}
 
 	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &task_a);
-	void *b_to_a = ptp_connect_v4(&local_addr, ptp_mac_b, port_b, ptp_mac_a, port_a, &state);
+	void *b_to_a = ptp_connect_v4(&local_addr, (const char *)ptp_mac_b, port_b, (const char *)ptp_mac_a, port_a, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from b to a\n", __func__);
 		exit(1);
@@ -680,12 +680,12 @@ void adhocctl_init(){
 	uint16_t port_b = 23456;
 	uint16_t port_c = 34567;
 	int state = 0;
-	void *pdp_handle = pdp_create_v4(&local_addr, mac_a, port_a, &state);
+	void *pdp_handle = pdp_create_v4(&local_addr, (const char *)mac_a, port_a, &state);
 	if (pdp_handle == NULL){
 		LOG("%s: failed creating test pdp handle\n", __func__);
 		exit(1);
 	}
-	void *ptp_listen_handle = ptp_listen_v4(&local_addr, mac_a, port_a, &state);
+	void *ptp_listen_handle = ptp_listen_v4(&local_addr, (const char *)mac_a, port_a, &state);
 	if (ptp_listen_handle == NULL){
 		LOG("%s: failed creating test ptp listen handle\n", __func__);
 		exit(1);
@@ -717,7 +717,7 @@ void adhocctl_init(){
 	char group[8] = "abcd1234";
 	int channel = 1;
 
-	void *adhocctl_handle_a = create_adhocctl_v1_session_v4(&adhocctl_addr, gamecode, nickname_a, mac_a);
+	void *adhocctl_handle_a = create_adhocctl_v1_session_v4(&adhocctl_addr, gamecode, nickname_a, (const char *)mac_a);
 	if (adhocctl_handle_a == NULL){
 		LOG("%s: failed creating adhocctl session for a\n", __func__);
 		exit(1);
@@ -725,19 +725,19 @@ void adhocctl_init(){
 	adhocctl_connect(adhocctl_handle_a, group);
 	sleep_ms(100);
 
-	void *ptp_listen_handle_a = ptp_listen_v4(&local_addr, mac_a, port_a, &state);
+	void *ptp_listen_handle_a = ptp_listen_v4(&local_addr, (const char *)mac_a, port_a, &state);
 	if (ptp_listen_handle_a == NULL){
 		LOG("%s: failed creating ptp listen handle for a\n", __func__);
 		exit(1);
 	}
 
-	void *adhocctl_handle_b = create_adhocctl_v1_session_v4(&adhocctl_addr, gamecode_2, nickname_b, mac_b);
+	void *adhocctl_handle_b = create_adhocctl_v1_session_v4(&adhocctl_addr, gamecode_2, nickname_b, (const char *)mac_b);
 	if (adhocctl_handle_b == NULL){
 		LOG("%s: failed creating adhocctl session for b\n", __func__);
 		exit(1);
 	}
 
-	void *ptp_connect_b_to_a_handle = ptp_connect_v4(&local_addr, mac_b, port_b, mac_a, port_a, &state);
+	void *ptp_connect_b_to_a_handle = ptp_connect_v4(&local_addr, (const char *)mac_b, port_b, (const char *)mac_a, port_a, &state);
 	if (ptp_connect_b_to_a_handle != NULL){
 		LOG("%s: ptp connected unexpected, strict mode might not be enabled\n", __func__);
 		exit(1);
@@ -748,7 +748,7 @@ void adhocctl_init(){
 	// create the rest of adhocctl sessions, the success case will be tested later
 	adhocctl_connect(adhocctl_handle_b, group);
 
-	void *adhocctl_handle_c = create_adhocctl_v1_session_v4(&adhocctl_addr, gamecode_2, nickname_c, mac_c);
+	void *adhocctl_handle_c = create_adhocctl_v1_session_v4(&adhocctl_addr, gamecode_2, nickname_c, (const char *)mac_c);
 	if (adhocctl_handle_c == NULL){
 		LOG("%s: failed creating adhocctl session for c\n", __func__);
 		exit(1);
