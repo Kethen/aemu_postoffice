@@ -526,20 +526,23 @@ void test_ptp(){
 			exit(1);
 		}
 
+		sleep_ms(50);
+
 		recv_size = sizeof(recv_buf);
 		recv_status = ptp_recv(b_to_a, recv_buf, &recv_size, false);
 		if (recv_status != 0){
 			LOG("%s: failed receiving from a accept to b\n", __func__);
 			exit(1);
 		}
-		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
-			LOG("%s: receiving from a accept to b has bad data\n", __func__);
-			exit(1);
-		}
 		if (recv_size != sizeof(recv_buf)){
 			LOG("%s: receiving from a accept to b has bad data size\n", __func__);
 			exit(1);
 		}
+		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
+			LOG("%s: receiving from a accept to b has bad data\n", __func__);
+			exit(1);
+		}
+
 
 		send_status = ptp_send(b_to_a, test_data, sizeof(test_data), false);
 		if (send_status != 0){
@@ -547,8 +550,8 @@ void test_ptp(){
 			exit(1);
 		}
 
+		sleep_ms(50);
 
-		sleep_ms(100);
 		int next_size = ptp_peek_next_size(accept_handle_a);
 		if (next_size != sizeof(recv_buf)){
 			LOG("%s: failed peeking ptp size, expected %lu, got %d\n", __func__, sizeof(recv_buf), next_size);
@@ -561,15 +564,14 @@ void test_ptp(){
 			LOG("%s: failed receiving from b connect to a\n", __func__);
 			exit(1);
 		}
-		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
-			LOG("%s: receiving from b connect to b has bad data\n", __func__);
-			exit(1);
-		}
 		if (recv_size != sizeof(recv_buf)){
 			LOG("%s: receiving from b connect to b has bad data size\n", __func__);
 			exit(1);
 		}
-
+		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
+			LOG("%s: receiving from b connect to b has bad data\n", __func__);
+			exit(1);
+		}
 
 		send_status = ptp_send(accept_handle_b, test_data, sizeof(test_data), false);
 		if (send_status != 0){
@@ -577,18 +579,20 @@ void test_ptp(){
 			exit(1);
 		}
 
+		sleep_ms(50);
+
 		recv_size = sizeof(recv_buf);
 		recv_status = ptp_recv(a_to_b, recv_buf, &recv_size, false);
 		if (recv_status != 0){
 			LOG("%s: failed receiving from a connect to b\n", __func__);
 			exit(1);
 		}
-		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
-			LOG("%s: receiving from a connect to b has bad data\n", __func__);
-			exit(1);
-		}
 		if (recv_size != sizeof(recv_buf)){
 			LOG("%s: receiving from a connect to b has bad data size\n", __func__);
+			exit(1);
+		}
+		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
+			LOG("%s: receiving from a connect to b has bad data\n", __func__);
 			exit(1);
 		}
 
@@ -597,6 +601,8 @@ void test_ptp(){
 			LOG("%s: failed sending from a connect to b\n", __func__);
 			exit(1);
 		}
+
+		sleep_ms(50);
 
 		for (int j = 0;j < sizeof(recv_buf);j++){
 			recv_size = 1;
@@ -627,7 +633,8 @@ void test_ptp(){
 			exit(1);
 		}
 
-		sleep_ms(100);
+		sleep_ms(50);
+
 		next_size = ptp_peek_next_size(accept_handle_b);
 		if (next_size != sizeof(test_data) * 2){
 			LOG("%s: failed peeking ptp size during stream test, expected %lu, got %d\n", __func__, sizeof(test_data) * 2, next_size);
@@ -657,7 +664,7 @@ void test_ptp(){
 	ptp_close(a_to_b);
 	ptp_close(b_to_a);
 
-	sleep_ms(100);
+	sleep_ms(50);
 
 	ptp_close(accept_handle_a);
 	ptp_close(accept_handle_b);
