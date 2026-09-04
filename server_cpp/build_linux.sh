@@ -14,4 +14,4 @@ do
 	built="$built ${f}.o"
 done
 
-$CPPC $LINK_FLAGS $built -o aemu_postoffice
+$CPPC $LINK_FLAGS $built -lpthread -o aemu_postoffice

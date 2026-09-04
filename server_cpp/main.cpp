@@ -52,7 +52,7 @@ int main(int argc, char **argv){
 	signal(SIGINT, handle_sigterm);
 	#endif
 
-	char exe_path[strlen(argv[0]) + 1] = {0};
+	char exe_path[1024] = {0};
 	strcpy(exe_path, argv[0]);
 	dirname(exe_path);
 	chdir(exe_path);

@@ -49,6 +49,11 @@ struct client_op {
 	destroy_op destroy;
 };
 
+#ifdef __APPLE__
+// what pulled in math.h..?
+#undef OVERFLOW
+#endif
+
 enum class ClientPumpStatus {
 	SUCCESS,
 	DISCONNECT,

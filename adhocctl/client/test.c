@@ -28,7 +28,7 @@ void test_too_many_sessions(){
 	for (int i = 0;i < 17;i++){
 		char mac[6] = {0};
 		*(int *)mac = i + 1;
-		sprintf(nickname, "%d", i);
+		snprintf(nickname, sizeof(nickname), "%d", i);
 		handles[i] = create_adhocctl_v1_session_v4(&addr, game_code, nickname, mac);
 		sleep_ms(120);
 	}
@@ -65,7 +65,7 @@ void test_protocol(){
 	char game_code[] = "ABCD12345";
 
 	char nickname_a[128] = {0};
-	sprintf(nickname_a, "nickname a");
+	snprintf(nickname_a, sizeof(nickname_a), "nickname a");
 	char mac_a[6];
 	memset(mac_a, 0xa, 6);
 	void *session_a = create_adhocctl_v1_session_v4(&addr, game_code, nickname_a, mac_a);
@@ -75,7 +75,7 @@ void test_protocol(){
 	}
 
 	char nickname_b[128] = {0};
-	sprintf(nickname_b, "nickname b");
+	snprintf(nickname_b, sizeof(nickname_b), "nickname b");
 	char mac_b[6];
 	memset(mac_b, 0xb, 6);
 	void *session_b = create_adhocctl_v1_session_v4(&addr, game_code, nickname_b, mac_b);
