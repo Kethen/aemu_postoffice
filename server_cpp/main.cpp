@@ -105,7 +105,18 @@ int main(int argc, char **argv){
 	threads.emplace_back([&config, &server, &relay_mutex, &http_status_server, &http_status_server_mutex] {
 		set_thread_name("relay main");
 
-		auto last_dump = std::chrono::high_resolution_clock::now();
+		auto last_http_publish = std::chrono::high_resolution_clock::now();
+		auto publish_to_http = [&http_status_server, &http_status_server_mutex, &server, &last_http_publish] () {
+			if (http_status_server == NULL){
+				return;
+			}
+			auto now = std::chrono::high_resolution_clock::now();
+			if ((now - last_http_publish) / std::chrono::seconds(1) >= 5){
+				const std::lock_guard<std::mutex> guard(http_status_server_mutex);
+				last_http_publish = now;
+				http_status_server->update_relay_snapshot(server.get_snapshot());
+			}
+		};
 		while(!should_stop){
 			auto begin = std::chrono::high_resolution_clock::now();
 			relay_mutex.lock();
@@ -114,25 +125,12 @@ int main(int argc, char **argv){
 			uint64_t interval_ms = config.target_tick_interval_ms;
 			if (pump_status == aemu_postoffice_server::ServerPumpStatus::IDLE){
 				interval_ms = config.target_tick_interval_idle_ms;
-				if (http_status_server != NULL){
-					http_status_server_mutex.lock();
-					http_status_server->update_relay_snapshot(aemu_postoffice_server::snapshot());
-					http_status_server_mutex.unlock();
-				}
+				publish_to_http();
 			} else if (pump_status == aemu_postoffice_server::ServerPumpStatus::LISTEN_SOCK_DEAD){
 				should_stop = true;
 				break;
 			} else if (pump_status == aemu_postoffice_server::ServerPumpStatus::SUCCESS) {
-				if ((begin - last_dump) / std::chrono::seconds(1) >= 5) {
-					last_dump = begin;
-					struct aemu_postoffice_server::snapshot snapshot = server.get_snapshot();
-					//aemu_postoffice_server::dump_snapshot_to_log(snapshot);
-					if (http_status_server != NULL){
-						http_status_server_mutex.lock();
-						http_status_server->update_relay_snapshot(snapshot);
-						http_status_server_mutex.unlock();
-					}
-				}
+				publish_to_http();
 			}
 			auto timespent = std::chrono::high_resolution_clock::now() - begin;
 			int64_t wait_ms = config.target_tick_interval_ms - timespent / std::chrono::milliseconds(1);
@@ -149,8 +147,33 @@ int main(int argc, char **argv){
 		threads.emplace_back([&config, &adhocctl_server, &relay_mutex, &server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex] {
 			set_thread_name("adhocctl main");
 
-			auto last_dump = std::chrono::high_resolution_clock::now();
-			auto last_sync = std::chrono::high_resolution_clock::now();
+			auto last_http_publish = std::chrono::high_resolution_clock::now();
+			auto last_relay_sync = std::chrono::high_resolution_clock::now();
+			auto publish_snapshot = [&adhocctl_server, &server, &relay_mutex, &http_status_server, &http_status_server_mutex, &last_http_publish, &last_relay_sync] () {
+				auto now = std::chrono::high_resolution_clock::now();
+				bool need_relay_sync = false;
+				bool need_http_publish = false;
+				if ((now - last_relay_sync) / std::chrono::milliseconds(1) >= 100){
+					need_relay_sync = true;
+					last_relay_sync = now;
+				}
+				if (http_status_server != NULL && (now - last_http_publish) / std::chrono::seconds(1) >= 5){
+					need_http_publish = true;
+					last_http_publish = now;
+				}
+				if (!need_relay_sync && !need_http_publish){
+					return;
+				}
+				auto snapshot = adhocctl_server->get_snapshot();
+				if (need_http_publish){
+					const std::lock_guard<std::mutex> guard(http_status_server_mutex);
+					http_status_server->update_adhocctl_snapshot(snapshot);
+				}
+				if (need_relay_sync){
+					const std::lock_guard<std::mutex> guard(relay_mutex);
+					server.update_adhocctl_data(snapshot);
+				}
+			};
 			while(!should_stop){
 				auto begin = std::chrono::high_resolution_clock::now();
 
@@ -160,28 +183,12 @@ int main(int argc, char **argv){
 				uint64_t interval_ms = config.adhocctl_target_tick_interval_ms;
 				if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::IDLE){
 					interval_ms = config.adhocctl_target_tick_interval_idle_ms;
-					if (http_status_server != NULL){
-						http_status_server_mutex.lock();
-						http_status_server->update_adhocctl_snapshot(aemu_postoffice_adhocctl_server::snapshot());
-						http_status_server_mutex.unlock();
-					}
+					publish_snapshot();
 				} else if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::ERROR){
 					should_stop = true;
 					break;
 				} else if (pump_status == aemu_postoffice_adhocctl_server::ServerPumpStatus::SUCCESS){
-					auto snapshot = adhocctl_server->get_snapshot();
-					if ((begin - last_dump) / std::chrono::seconds(1) >= 5){
-						last_dump = begin;
-						//aemu_postoffice_adhocctl_server::dump_snapshot_to_log(snapshot);
-						if (http_status_server != NULL){
-							http_status_server_mutex.lock();
-							http_status_server->update_adhocctl_snapshot(snapshot);
-							http_status_server_mutex.unlock();
-						}
-					}
-					relay_mutex.lock();
-					server.update_adhocctl_data(snapshot);
-					relay_mutex.unlock();
+					publish_snapshot();
 				}
 				auto timespent = std::chrono::high_resolution_clock::now() - begin;
 				int64_t wait_ms = config.target_tick_interval_ms - timespent / std::chrono::milliseconds(1);
@@ -196,7 +203,7 @@ int main(int argc, char **argv){
 
 			while(!should_stop){
 				{
-					std::lock_guard<std::mutex> lg(http_status_server_mutex);
+					const std::lock_guard<std::mutex> guard(http_status_server_mutex);
 					if (!http_status_server->is_server_running()){
 						should_stop = true;
 						break;
@@ -228,15 +235,13 @@ int main(int argc, char **argv){
 			server.set_config(config);
 			relay_mutex.unlock();
 			if (adhocctl_server != NULL){
-				adhocctl_mutex.lock();
+				const std::lock_guard<std::mutex> guard(adhocctl_mutex);
 				adhocctl_server->set_config(config);
 				adhocctl_server->set_game_db(game_db);
-				adhocctl_mutex.unlock();
 			}
 			if (http_status_server != NULL){
-				http_status_server_mutex.lock();
+				const std::lock_guard<std::mutex> guard(http_status_server_mutex);
 				http_status_server->set_game_db(game_db);
-				http_status_server_mutex.unlock();
 			}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(250));

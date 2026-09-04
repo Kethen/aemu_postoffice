@@ -44,7 +44,7 @@ struct config {
 	int max_num_sessions_per_mac = 20;
 
 	// -- adhocctl settings --
-	// enable built-in adhocctl
+	// enable built-in adhocctl as well as http status server
 	bool enable_adhocctl = true;
 
 	// target packet processing tick rate
