@@ -1,18 +1,19 @@
 #pragma once
 
-#include <semaphore>
-
 namespace aemu_postoffice_server {
 
 class Semaphore{
 	public:
-		Semaphore() : sema(0){}
-		// caution: this is not a real move constructor, this is just to work around std::counting_semaphore not being movable
-		Semaphore(Semaphore &&to_move) : sema(0){}
+		Semaphore();
+		Semaphore(Semaphore &&from){
+			sema_impl = from.sema_impl;
+			from.sema_impl = nullptr;
+		}
+		~Semaphore();
 		void acquire();
 		void release();
 	private:
-		std::counting_semaphore<65535> sema;
+		void *sema_impl;
 };
 
 }
