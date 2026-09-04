@@ -247,7 +247,7 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				logged_in = true;
 
 				// TODO might need sanity checks
-				LOG("%s: client %s logged in game %s with mac address %s channel %d\n", __func__, socket_name.c_str(), game_code.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
+				LOG("%s: client %s %s logged in game %s with mac address %s channel %d\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
 
 				break;
 			}
