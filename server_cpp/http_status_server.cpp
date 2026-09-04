@@ -29,6 +29,7 @@ static void set_thread_name(std::string name){
 
 HttpStatusServer::HttpStatusServer(const struct config &config, const struct aemu_postoffice_adhocctl_server::game_db &game_db){
 	this->game_db = game_db;
+	stopping = false;
 
 	data_crunch_thread = new std::thread([this] () {
 		set_thread_name("status prep");
@@ -154,7 +155,6 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 	});
 
 	server_running = true;
-	stopping = false;
 
 	server_thread = new std::thread([this, server, config] () {
 		set_thread_name("http status");

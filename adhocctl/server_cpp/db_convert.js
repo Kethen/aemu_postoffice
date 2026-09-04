@@ -16,7 +16,13 @@ let crosslinks = db.prepare('SELECT * FROM crosslinks').iterate();
 
 let out = {
 	"names":{},
-	"crosslinks":{}
+	"crosslinks":{},
+	"cod_quirk_games":[
+		"ULUS10218",
+		"ULES00643",
+		"ULES00644",
+		"ULKS46114"
+	]
 };
 
 names.forEach((element) => {

@@ -156,6 +156,8 @@
         "UCES01421": "UCUS98751",
         "NPJG00122": "UCUS98751",
         "ULES00643": "ULUS10218",
+        "ULES00644": "ULUS10218",
+        "ULKS46114": "ULUS10218",
         "ULES01456": "ULUS10537",
         "NPJH50401": "ULUS10579",
         "ULJM05034": "ULUS10121",
@@ -204,5 +206,8 @@
         "ULUS10269": "UCES00758",
         "ULES00566": "ULUS10180",
         "ULJM05202": "ULUS10180"
-    }
+    },
+    "cod_quirk_games": [
+        "ULUS10218"
+    ]
 }

@@ -281,6 +281,10 @@ void Server::connect_client(std::string mac, std::string group_name, bool groupl
 		target->second.game_code = crosslink->second;
 	}
 
+	if (game_db.cod_quirk_games.contains(game_code) && !groupless_group){
+		group_name = std::string("cod_quirk_fix_applied");
+	}
+
 	auto game = games.find(game_code);
 
 	if (game == games.end()){

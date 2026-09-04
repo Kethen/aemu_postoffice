@@ -43,6 +43,16 @@ bool parse_game_db_from_json(std::string path, struct game_db &out){
 		return false;
 	}
 
+	auto cod_quirk_games = parsed_json.find("cod_quirk_games");
+	if (cod_quirk_games == parsed_json.end()){
+		LOG("%s: cod_quirk_games not found in json\n", __func__);
+		return false;
+	}
+	if (!cod_quirk_games.value().is_array()){
+		LOG("%s: cod_quirk_games is not an array\n", __func__);
+		return false;
+	}
+
 	for (auto entry = crosslinks.value().begin();entry != crosslinks.value().end();entry++){
 		if (!entry.value().is_string()){
 			LOG("%s: bad non string value on crosslink entry %s\n", __func__, entry.key().c_str());
@@ -67,6 +77,10 @@ bool parse_game_db_from_json(std::string path, struct game_db &out){
 			out.crosslinks.clear();
 			return false;
 		}
+	}
+
+	for (auto entry : cod_quirk_games.value()){
+		out.cod_quirk_games.insert(entry);
 	}
 
 	return true;
