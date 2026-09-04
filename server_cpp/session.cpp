@@ -93,16 +93,16 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 				return false;
 			}
 
+			auto game = adhocctl_snapshot.games.find(src_client->second.game_code);
+			auto group = game->second.groups.find(src_client->second.group_key);
+			if (group->second.channel < 0){
+				// client has not joined a group (yet)
+				return false;
+			}
+
 			if (init->init_type == AEMU_POSTOFFICE_INIT_PTP_ACCEPT || init->init_type == AEMU_POSTOFFICE_INIT_PTP_CONNECT){
 				// in the case of ptp accept and connect, make sure both are in the same group
 				std::string dst_mac(init->dst_addr, 6);
-				auto game = adhocctl_snapshot.games.find(src_client->second.game_code);
-				auto group = game->second.groups.find(src_client->second.group_key);
-
-				if (group->second.channel < 0){
-					// client has not joined a group (yet)
-					return false;
-				}
 
 				bool dst_found_in_group = false;
 				for (auto &member_mac : group->second.members){
