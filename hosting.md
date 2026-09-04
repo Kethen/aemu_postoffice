@@ -20,7 +20,7 @@ Build and run server following the instructions [here](/README.md#building-and-r
 
 #### Ports
 
-By default, port `27312/tcp` is used for adhocctl, `27313/tcp` is used for relay, `8888/tcp` is used for the http status page. Please configure your firewall accordingly.
+By default, port `27312/tcp` is used for adhocctl, `27313/tcp` is used for relay, `8888/tcp` is used for the http status page. Please configure your firewall and/or http reverse proxy accordingly.
 
 #### Configuring the server
 
