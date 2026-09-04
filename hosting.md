@@ -51,7 +51,7 @@ sudo zypper install nodejs
 sudo dnf install nodejs
 
 # FreeBSD
-sudo dnf install node26
+sudo pkg install node26
 
 
 # convert the database, overwrite game_db.json came with with release
