@@ -24,7 +24,7 @@ Build and run server following the instructions [here](/README.md#building-and-r
 
 #### Migrating crosslink database from standalone adhocctl server
 
-A game database conversion script `server_cpp/db_convert.js` is provided is provided with the release bundle from https://github.com/Kethen/aemu_postoffice/releases . The script requires nodejs to run.
+A game database conversion script `server_cpp/db_convert.js` is provided with the release bundle from https://github.com/Kethen/aemu_postoffice/releases . The script requires nodejs to run.
 
 Linux/FreeBSD:
 
