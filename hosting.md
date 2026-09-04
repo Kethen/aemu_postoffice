@@ -18,9 +18,19 @@ MacOS/FreeBSD:
 
 Build and run server following the instructions [here](/README.md#building-and-running)
 
+#### Ports
+
+By default, port `27312/tcp` is used for adhocctl, `27313/tcp` is used for relay, `8888/tcp` is used for the http status page. Please configure your firewall accordingly.
+
 #### Configuring the server
 
 `config.json` next to `aemu_postoffice`/`aemu_postoffice.exe` is loaded on server start. See [here](/server_cpp/config.h) for explanations of each configuration item
+
+#### Customizing the http status page
+
+- `http_assets` is statically served on http path `/assets`
+- `http_assets/status.html` is served on http path `/` and can be customized/rewritten to your liking
+- http path `/data.json` serves a server status json that is used by PPSSPP and the provided `http_assets/status.html` template
 
 #### Migrating crosslink database from standalone adhocctl server
 
