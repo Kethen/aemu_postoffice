@@ -52,4 +52,5 @@ jobs:
            server_cpp/game_db.json
            server_cpp/db_convert.js
            server_cpp/config.json
+           server_cpp/http_assets
         if-no-files-found: error
