@@ -33,6 +33,10 @@ By default, port `27312/tcp` is used for adhocctl, `27313/tcp` is used for relay
 - http path `/data.json` serves a server status json that is used by PPSSPP and the provided `http_assets/status.html` template
 - a sample `data.json` is provided [here](/server_cpp/data.json.sample)
 
+#### Adding to crosslink & game name database
+
+`game_db.json` next to `aemu_postoffice`/`aemu_postoffice.exe` contains crosslink and game name data entries, new data can be added to the file. If you are feeling generous, you can also PR your changes to https://github.com/Kethen/aemu_postoffice/blob/main/server_cpp/game_db.json , which will then be included in future releases.
+
 #### Migrating crosslink database from standalone adhocctl server
 
 A game database conversion script `server_cpp/db_convert.js` is provided with the release bundle from https://github.com/Kethen/aemu_postoffice/releases . The script requires nodejs to run.
