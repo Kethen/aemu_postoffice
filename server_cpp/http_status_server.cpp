@@ -14,7 +14,7 @@
 
 #include <stdio.h>
 
-static const std::string HTTP_ASSET_PATH("./http_assets/");
+static const std::string HTTP_ASSET_PATH("./http_assets");
 
 namespace aemu_postoffice_server {
 
@@ -142,7 +142,7 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 
 	server->Get("/", [] (const httplib::Request &req, httplib::Response &res) {
 		char path_buf[1024] = {0};
-		snprintf(path_buf, sizeof(path_buf), "%s%s", HTTP_ASSET_PATH.c_str(), "status.html");
+		snprintf(path_buf, sizeof(path_buf), "%s/%s", HTTP_ASSET_PATH.c_str(), "status.html");
 		std::string file_path = std::string(path_buf);
 		std::string raw_bytes = read_file_to_string(file_path);
 		if (raw_bytes == std::string("")){
