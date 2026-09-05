@@ -123,3 +123,8 @@ bash build_windows.sh
 # Run server
 ./aemu_postoffice.exe
 ```
+
+##### External softwares used on the server:
+
+- cpp-httplib https://github.com/yhirose/cpp-httplib
+- json https://github.com/nlohmann/json
