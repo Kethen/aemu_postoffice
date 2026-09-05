@@ -451,7 +451,7 @@ ServerPumpStatus Server::pump(){
 	}
 
 	// pump data from clients
-	std::vector<int> num_clients = {config.adhocctl_num_threads, 0};
+	std::vector<int> num_clients(config.adhocctl_num_threads, 0);
 	for (auto game = games.begin();game != games.end();game++){
 		for (auto group = game->second.groups.begin();group != game->second.groups.end();group++){
 			int least_used_worker = 0;
