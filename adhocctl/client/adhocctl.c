@@ -22,7 +22,7 @@ static enum adhocctl_call_status login_v1(int sock_fd, const char *game_code, co
 	SceNetAdhocctlLoginPacketC2S packet = {0};
 	packet.base.opcode = OPCODE_LOGIN;
 	memcpy(packet.mac.data, mac, 6);
-	memcpy(packet.name.data, nickname, 128);
+	memcpy(packet.name.data, nickname, 127);
 	memcpy(packet.game.data, game_code, 9);
 
 	SEND_PACKET(sock_fd, packet);
@@ -239,7 +239,7 @@ void get_event_v1(int sock_fd, struct adhocctl_event *event_out){
 			CHECK_RESULT(recv_result, sizeof(packet));
 			event_out->type = ADHOCCTL_EVENT_CONNECT;
 			memcpy(event_out->connect.mac, packet.mac.data, 6);
-			memcpy(event_out->connect.nickname, packet.name.data, 128);
+			memcpy(event_out->connect.nickname, packet.name.data, 127);
 			event_out->connect.id = packet.ip;
 			return;
 		}
@@ -270,7 +270,7 @@ void get_event_v1(int sock_fd, struct adhocctl_event *event_out){
 			int recv_result = native_recv(sock_fd, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
 			event_out->type = ADHOCCTL_EVENT_CHAT;
-			memcpy(event_out->chat.nickname, packet.name.data, 128);
+			memcpy(event_out->chat.nickname, packet.name.data, 127);
 			memcpy(event_out->chat.message, packet.base.message, 64);
 			return;
 		}
