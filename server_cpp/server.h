@@ -4,7 +4,7 @@
 #include <list>
 #include <thread>
 #include <semaphore>
-#include <set>
+#include <unordered_set>
 
 #include "config.h"
 #include "session.h"
@@ -48,7 +48,7 @@ class Server{
 		std::vector<Semaphore> session_from_client_pump_worker_done_semas;
 		std::vector<std::thread> session_from_client_pump_workers;
 		std::vector<std::list<Session *>> sessions_to_pump;
-		std::vector<std::set<std::string>> sessions_to_remove;
+		std::vector<std::unordered_set<std::string>> sessions_to_remove;
 		std::vector<std::unordered_map<std::string, std::list<SendListItem>>> send_list;
 
 		std::vector<Semaphore> session_to_client_pump_worker_semas;

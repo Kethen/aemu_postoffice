@@ -6,6 +6,7 @@
 #include "file_util.h"
 
 #include <chrono>
+#include <unordered_set>
 
 #ifdef __unix__
 // for naming threads
@@ -97,14 +98,26 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 
 							auto client = relay_snapshot_copy.clients.find(member);
 							if (client != relay_snapshot_copy.clients.end()){
+								std::unordered_set<int> pdp_ports;
 								for (auto pdp_port : client->second.pdp_ports){
+									pdp_ports.insert(pdp_port);
+								}
+								for (auto pdp_port : pdp_ports){
 									user_entry["pdp_ports"].push_back(pdp_port);
 								}
+
+								std::unordered_set<int> ptp_ports;
 								for (auto ptp_listen_port : client->second.ptp_listen_ports){
-									user_entry["ptp_ports"].push_back(ptp_listen_port);
+									ptp_ports.insert(ptp_listen_port);
 								}
 								for (auto ptp_connect_port : client->second.ptp_connect_ports){
-									user_entry["ptp_ports"].push_back(ptp_connect_port);
+									ptp_ports.insert(ptp_connect_port);
+								}
+								for (auto ptp_accept_port : client->second.ptp_accept_ports){
+									ptp_ports.insert(ptp_accept_port);
+								}
+								for (auto ptp_port : ptp_ports){
+									user_entry["ptp_ports"].push_back(ptp_port);
 								}
 							}
 

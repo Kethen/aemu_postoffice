@@ -83,7 +83,7 @@ Server::Server(const struct config &config){
 			}
 		}));
 		this->sessions_to_pump.push_back(std::list<Session *>());
-		this->sessions_to_remove.push_back(std::set<std::string>());
+		this->sessions_to_remove.push_back(std::unordered_set<std::string>());
 		this->send_list.push_back(std::unordered_map<std::string, std::list<SendListItem>>());
 	}
 
