@@ -175,7 +175,7 @@ void test_pdp(){
 			exit(1);
 		}
 
-		sleep_ms(100);
+		sleep_ms(50);
 
 		int buffered_size = pdp_buffered_data_size(pdp_handle_b);
 		if (buffered_size != sizeof(test_data) * 2){
@@ -257,13 +257,13 @@ void test_pdp(){
 			exit(1);
 		}
 
-		sleep_ms(100);
-
 		send_status = pdp_send(pdp_handle_a, (const char *)pdp_mac_c, port_c, test_data, sizeof(test_data), false);
 		if (send_status != 0){
 			LOG("%s: failed sending pdp packet from a to c, %d\n", __func__, send_status);
 			exit(1);
 		}
+
+		sleep_ms(50);
 
 		len = sizeof(recv_buf);
 		recv_status = pdp_recv(pdp_handle_c, incoming_mac, &incoming_port, recv_buf, &len, false);
@@ -309,7 +309,7 @@ void test_pdp(){
 			exit(1);
 		}
 
-		sleep_ms(100);
+		sleep_ms(50);
 
 		len = sizeof(recv_buf);
 		recv_status = pdp_recv(pdp_handle_a, incoming_mac, &incoming_port, recv_buf, &len, true);
