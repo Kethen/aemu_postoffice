@@ -67,7 +67,7 @@ static void init_winsock(){
 	WSADATA wsa_data;
 	int err = WSAStartup(MAKEWORD(2, 2), &wsa_data);
 	if (err != 0){
-		LOG("%s: warning: WSAStartup failed, it might have been initialized already\n", __func__);
+		LOG_TS("%s: warning: WSAStartup failed, it might have been initialized already\n", __func__);
 	}
 }
 
@@ -111,14 +111,14 @@ int native_tcp_listen(std::string ip, uint16_t port){
 	int bind_result = bind(sock_fd, (const sockaddr *)addr, addr_len);
 	if (bind_result == SOCKET_ERROR){
 		int err = WSAGetLastError();
-		LOG("%s: bind failed, 0x%x\n", __func__, err);
+		LOG_TS("%s: bind failed, 0x%x\n", __func__, err);
 		return -1;
 	}
 
 	int listen_result = listen(sock_fd, 1000);
 	if (listen_result == SOCKET_ERROR){
 		int err = WSAGetLastError();
-		LOG("%s: listen failed, 0x%x\n", __func__, err);
+		LOG_TS("%s: listen failed, 0x%x\n", __func__, err);
 		return -1;
 	}
 
