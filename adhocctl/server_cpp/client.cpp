@@ -27,7 +27,7 @@ Client::Client(int sock_fd, std::string ip, uint16_t port, std::string socket_na
 	this->create_time = std::chrono::high_resolution_clock::now();
 	this->last_seen = std::chrono::high_resolution_clock::now();
 
-	LOG("%s: client with socket name %s created\n", __func__, socket_name.c_str());
+	LOG_TS("%s: client with socket name %s created\n", __func__, socket_name.c_str());
 }
 
 void Client::close_socket(){
@@ -40,7 +40,7 @@ Client::~Client(){
 
 static bool client_sent_too_much(const std::string &recv_buf, struct aemu_postoffice_server::config *config, Client *client){
 	if (recv_buf.length() > config->adhocctl_data_queue_size_limit_byte){
-		LOG("%s: client %s %s is sending too much data\n", __func__, mac_bytes_to_mac_string(client->get_mac()).c_str(), client->get_socket_name().c_str());
+		LOG_TS("%s: client %s %s is sending too much data\n", __func__, mac_bytes_to_mac_string(client->get_mac()).c_str(), client->get_socket_name().c_str());
 		return true;
 	}
 	return false;
@@ -48,7 +48,7 @@ static bool client_sent_too_much(const std::string &recv_buf, struct aemu_postof
 
 static ServerToClientOpQueueStatus check_send_queue_size(const std::string &send_buf, struct aemu_postoffice_server::config *config, Client *client){
 	if (send_buf.length() > config->adhocctl_data_queue_size_limit_byte){
-		LOG("%s: client %s %s is not receiving data timely\n", __func__, mac_bytes_to_mac_string(client->get_mac()).c_str(), client->get_socket_name().c_str());
+		LOG_TS("%s: client %s %s is not receiving data timely\n", __func__, mac_bytes_to_mac_string(client->get_mac()).c_str(), client->get_socket_name().c_str());
 		return ServerToClientOpQueueStatus::OVERFLOW;
 	}
 	return ServerToClientOpQueueStatus::SUCCESS;
@@ -153,7 +153,7 @@ ServerToClientOpQueueStatus Client::scan_complete(){
 static void connect_notify_v1(std::string &send_buf, std::string nickname, std::string mac, uint32_t ip){
 	SceNetAdhocctlConnectPacketS2C packet = {0};
 	packet.base.opcode = OPCODE_CONNECT;
-	memcpy(packet.name.data, nickname.data(), nickname.length() > sizeof(packet.name.data) ? sizeof(packet.name.data) : nickname.length());
+	memcpy(packet.name.data, nickname.data(), nickname.length() > sizeof(packet.name.data) - 1 ? sizeof(packet.name.data) - 1 : nickname.length());
 	memcpy(packet.mac.data, mac.data(), 6);
 	packet.ip = ip;
 	send_buf.append((char *)&packet, sizeof(packet));
@@ -192,34 +192,34 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				break;
 			case OPCODE_CONNECT:
 				if (!logged_in){
-					LOG("%s: client %s sending OPCODE_CONNECT before logging in\n", __func__, socket_name.c_str());
+					LOG_TS("%s: client %s sending OPCODE_CONNECT before logging in\n", __func__, socket_name.c_str());
 					return ClientPumpStatus::ERROR;
 				}
 				packet_size = sizeof(SceNetAdhocctlConnectPacketC2S);
 				break;
 			case OPCODE_DISCONNECT:
 				if (!logged_in){
-					LOG("%s: client %s sending OPCODE_DISCONNECT before logging in\n", __func__, socket_name.c_str());
+					LOG_TS("%s: client %s sending OPCODE_DISCONNECT before logging in\n", __func__, socket_name.c_str());
 					return ClientPumpStatus::ERROR;
 				}
 				packet_size = sizeof(SceNetAdhocctlPacketBase);
 				break;
 			case OPCODE_SCAN:
 				if (!logged_in){
-					LOG("%s: client %s sending OPCODE_SCAN before logging in\n", __func__, socket_name.c_str());
+					LOG_TS("%s: client %s sending OPCODE_SCAN before logging in\n", __func__, socket_name.c_str());
 					return ClientPumpStatus::ERROR;
 				}
 				packet_size = sizeof(SceNetAdhocctlPacketBase);
 				break;
 			case OPCODE_CHAT:
 				if (!logged_in){
-					LOG("%s: client %s sending OPCODE_CHAT before logging in\n", __func__, socket_name.c_str());
+					LOG_TS("%s: client %s sending OPCODE_CHAT before logging in\n", __func__, socket_name.c_str());
 					return ClientPumpStatus::ERROR;
 				}
 				packet_size = sizeof(SceNetAdhocctlChatPacketC2S);
 				break;
 			default:
-				LOG("%s: client %s sent invalid opcode %d\n", __func__,socket_name.c_str(), packet_base->opcode);
+				LOG_TS("%s: client %s sent invalid opcode %d\n", __func__,socket_name.c_str(), packet_base->opcode);
 				return ClientPumpStatus::ERROR;
 		}
 
@@ -246,8 +246,43 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				channel = V1_PROTOCOL_DEFAULT_CHANNEL;
 				logged_in = true;
 
-				// TODO might need sanity checks
-				LOG("%s: client %s %s logged in game %s with mac address %s channel %d\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
+				// TODO might need more sanity checks
+				static const char bad_mac[6] = {0};
+				if (memcmp(&mac.data()[1], &bad_mac[1], 5) == 0){
+					// check 5 bytes only because some games corrupt the first byte and matching in aemu/ppsspp is done using 5 bytes
+					LOG_TS("%s: client %s %s tries to use xx:00:00:00:00:00 as mac, rejecting\n", __func__, socket_name.c_str(), nickname.c_str());
+					return ClientPumpStatus::ERROR;
+				}
+
+				if (game_code.size() < 9){
+					LOG_TS("%s: client %s %s logs in with bad game code %s, rejecting\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str());
+					return ClientPumpStatus::ERROR;
+				}
+
+				for (int i = 0;i < 9;i++){
+					if (game_code.data()[i] >= '0' && mac.data()[i] <= '9'){
+						continue;
+					}
+					/*
+					// can a game use small letters for game code? standalone adhocctl never really allowed small letters, meanwhile
+					if (game_code.data()[i] >= 'a' && game_code.data()[i] <= 'z'){
+						continue;
+					}
+					*/
+					if (game_code.data()[i] >= 'A' && game_code.data()[i] <= 'Z'){
+						continue;
+					}
+					LOG_TS("%s: client %s %s logs in with bad game code %s, rejecting\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str());
+					return ClientPumpStatus::ERROR;
+				}
+
+				if (nickname.size() >= 128){
+					// it should be at most 128 including a null termination
+					LOG_TS("%s: client %s %s has bad nickname, rejecting\n", __func__, socket_name.c_str(), nickname.c_str());
+					return ClientPumpStatus::ERROR;
+				}
+
+				LOG_TS("%s: client %s %s logged in game %s with mac address %s channel %d\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
 
 				break;
 			}
@@ -268,7 +303,7 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				op.connect.channel = channel;
 				client_ops.push_back(op);
 
-				LOG("%s: client %s %s on channel %d joining group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel, game_code.c_str(), op.connect.group.c_str());
+				LOG_TS("%s: client %s %s on channel %d joining group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel, game_code.c_str(), op.connect.group.c_str());
 
 				break;
 			}
@@ -279,7 +314,7 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				op.disconnect.channel = channel;
 				client_ops.push_back(op);
 
-				LOG("%s: client %s %s disconnecting from group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), game_code.c_str(), group.c_str());
+				LOG_TS("%s: client %s %s disconnecting from group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), game_code.c_str(), group.c_str());
 				break;
 			}
 			case OPCODE_SCAN:{
@@ -301,7 +336,7 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				op.chat.msg = std::string(buf);
 				client_ops.push_back(op);
 
-				LOG("%s: client %s %s sending message [%s] to group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), buf, game_code.c_str(), group.c_str());
+				LOG_TS("%s: client %s %s sending message [%s] to group %s %s\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), buf, game_code.c_str(), group.c_str());
 				break;
 			}
 			default:
@@ -316,13 +351,13 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 ClientPumpStatus Client::pump_from_client(){
 	if (!logged_in){
 		if ((std::chrono::high_resolution_clock::now() - create_time) / std::chrono::seconds(1) > 5){
-			LOG("%s: pending client %s has timed out\n", __func__, get_socket_name().c_str());
+			LOG_TS("%s: pending client %s has timed out\n", __func__, get_socket_name().c_str());
 			return ClientPumpStatus::TIMEDOUT;
 		}
 	}
 
 	if ((std::chrono::high_resolution_clock::now() - last_seen) / std::chrono::milliseconds(1) > config->adhocctl_timeout_ms){
-		LOG("%s: client %s %s has timed out\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str());
+		LOG_TS("%s: client %s %s has timed out\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str());
 		return ClientPumpStatus::TIMEDOUT;
 	}
 
@@ -331,7 +366,7 @@ ClientPumpStatus Client::pump_from_client(){
 		char recv_buf[4096];
 		int recv_status = native_recv(sock_fd, recv_buf, sizeof(recv_buf));
 		if (recv_status == 0){
-			LOG("%s: client %s %s has disconnected\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str());
+			LOG_TS("%s: client %s %s has disconnected\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str());
 			return ClientPumpStatus::DISCONNECT;
 		}
 		if (recv_status == -1){
@@ -339,7 +374,7 @@ ClientPumpStatus Client::pump_from_client(){
 			if (native_error_is_would_block(error)){
 				break;
 			}
-			LOG("%s: client %s %s has errored 0x%x\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str(), error);
+			LOG_TS("%s: client %s %s has errored 0x%x\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str(), error);
 			return ClientPumpStatus::ERROR;
 		}
 		// we have data otherwise
@@ -374,7 +409,7 @@ ClientPumpStatus Client::pump_to_client(){
 			if (native_error_is_would_block(err)){
 				return ClientPumpStatus::SUCCESS;
 			}
-			LOG("%s: failed sending to client, 0x%x\n", __func__, err);
+			LOG_TS("%s: failed sending to client, 0x%x\n", __func__, err);
 			return ClientPumpStatus::ERROR;
 		}
 

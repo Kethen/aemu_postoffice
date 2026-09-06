@@ -276,7 +276,7 @@ void Server::connect_client(std::string mac, std::string group_name, bool groupl
 	// resolve crosslinking
 	auto crosslink = game_db.crosslinks.find(game_code);
 	if (crosslink != game_db.crosslinks.end()){
-		LOG("%s: client %s %s crosslinked from %s to %s\n", __func__, target->second.get_socket_name().c_str(), mac_bytes_to_mac_string(target->second.get_mac()).c_str(), game_code.c_str(), crosslink->second.c_str());
+		LOG_TS("%s: client %s %s crosslinked from %s to %s\n", __func__, target->second.get_socket_name().c_str(), mac_bytes_to_mac_string(target->second.get_mac()).c_str(), game_code.c_str(), crosslink->second.c_str());
 		game_code = crosslink->second;
 		target->second.game_code = crosslink->second;
 	}
@@ -346,7 +346,7 @@ ServerPumpStatus Server::pump(){
 				break;
 			}
 			if (native_error_is_emfile(err)){
-				LOG("%s: warning, new adhocctl connection dropped as system limit has been reached\n", __func__);
+				LOG_TS("%s: warning, new adhocctl connection dropped as system limit has been reached\n", __func__);
 				break;
 			}
 			LOG("%s: accept call failed, 0x%x\n", __func__, err);
@@ -354,7 +354,7 @@ ServerPumpStatus Server::pump(){
 		}
 
 		if (pending_clients.size() + clients.size() >= config.adhocctl_max_num_sessions){
-			LOG("%s: warning, new connection from %s dropped as maximum number of adhocctl sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.adhocctl_max_num_sessions);
+			LOG_TS("%s: warning, new connection from %s dropped as maximum number of adhocctl sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.adhocctl_max_num_sessions);
 			native_close(accept_status);
 			continue;
 		}
@@ -407,7 +407,7 @@ ServerPumpStatus Server::pump(){
 			std::string mac = target->second.get_mac();
 			auto existing_client = clients.find(mac);
 			if (existing_client != clients.end()){
-				LOG("%s: session with mac address %s owned by %s now owned by %s\n", __func__, mac_bytes_to_mac_string(mac).c_str(), existing_client->second.get_socket_name().c_str(), target->second.get_socket_name().c_str());
+				LOG_TS("%s: session with mac address %s owned by %s now owned by %s\n", __func__, mac_bytes_to_mac_string(mac).c_str(), existing_client->second.get_socket_name().c_str(), target->second.get_socket_name().c_str());
 				remove_client(target->second.get_mac());
 			}
 

@@ -104,7 +104,7 @@ Server::Server(const struct config &config){
 		}));
 	}
 
-	LOG("%s: created server listening on %s %u\n", __func__, config.ip_addr.c_str(), config.port);
+	LOG_TS("%s: created server listening on %s %u\n", __func__, config.ip_addr.c_str(), config.port);
 }
 
 Server::~Server(){
@@ -273,17 +273,17 @@ ServerPumpStatus Server::pump(){
 				break;
 			}
 			if (native_error_is_emfile(error)){
-				LOG("%s: warning, new relay connection dropped as system limit has been reached\n", __func__);
+				LOG_TS("%s: warning, new relay connection dropped as system limit has been reached\n", __func__);
 				break;
 			}
-			LOG("%s: failed accepting connection, 0x%x\n", __func__, error);
+			LOG_TS("%s: failed accepting connection, 0x%x\n", __func__, error);
 			native_close(this->sock_fd);
 			this->sock_fd = -1;
 			return ServerPumpStatus::LISTEN_SOCK_DEAD;
 		}
 
 		if (this->pending_sessions.size() + this->sessions.size() >= this->config.max_num_sessions){
-			LOG("%s: warning, new relay connection from %s dropped as maximum number of sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.max_num_sessions);
+			LOG_TS("%s: warning, new relay connection from %s dropped as maximum number of sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.max_num_sessions);
 			native_close(accept_status);
 			continue;
 		}
@@ -331,7 +331,7 @@ ServerPumpStatus Server::pump(){
 			auto old_session = this->sessions.find(identifier);
 			bool replaced = false;
 			if (old_session != this->sessions.end()){
-				LOG("%s: replacing session %s from %s by session from %s\n", __func__, identifier.c_str(), old_session->second.get_client_addr().c_str(), new_session.get_client_addr().c_str());
+				LOG_TS("%s: replacing session %s from %s by session from %s\n", __func__, identifier.c_str(), old_session->second.get_client_addr().c_str(), new_session.get_client_addr().c_str());
 				old_session->second.close_socket();
 				replaced = true;
 			}
@@ -425,14 +425,14 @@ ServerPumpStatus Server::pump(){
 			reduce_count(session->second.get_from_mac());
 
 			std::string peer_identifier = session->second.get_peer_identifier();
-			LOG("%s: removing %s of %s\n", __func__, session_name.c_str(), session->second.get_client_addr().c_str());
+			LOG_TS("%s: removing %s of %s\n", __func__, session_name.c_str(), session->second.get_client_addr().c_str());
 			this->sessions.erase(session);
 			if (peer_identifier != std::string("")){
 				auto peer_session = this->sessions.find(peer_identifier);
 				if (peer_session != this->sessions.end()){
 					peer_session->second.close_socket();
 					reduce_count(peer_session->second.get_from_mac());
-					LOG("%s: removing %s of %s by peer relation\n", __func__, peer_identifier.c_str(), peer_session->second.get_client_addr().c_str());
+					LOG_TS("%s: removing %s of %s by peer relation\n", __func__, peer_identifier.c_str(), peer_session->second.get_client_addr().c_str());
 					this->sessions.erase(peer_session);
 				}
 			}

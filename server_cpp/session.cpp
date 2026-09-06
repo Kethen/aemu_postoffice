@@ -15,7 +15,7 @@ PendingSession::PendingSession(int sock_fd, std::string client_addr, int client_
 	this->client_port = client_port;
 	this->create_time = std::chrono::high_resolution_clock::now();
 	this->config = config;
-	LOG("%s: %s connecting\n", __func__, client_addr.c_str());
+	LOG_TS("%s: %s connecting\n", __func__, client_addr.c_str());
 }
 
 static std::string get_listen_session_name(const char *mac, uint16_t port){
@@ -50,21 +50,21 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 	char buf[sizeof(aemu_postoffice_init)];
 
 	if ((std::chrono::high_resolution_clock::now() - this->create_time) / std::chrono::milliseconds(1) > this->config->session_init_time_limit_ms){
-		LOG("%s: session creation for %s timed out\n", __func__, this->client_addr.c_str());
+		LOG_TS("%s: session creation for %s timed out\n", __func__, this->client_addr.c_str());
 		native_close(this->sock_fd);
 		return PendingSessionPumpStatus::TIMEOUT;
 	}
 
 	int recv_status = native_recv(this->sock_fd, buf, sizeof(buf));
 	if (recv_status == 0){
-		LOG("%s: client %s closed socket during init\n", __func__, this->client_addr.c_str());
+		LOG_TS("%s: client %s closed socket during init\n", __func__, this->client_addr.c_str());
 		native_close(this->sock_fd);
 		return PendingSessionPumpStatus::SOCKET_CLOSED;
 	}
 	if (recv_status < 0){
 		int error = native_get_last_socket_error();
 		if (!native_error_is_would_block(error)){
-			LOG("%s: client %s has socket error 0x%x during init\n", __func__, this->client_addr.c_str(), error);
+			LOG_TS("%s: client %s has socket error 0x%x during init\n", __func__, this->client_addr.c_str(), error);
 			native_close(this->sock_fd);
 			return PendingSessionPumpStatus::SOCKET_CLOSED;
 		}
@@ -137,7 +137,7 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 				std::string connect_session_name = get_connect_session_name(init->dst_addr, init->dport, init->src_addr, init->sport);
 				auto connect_session = global_sessions.find(connect_session_name);
 				if (connect_session == global_sessions.end() || connect_session->second.get_session_phase() != SessionPhase::PTP_CONNECTING){
-					LOG("%s: peer session %s not found, not creating ptp accept session for %s\n", __func__, connect_session_name.c_str(), this->client_addr.c_str());
+					LOG_TS("%s: peer session %s not found, not creating ptp accept session for %s\n", __func__, connect_session_name.c_str(), this->client_addr.c_str());
 					native_close(this->sock_fd);
 					return PendingSessionPumpStatus::SOCKET_CLOSED;
 				}else{
@@ -146,7 +146,7 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 				}
 			}
 			default:{
-				LOG("%s: unknown init type %d, not creating session for %s\n", __func__, init->init_type, this->client_addr.c_str());
+				LOG_TS("%s: unknown init type %d, not creating session for %s\n", __func__, init->init_type, this->client_addr.c_str());
 				native_close(this->sock_fd);
 				return PendingSessionPumpStatus::BAD_INIT;
 			}
@@ -255,10 +255,10 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 		this->phase = SessionPhase::HEADER;
 		peer_session->phase = SessionPhase::HEADER;
 
-		LOG("%s: bonding %s with %s\n", __func__, peer_session->get_identifier().c_str(), this->get_identifier().c_str());
+		LOG_TS("%s: bonding %s with %s\n", __func__, peer_session->get_identifier().c_str(), this->get_identifier().c_str());
 	}
 
-	LOG("%s: created session %s for %s\n", __func__, this->get_identifier().c_str(), this->client_addr.c_str());
+	LOG_TS("%s: created session %s for %s\n", __func__, this->get_identifier().c_str(), this->client_addr.c_str());
 }
 
 Session::~Session(){
@@ -284,7 +284,7 @@ SessionPumpStatus Session::pump_from_client(){
 		char buf[1024];
 		int recv_status = native_recv(this->sock_fd, buf, sizeof(buf));
 		if (recv_status == 0){
-			LOG("%s: client %s of session %s has closed the socket\n", __func__, this->client_addr.c_str(), this->get_identifier().c_str());
+			LOG_TS("%s: client %s of session %s has closed the socket\n", __func__, this->client_addr.c_str(), this->get_identifier().c_str());
 			ret = SessionPumpStatus::SOCKET_CLOSED;
 			break;
 		}
@@ -294,7 +294,7 @@ SessionPumpStatus Session::pump_from_client(){
 				ret = SessionPumpStatus::SUCCESS;
 				break;
 			}
-			LOG("%s: socket error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
+			LOG_TS("%s: socket error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
 			ret = SessionPumpStatus::SOCKET_CLOSED;
 			break;
 		}
@@ -397,7 +397,7 @@ void Session::get_send_list(std::vector<SendListItem> &container){
 DataQueueStatus Session::queue_send(const std::string &data){
 	to_client_data_buffer.append(data.data(), data.length());
 	if (to_client_data_buffer.length() >= this->config->data_queue_size_limit_byte){
-		LOG("%s: session %s from %s has reached receive data buffer limit %ub\n", __func__, this->get_identifier().c_str(), this->get_client_addr().c_str(), this->config->data_queue_size_limit_byte);
+		LOG_TS("%s: session %s from %s has reached receive data buffer limit %ub\n", __func__, this->get_identifier().c_str(), this->get_client_addr().c_str(), this->config->data_queue_size_limit_byte);
 		return DataQueueStatus::MAX_DATA_REACHED;
 	}
 	return DataQueueStatus::SUCCESS;
@@ -415,7 +415,7 @@ SessionPumpStatus Session::pump_to_client(){
 			if (native_error_is_would_block(error)){
 				 return SessionPumpStatus::SUCCESS;
 			}
-			LOG("%s: sock error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
+			LOG_TS("%s: sock error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
 			return SessionPumpStatus::SOCKET_CLOSED;
 		}
 		to_client_data_buffer.erase(0, send_status);
@@ -438,6 +438,7 @@ std::string Session::get_identifier(){
 		}
 	}
 	LOG("%s: bad session mode 0x%x, debug this\n", __func__, this->mode);
+	exit(1);
 	return std::string("");
 }
 
