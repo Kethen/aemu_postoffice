@@ -255,12 +255,12 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				}
 
 				if (game_code.size() < 9){
-					LOG_TS("%s: client %s %s logs in with bad game code %s, rejecting\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str());
+					LOG_TS("%s: client %s %s logs in with bad game code %s (len %d), rejecting\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str(), game_code.size());
 					return ClientPumpStatus::ERROR;
 				}
 
 				for (int i = 0;i < 9;i++){
-					if (game_code.data()[i] >= '0' && mac.data()[i] <= '9'){
+					if (game_code.data()[i] >= '0' && game_code.data()[i] <= '9'){
 						continue;
 					}
 					/*
@@ -272,7 +272,7 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 					if (game_code.data()[i] >= 'A' && game_code.data()[i] <= 'Z'){
 						continue;
 					}
-					LOG_TS("%s: client %s %s logs in with bad game code %s, rejecting\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str());
+					LOG_TS("%s: client %s %s logs in with bad game code %s (bad character %c), rejecting\n", __func__, socket_name.c_str(), nickname.c_str(), game_code.c_str(), game_code.data()[i]);
 					return ClientPumpStatus::ERROR;
 				}
 
