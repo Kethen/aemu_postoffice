@@ -100,9 +100,9 @@ MacOS/FreeBSD:
 # FreeBSD
 sudo pkg install git gcc bash
 
-# Clone project and build client, on MacOS, you might be prompted to install xcode commandline tools in this step if you do not have any version of xcode around
+# Clone project and build server, on MacOS, you might be prompted to install xcode commandline tools in this step if you do not have any version of xcode around
 git clone https://github.com/kethen/aemu_postoffice
-cd aemu_postoffice/client
+cd aemu_postoffice/server_cpp
 bash build_linux.sh
 
 # Run server
