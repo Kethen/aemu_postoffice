@@ -84,7 +84,9 @@
         "ULJM05933": "Hatsune Miku - Project Diva Extend",
         "ULUS10298": "Hot Pixel",
         "UCUS98701": "Everybody's Tennis",
-        "ULUS10548": "TRON - Evolution"
+        "ULUS10548": "TRON - Evolution",
+        "ULES00503": "Grand Theft Auto: Vice City Stories",
+        "ULES00151": "Grand Theft Auto: Liberty City Stories"
     },
     "crosslinks": {
         "ULES01408": "ULUS10511",
@@ -205,7 +207,11 @@
         "ULJS00098": "UCES00758",
         "ULUS10269": "UCES00758",
         "ULES00566": "ULUS10180",
-        "ULJM05202": "ULUS10180"
+        "ULJM05202": "ULUS10180",
+        "ULUS10160": "ULES00503",
+        "ULES00502": "ULES00503",
+        "ULES00182": "ULES00151",
+        "ULUS10041": "ULES00151"
     },
     "cod_quirk_games": [
         "ULUS10218"
