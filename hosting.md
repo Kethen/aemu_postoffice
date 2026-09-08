@@ -12,7 +12,7 @@ Windows:
 
 1. Download latest release from https://github.com/Kethen/aemu_postoffice/releases
 2. Extract release zip
-3. Run `server_cpp/aemu_postoffice.exe` in a terminal, make sure `config.json` and `game_db.json` are next to the `aemu_postoffice.exe` in the same directory
+3. Run `server_cpp/aemu_postoffice.exe`, optionally in cmd, make sure `config.json` and `game_db.json` are next to `aemu_postoffice.exe` in the same directory
 
 MacOS/FreeBSD:
 
