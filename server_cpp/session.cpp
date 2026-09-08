@@ -315,6 +315,7 @@ SessionPumpStatus Session::pump_from_client(){
 					this->pdp_data_target = get_pdp_session_name(header->addr, header->port);
 					this->data_size = header->size;
 					if (this->data_size > AEMU_POSTOFFICE_PDP_BLOCK_MAX * 2){
+						LOG("%s: bad data size %d on session %s with client %s\n", __func__, this->data_size, this->get_identifier().c_str(), this->client_addr.c_str());
 						return SessionPumpStatus::BAD_DATA_SIZE;
 					}
 					this->from_client_data_buffer.erase(0, sizeof(aemu_postoffice_pdp));
@@ -326,6 +327,7 @@ SessionPumpStatus Session::pump_from_client(){
 					aemu_postoffice_ptp_data *header = (aemu_postoffice_ptp_data *)this->from_client_data_buffer.data();
 					this->data_size = header->size;
 					if (this->data_size > AEMU_POSTOFFICE_PTP_BLOCK_MAX * 2){
+						LOG("%s: bad data size %d on session %s with client %s\n", __func__, this->data_size, this->get_identifier().c_str(), this->client_addr.c_str());
 						return SessionPumpStatus::BAD_DATA_SIZE;
 					}
 					this->from_client_data_buffer.erase(0, sizeof(aemu_postoffice_ptp_data));
