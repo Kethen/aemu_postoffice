@@ -323,7 +323,7 @@ ClientPumpStatus Client::process_recv_buf_v1(){
 				op.op = ClientOp::SCAN;
 				client_ops.push_back(op);
 
-				LOG("%s: client %s %s on channel %d requesting scan\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
+				LOG_TS("%s: client %s %s on channel %d requesting scan\n", __func__, socket_name.c_str(), mac_bytes_to_mac_string(mac).c_str(), channel);
 				break;
 			}
 			case OPCODE_CHAT:{
