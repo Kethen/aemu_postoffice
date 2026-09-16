@@ -11,6 +11,7 @@
 #include "semaphore.h"
 #include "../adhocctl/server_cpp/snapshot.h"
 #include "snapshot.h"
+#include "native_socket.h"
 
 namespace aemu_postoffice_server {
 
@@ -58,6 +59,9 @@ class Server{
 		int sock_fd;
 		struct config config;
 		aemu_postoffice_adhocctl_server::snapshot adhocctl_snapshot;
+
+		AddrFamily addr_family;
+		void *enet_host;
 
 		void pump_pending_sessions(int set);
 		void pump_connect_and_from_clients(int set);

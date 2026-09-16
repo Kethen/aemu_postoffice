@@ -10,6 +10,11 @@
 
 #include "native_socket.h"
 
+#define ENET_IMPLEMENTATION
+#include "../ext/enet/enet.h"
+
+#include <mutex>
+
 namespace aemu_postoffice_server {
 
 static void set_thread_name(std::string name){
@@ -19,6 +24,23 @@ static void set_thread_name(std::string name){
 	#else
 	// hm, what do
 	#endif
+}
+
+static int _enet_initialize(){
+	static bool initialized = false;
+	static std::mutex init_mutex;
+	const std::lock_guard<std::mutex> guard(init_mutex);
+	if (initialized){
+		return 0;
+	}
+
+	int initialize_result = enet_initialize();
+	if (initialize_result == 0){
+		initialized = true;
+		return 0;
+	}
+	LOG("%s: failed initializing enet, 0x%x\n", __func__, initialize_result);
+	return initialize_result;
 }
 
 Server::Server(const struct config &config){
@@ -34,6 +56,25 @@ Server::Server(const struct config &config){
 		this->sock_fd = -1;
 		LOG("%s: failed parsing %s as ipv6 nor ipv4\n", __func__, config.ip_addr.c_str());
 		return;
+	}
+
+	addr_family = get_addr_family(config.ip_addr);
+	if (addr_family == AddrFamily::IPV4){
+		// TODO this is a mess, if only it is possible to move around mixed/ipv4 only modes runtime..
+		LOG("%s: not initializing enet in ipv4 only mode\n", __func__);
+		enet_host = NULL;
+	} else {
+		if ( _enet_initialize() != 0){
+			return;
+		}
+		ENetAddress enet_addr = {0};
+		enet_address_set_host_ip(&enet_addr, config.ip_addr.c_str());
+		enet_addr.port = config.port;
+		enet_host = enet_host_create(&enet_addr, config.max_num_sessions, 1, 0, 0);
+		if (enet_host == NULL){
+			LOG("%s: failed initializing enet host\n", __func__);
+			return;
+		}
 	}
 
 	this->stopping = false;
@@ -112,6 +153,10 @@ Server::~Server(){
 		native_close(this->sock_fd);
 	}else{
 		return;
+	}
+
+	if (enet_host != NULL){
+		enet_host_destroy((ENetHost*)enet_host);
 	}
 
 	this->stopping = true;
@@ -258,6 +303,9 @@ void Server::pump_to_clients(int set){
 
 ServerPumpStatus Server::pump(){
 	if (this->sock_fd == -1){
+		return ServerPumpStatus::LISTEN_SOCK_DEAD;
+	}
+	if (addr_family == AddrFamily::IPV6 && enet_host == NULL){
 		return ServerPumpStatus::LISTEN_SOCK_DEAD;
 	}
 
