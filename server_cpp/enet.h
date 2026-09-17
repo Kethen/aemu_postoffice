@@ -11,13 +11,10 @@
 #include <shared_mutex>
 #include <thread>
 #include <unordered_map>
-#include <unordered_set>
 #include <list>
 #include <string>
 
-#include <stdint.h>
-
-namespace aemu_postoffice_enet_server {
+namespace aemu_postoffice_enet {
 
 enum class EnetAcceptStatus{
 	SUCCESS,
@@ -38,14 +35,9 @@ enum class EnetSendStatus{
 };
 
 struct send_op {
-	int peer_ref;
 	std::string data;
 	bool reliable;
 	int channel;
-};
-
-struct recv_data {
-	std::string data;
 };
 
 struct peer {
@@ -54,32 +46,49 @@ struct peer {
 	std::mutex send_buf_mutex; // send locks for adding send operations, enet_host_service loop locks for draining send operations
 	std::list<send_op> send_buf;
 	std::mutex recv_buf_mutex; // recv locks for draining packet, enet_host_service loop locks for adding data
-	std::unordered_map<int, std::list<recv_data>> recv_buf;
+	std::unordered_map<int, std::list<std::string>> recv_buf;
+
+	peer(void *peer);
 };
 
-class BasicEnetServer{
+enum class BasicEnetClientState{
+	INACTIVE,
+	LISTEN,
+	CONNECT,
+};
+
+class BasicEnetClient{
 	public:
-		BasicEnetServer(std::string host, int port, int channels);
-		int accept(std::string &peer_addr, int &peer_port, EnetAcceptStatus &status); // returns a peer ref, or -1 on error
+		BasicEnetClient();
+		~BasicEnetClient();
+		int listen(const std::string &host, int port, int max_peers, int channels); // returns 0 on success, -1 on error
+		int accept(std::string &peer_addr, int &peer_port, EnetAcceptStatus &status); // returns a peer ref, or -1 on error, only usable in listen mode
+		int connect(const std::string &host, int port); // returns a peer ref, or -1 on error
 		int recv(int peer_ref, char *buf, int buf_len, int channel, EnetRecvStatus &status); // returns buffer used, -1 on error
 		int get_outgoing_data(int peer_ref); // returns data queued on enet for sending, returns -1 on a disconnected peer
 		int send(int peer_ref, const char *buf, int buf_len, int channel, bool reliable, EnetSendStatus &status); // returns data queued for sending, or -1 on error
 		int get_incoming_data(int peer_ref); // returns data queued on enet for receiving, returns -1 on a disconnected peer
 		void close(int peer_ref);
+		int reset();
 
 	private:
-		std::thread *worker;
+		bool stopping;
+		std::thread *in_worker;
+		std::thread *out_worker;
+		BasicEnetClientState state;
 
+		std::mutex server_mutex;
 		void *server; // let's not cause enet.h to be loaded everywhere, a ENetHost pointer, only enet_host_service loop should be touching this
 
-		std::unordered_set<void *> new_peers; // peers to be used by accept(), a set of ENetPeer
+		std::unordered_map<void *, struct peer> new_peers; // peers to be used by accept(), a set of ENetPeer
 		std::unordered_map<int, struct peer> peers;
-		std::unordered_map<void *, int> peers_lookup; // reverse lookup, mostly used during disconnect
-
-		std::list<struct send_op> send_buffer;
-		std::unordered_map<int, std::unordered_map<int, std::list<recv_data>>> recv_buffer; // peer ref -> channel -> list of recv_data
+		std::unordered_map<void *, int> peers_lookup; // reverse lookup, for handling events on enet_host_service loop
 
 		std::shared_mutex peer_mutex; // enet_host_service loop locks for new peers adding and disconnecting handling, enet_host_service share locks for recv/send handling, accept locks for upgrading new peers to peers, send/recv share locks for peer operations, close locks for removing peer
+
+		void worker_in_tick();
+		void worker_out_tick();
+		void create_workers();
 };
 
 }
