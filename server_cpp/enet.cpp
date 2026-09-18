@@ -3,6 +3,7 @@
 #include "log.h"
 
 #include <stdlib.h>
+#include <limits.h>
 
 #include <chrono>
 
@@ -34,6 +35,12 @@ class shared_lock_guard{
 peer::peer(void *peer){
 	this->peer = peer;
 	disconnected = false;
+}
+
+peer::peer(peer &copy){
+	peer = copy.peer;
+	send_buf = copy.send_buf;
+	recv_buf = copy.recv_buf;
 }
 
 BasicEnetClient::BasicEnetClient(){
@@ -95,8 +102,12 @@ void BasicEnetClient::worker_in_tick(){
 
 		switch(event.type){
 			case ENET_EVENT_TYPE_CONNECT:{
-				const shared_lock_guard peer_guard(peer_mutex, false);
-				new_peers.emplace(event.peer, event.peer);
+				const shared_lock_guard peer_guard(peer_mutex);
+				if (state != BasicEnetClientState::CONNECT && (peers_lookup.find(event.peer) != peers_lookup.end() || new_peers.find(event.peer) != peers.end())){
+					LOG("%s: unexpected second connect event from peer %p, debug this\n", __func__, event.peer);
+					exit(1);
+				}
+				create_peer_reference(event.peer);
 				break;
 			}
 			case ENET_EVENT_TYPE_DISCONNECT:
@@ -249,8 +260,14 @@ bool BasicEnetClient::create_workers(){
 }
 
 int BasicEnetClient::listen(const std::string &host, int port, int max_peers, int channels){
+	const lock_guard<std::mutex> guard(server_mutex);
 	if (_enet_initialize() != 0){
 		return -1;
+	}
+
+	if (state != BasicEnetClientState::INACTIVE){
+		LOG("%s: enet client is not inactive, debug this\n", __func__);
+		exit(1);
 	}
 
 	ENetAddress enet_addr = {0};
@@ -269,4 +286,77 @@ int BasicEnetClient::listen(const std::string &host, int port, int max_peers, in
 	}
 
 	state = BasicEnetClientState::LISTEN;
+	return 0;
 }
+
+// assumes peer lock
+void BasicEnetClient::create_peer_reference(void *peer){
+	new_peers.emplace(peer, peer);
+}
+
+// assumes peer lock
+bool BasicEnetClient::upgrade_peer(void *peer){
+	static int ref = 1;
+
+	if (peers.size() >= INT_MAX - 1){
+		return false;
+	}
+
+	while(peers.find(ref) != peers.end()){
+		ref++;
+		if (ref < 0){
+			ref = 1;
+		}
+	}
+
+	auto new_peer = new_peers.find(peer);
+	if (new_peer == new_peers.end()){
+		LOG("%s: trying to upgrade non existing peer, debug this\n", __func__);
+		exit(1);
+	}
+	peers[ref] = new_peer->second;
+	peers_lookup[peer] = ref;
+	new_peers.erase(new_peer);
+}
+
+int BasicEnetClient::connect(const std::string &host, int port, int channels){
+	const lock_guard<std::mutex> guard(server_mutex);
+	if (_enet_initialize() != 0){
+		return -1;
+	}
+
+	if (state != BasicEnetClientState::INACTIVE){
+		LOG("%s: enet client is not inactive, debug this\n", __func__);
+		exit(1);
+	}
+
+	ENetAddress enet_addr = {0};
+	enet_address_set_host_ip(&enet_addr, host.c_str());
+	enet_addr.port = port;
+	server = enet_host_create(NULL, 1, channels, 0, 0);
+
+	if (server == NULL){
+		reset();
+		return -1;
+	}
+
+	ENetPeer *peer = enet_host_connect((ENetHost *)server, &enet_addr, channels, NULL);
+	if (peer == NULL){
+		reset();
+		return -1;
+	}
+
+	if (!create_workers()){
+		reset();
+		return -1;
+	}
+
+	const shared_lock_guard peer_guard(peer_mutex, false);
+	create_peer_reference(peer);
+	upgrade_peer(peer);
+
+	state = BasicEnetClientState::CONNECT;
+
+	return peer_lookup[peer];
+}
+

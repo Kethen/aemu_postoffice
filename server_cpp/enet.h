@@ -7,6 +7,10 @@
 // we queue events in a c++ way
 // we make it so each peer behaves more like sockets
 
+// NOTE: a BasicENetClient only supports two operationg modes, as each BasicENetClient only manages a single ENetHost:
+// server: you setup a single server and accept connections
+// client: you setup a single client and connect to a single server
+
 #include <mutex>
 #include <shared_mutex>
 #include <thread>
@@ -49,6 +53,7 @@ struct peer {
 	std::unordered_map<int, std::list<std::string>> recv_buf;
 
 	peer(void *peer);
+	peer(peer &copy);
 };
 
 enum class BasicEnetClientState{
@@ -63,7 +68,7 @@ class BasicEnetClient{
 		~BasicEnetClient();
 		int listen(const std::string &host, int port, int max_peers, int channels); // returns 0 on success, -1 on error
 		int accept(std::string &peer_addr, int &peer_port, EnetAcceptStatus &status); // returns a peer ref, or -1 on error, only usable in listen mode
-		int connect(const std::string &host, int port); // returns a peer ref, or -1 on error
+		int connect(const std::string &host, int port, int channels); // returns a peer ref, or -1 on error
 		int recv(int peer_ref, char *buf, int buf_len, int channel, EnetRecvStatus &status); // returns buffer used, -1 on error
 		int get_outgoing_data(int peer_ref); // returns data queued on enet for sending, returns -1 on a disconnected peer
 		int send(int peer_ref, const char *buf, int buf_len, int channel, bool reliable, EnetSendStatus &status); // returns data queued for sending, or -1 on error
@@ -80,7 +85,7 @@ class BasicEnetClient{
 		std::mutex server_mutex;
 		void *server; // let's not cause enet.h to be loaded everywhere, a ENetHost pointer, only enet_host_service loop should be touching this
 
-		std::unordered_map<void *, struct peer> new_peers; // peers to be used by accept(), a set of ENetPeer
+		std::unordered_map<void *, struct peer> new_peers; // peers to be used by accept(), a set of struct peer
 		std::unordered_map<int, struct peer> peers;
 		std::unordered_map<void *, int> peers_lookup; // reverse lookup, for handling events on enet_host_service loop
 
@@ -89,6 +94,9 @@ class BasicEnetClient{
 		void worker_in_tick();
 		void worker_out_tick();
 		void create_workers();
+
+		void create_peer_reference(void *peer); // this assumes peer mutex is locked by caller
+		bool upgrade_peer(void *peer); // this assumes peer mutex is locked by caller
 };
 
 }
