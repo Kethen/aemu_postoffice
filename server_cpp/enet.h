@@ -38,6 +38,12 @@ enum class EnetSendStatus{
 	PEER_CLOSED,
 };
 
+enum class WorkerTickStatus{
+	IDLE,
+	SUCCESS,
+	ERRORED,
+};
+
 struct send_op {
 	std::string data;
 	bool reliable;
@@ -86,13 +92,14 @@ class BasicEnetClient{
 		void *server; // let's not cause enet.h to be loaded everywhere, a ENetHost pointer, only enet_host_service loop should be touching this
 
 		std::unordered_map<void *, struct peer> new_peers; // peers to be used by accept(), a set of struct peer
+		std::list<void *> new_peers_ordered;
 		std::unordered_map<int, struct peer> peers;
 		std::unordered_map<void *, int> peers_lookup; // reverse lookup, for handling events on enet_host_service loop
 
 		std::shared_mutex peer_mutex; // enet_host_service loop locks for new peers adding and disconnecting handling, enet_host_service share locks for recv/send handling, accept locks for upgrading new peers to peers, send/recv share locks for peer operations, close locks for removing peer
 
-		void worker_in_tick();
-		void worker_out_tick();
+		WorkerTickStatus worker_in_tick();
+		WorkerTickStatus worker_out_tick();
 		void create_workers();
 
 		void create_peer_reference(void *peer); // this assumes peer mutex is locked by caller

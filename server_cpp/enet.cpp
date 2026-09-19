@@ -79,107 +79,109 @@ BasicEnetClient::~BasicEnetClient(){
 	reset();
 }
 
-void BasicEnetClient::worker_in_tick(){
+WorkerTickStatus BasicEnetClient::worker_in_tick(){
 	ENetEvent event;
-
 	// run enet_host_service until we are out of events or after a 100 cycles
-	int processed_events = 0;
-	while(processed_events < 100){
-		const lock_guard<std::mutex> guard(server_mutex);
-		if (server == NULL){
-			return;
-		}
-		int service_state = enet_host_service((ENetHost *)server, &event, 0);
-		if (service_state == 0){
-			break;
-		}
-		if (service_state < 0){
-			LOG_TS("%s: enet host has died..\n", __func__);
-			enet_host_destroy((ENetHost *)server);
-			server = NULL;
-			break;
-		}
+	const lock_guard<std::mutex> guard(server_mutex);
+	if (server == NULL){
+		return WorkerTickStatus::ERRORED;
+	}
+	int service_state = enet_host_service((ENetHost *)server, &event, 0);
+	if (service_state == 0){
+		return WorkerTickStatus::IDLE;
+	}
+	if (service_state < 0){
+		LOG_TS("%s: enet host has died..\n", __func__);
+		enet_host_destroy((ENetHost *)server);
+		server = NULL;
+		return WorkerTickStatus::ERRORED;
+	}
 
-		switch(event.type){
-			case ENET_EVENT_TYPE_CONNECT:{
-				const shared_lock_guard peer_guard(peer_mutex);
-				if (state != BasicEnetClientState::CONNECT && (peers_lookup.find(event.peer) != peers_lookup.end() || new_peers.find(event.peer) != peers.end())){
-					LOG("%s: unexpected second connect event from peer %p, debug this\n", __func__, event.peer);
-					exit(1);
-				}
-				create_peer_reference(event.peer);
-				break;
-			}
-			case ENET_EVENT_TYPE_DISCONNECT:
-			case ENET_EVENT_TYPE_DISCONNECT_TIMEOUT:{
-				const shared_lock_guard peer_guard(peer_mutex, false);
-				auto new_peer = new_peers.find(event.peer));
-				if (new_peer != new_peers.end()){
-					new_peers.erase(new_peer);
-					break;
-				}
-				auto peer_lookup = peers_lookup.find(event.peer);
-				if (peer_lookup != peer_lookup){
-					auto peer = peers.find(peer_lookup->second);
-					peers[peer_lookup->second].disconnected = true;
-					break;
-				}
-				LOG("%s: cannot handle peer %p disconnection, debug this\n", __func__, event.peer);
+	switch(event.type){
+		case ENET_EVENT_TYPE_CONNECT:{
+			const shared_lock_guard peer_guard(peer_mutex);
+			if (state != BasicEnetClientState::CONNECT && (peers_lookup.find(event.peer) != peers_lookup.end() || new_peers.find(event.peer) != peers.end())){
+				LOG("%s: unexpected second connect event from peer %p, debug this\n", __func__, event.peer);
 				exit(1);
-				break;
 			}
-			case ENET_EVENT_TYPE_NONE:{
-				// when does this happen..?
-				break;
-			}
-			case ENET_EVENT_TYPE_RECEIVE:{
-				const shared_lock_guard peer_guard(peer_mutex, true);
-				struct *peer = NULL;
-				auto new_peer = new_peers.find(event.peer);
-				if (new_peer != new_peers.end()){
-					peer = &new_peer->second;
-					break;
-				}
-				if (peer == NULL){
-					auto peer_lookup = peers_lookup.find(event.peer);
-					if (peer_lookup != peers_lookup.end()){
-						peer = &peers.[peer_lookup->second];
+			create_peer_reference(event.peer);
+			return WorkerTickStatus::SUCCESS;
+		}
+		case ENET_EVENT_TYPE_DISCONNECT:
+		case ENET_EVENT_TYPE_DISCONNECT_TIMEOUT:{
+			const shared_lock_guard peer_guard(peer_mutex, false);
+			auto new_peer = new_peers.find(event.peer));
+			if (new_peer != new_peers.end()){
+				new_peers.erase(new_peer);
+				for(auto ordered_new_peer = new_peers_ordered.begin();ordered_new_peer != new_peers_ordered.end();ordered_new_peer++){
+					if (*ordered_new_peer == event.peer){
+						new_peers_ordered.erase(ordered_new_peer);
+						break;
 					}
 				}
-				if (peer == NULL){
-					aemu_postoffice::LOG("%s: cannot find peer %p during packet receive, debug this\n", __func__, event.peer);
-					exit(1);
-				}
-				const lock_guard<std::mutex> guard(peer->recv_buf_mutex);
-				auto channel = peer->recv_buf.find(event.channelID);
-				if (channel == peer->recv_buf.end()){
-					peer->recv_buf[event.channelID] = std::list<struct recv_data>;
-					channel = peer->recv_buf.find(event.channelID);
-				}
-				channel->second.emplace_back((const char *)event.packet->data, event.packet->dataLength);
-				enet_packet_destroy(event.packet);
-				break;
+				return WorkerTickStatus::SUCCESS;
 			}
-			default:
-				LOG("%s: unreachable codepath, debug this\n", __func__);
-				exit(1);
-				break;
+			auto peer_lookup = peers_lookup.find(event.peer);
+			if (peer_lookup != peer_lookup){
+				auto peer = peers.find(peer_lookup->second);
+				peers[peer_lookup->second].disconnected = true;
+				return WorkerTickStatus::SUCCESS;
+			}
+			LOG("%s: cannot handle peer %p disconnection, debug this\n", __func__, event.peer);
+			exit(1);
+			return WorkerTickStatus::ERRORED;
 		}
-
-		processed_events++;
+		case ENET_EVENT_TYPE_NONE:{
+			// when does this happen..?
+			return WorkerTickStatus::SUCCESS;
+		}
+		case ENET_EVENT_TYPE_RECEIVE:{
+			const shared_lock_guard peer_guard(peer_mutex, true);
+			struct *peer = NULL;
+			auto new_peer = new_peers.find(event.peer);
+			if (new_peer != new_peers.end()){
+				peer = &new_peer->second;
+			}
+			if (peer == NULL){
+				auto peer_lookup = peers_lookup.find(event.peer);
+				if (peer_lookup != peers_lookup.end()){
+					peer = &peers.[peer_lookup->second];
+				}
+			}
+			if (peer == NULL){
+				aemu_postoffice::LOG("%s: cannot find peer %p during packet receive, debug this\n", __func__, event.peer);
+				exit(1);
+				return WorkerTickStatus::ERRORED;
+			}
+			const lock_guard<std::mutex> guard(peer->recv_buf_mutex);
+			auto channel = peer->recv_buf.find(event.channelID);
+			if (channel == peer->recv_buf.end()){
+				peer->recv_buf[event.channelID] = std::list<struct recv_data>;
+				channel = peer->recv_buf.find(event.channelID);
+			}
+			channel->second.emplace_back((const char *)event.packet->data, event.packet->dataLength);
+			enet_packet_destroy(event.packet);
+			return WorkerTickStatus::SUCCESS;
+		}
+		default:
+			LOG("%s: unreachable codepath, debug this\n", __func__);
+			exit(1);
+			return WorkerTickStatus::ERRORED;
 	}
 }
 
-void BasicEnetClient::worker_out_tick(){
+WorkerTickStatus BasicEnetClient::worker_out_tick(){
 	if (server == NULL){
-		return;
+		return WorkerTickStatus::ERRORED;
 	}
 
 	// queue peer data for sending
 	const shared_lock_guard peer_guard(peer_mutex, true);
+	bool idle = true;
 	for (auto peer = peers.begin();peer != peers.end();peer++){
 		const lock_guard<std::mutex> guard(peer->second.send_buf_mutex);
 		while(peer->second.send_buf.size() != 0){
+			idle = false;
 			const lock_guard<std::mutex> guard(server_mutex);
 			struct send_op &op = peer->send_buf.front();
 			enet_uint32 packet_flags = 0;
@@ -200,6 +202,8 @@ void BasicEnetClient::worker_out_tick(){
 			send_buf.pop_front();
 		}
 	}
+
+	return idle ? WorkerTickStatus::IDLE : WorkerTickStatus::SUCCESS;
 }
 
 static int _enet_initialize(){
@@ -223,13 +227,12 @@ bool BasicEnetClient::create_workers(){
 	stopping = false;
 	in_worker = new std::thread([this] {
 		const auto target_frametime = std::chrono::milliseconds(1000 / 120);
-		auto last_tick = std::chrono::high_resolution_clock::now();
 		while (!stopping){
 			auto begin = std::chrono::high_resolution_clock::now();
-			worker_in_tick();
+			WorkerTickStatus tick_status = worker_in_tick();
 			auto time_used = std::chrono::high_resolution_clock::now() - begin;
-			if (time_used > target_frametime){
-				std::this_thread::sleep_for(time_used - target_frame_time);
+			if (time_used > target_frametime && tick_status == WorkerTickStatus::IDLE){
+				std::this_thread::sleep_for(time_used - final_frametime_target);
 			}
 			if (server == NULL){
 				break;
@@ -239,13 +242,14 @@ bool BasicEnetClient::create_workers(){
 
 	out_worker = new std::thread([this] {
 		const auto target_frametime = std::chrono::milliseconds(1000 / 120);
-		auto last_tick = std::chrono::high_resolution_clock::now();
+		const auto target_frametime_idle = std::chrono::milliseconds(1000 / 30);
 		while (!stopping){
 			auto begin = std::chrono::high_resolution_clock::now();
-			worker_out_tick();
+			WorkerTickStatus tick_status = worker_out_tick();
 			auto time_used = std::chrono::high_resolution_clock::now() - begin;
-			if (time_used > target_frametime){
-				std::this_thread::sleep_for(time_used - target_frame_time);
+			const auto &final_frametime_target = tick_status == WorkerTickStatus::IDLE ? target_frametime_idle : target_frame_time;
+			if (time_used > final_frametime_target){
+				std::this_thread::sleep_for(time_used - final_frametime_target);
 			}
 			if (server == NULL){
 				break;
@@ -292,6 +296,7 @@ int BasicEnetClient::listen(const std::string &host, int port, int max_peers, in
 // assumes peer lock
 void BasicEnetClient::create_peer_reference(void *peer){
 	new_peers.emplace(peer, peer);
+	new_peers_ordered.insert(peer);
 }
 
 // assumes peer lock
@@ -317,6 +322,13 @@ bool BasicEnetClient::upgrade_peer(void *peer){
 	peers[ref] = new_peer->second;
 	peers_lookup[peer] = ref;
 	new_peers.erase(new_peer);
+
+	for(auto ordered_new_peer = new_peers_ordered.begin();ordered_new_peer != new_peers_ordered.end();ordered_new_peer++){
+		if (*ordered_new_peer == event.peer){
+			new_peers_ordered.erase(ordered_new_peer);
+			break;
+		}
+	}
 }
 
 int BasicEnetClient::connect(const std::string &host, int port, int channels){
