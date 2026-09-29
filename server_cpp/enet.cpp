@@ -541,6 +541,8 @@ void BasicEnetClient::close(int peer_ref){
 		return;
 	}
 
+	auto peer_lookup = peers_lookup.find(peer->second.enet_peer);
+	peers_lookup.erase(peer_lookup);
 	peers.erase(peer);
 }
 
