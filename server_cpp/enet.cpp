@@ -197,6 +197,8 @@ WorkerTickStatus BasicEnetClient::worker_out_tick(){
 	}
 
 	// queue peer data for sending
+	// this lock ordering is important to not cause dead locks with the other worker
+	const std::lock_guard<std::mutex> guard(server_mutex);
 	const shared_lock_guard peer_guard(peer_mutex, true);
 	if (peers.size() == 0){
 		return WorkerTickStatus::IDLE;
@@ -204,12 +206,11 @@ WorkerTickStatus BasicEnetClient::worker_out_tick(){
 	bool idle = true;
 	for (auto peer = peers.begin();peer != peers.end();peer++){
 		const std::lock_guard<std::mutex> guard(peer->second.send_buf_mutex);
-		if (peer->second.disconnected){
+		if (peer->second.disconnected || peer->second.closed){
 			continue;
 		}
 		while(peer->second.send_buf.size() != 0){
 			idle = false;
-			const std::lock_guard<std::mutex> guard(server_mutex);
 			struct send_op &op = peer->second.send_buf.front();
 			enet_uint32 packet_flags = 0;
 			if (op.reliable){
