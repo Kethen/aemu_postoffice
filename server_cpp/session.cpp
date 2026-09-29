@@ -130,6 +130,7 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 		};
 		switch(init->init_type){
 			case AEMU_POSTOFFICE_INIT_PTP_LISTEN:
+			case AEMU_POSTOFFICE_INIT_PDP_UNRELIABLE:
 			case AEMU_POSTOFFICE_INIT_PDP:{
 				return strict_mode_check() ? PendingSessionPumpStatus::SESSION_READY : PendingSessionPumpStatus::SUCCESS;
 			}
@@ -170,12 +171,13 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 	memcpy(&init, this->init_data_buffer.data(), sizeof(init));
 	this->init_data_buffer.erase(0, sizeof(init));
 	switch(init.init_type){
-		case AEMU_POSTOFFICE_INIT_PDP:{
-			return Session(SessionMode::PDP, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config, this->enet_server);
+		case AEMU_POSTOFFICE_INIT_PDP:
+		case AEMU_POSTOFFICE_INIT_PDP_UNRELIABLE:{
+			return Session(SessionMode::PDP, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config, this->enet_server, init.init_type == AEMU_POSTOFFICE_INIT_PDP ? true : false);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
 			this->init_data_buffer = std::string("");
-			return Session(SessionMode::PTP_LISTEN, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config, this->enet_server);
+			return Session(SessionMode::PTP_LISTEN, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config, this->enet_server, true);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
 			std::string listen_session_name = get_listen_session_name(init.dst_addr, init.dport);
@@ -184,7 +186,7 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 				LOG("%s: critical, ptp listen session removed during ptp connect session creation, fix this\n", __func__);
 				exit(1);
 			}
-			return Session(SessionMode::PTP_CONNECT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &listen_session->second, this->client_addr, this->client_port, this->config, this->enet_server);
+			return Session(SessionMode::PTP_CONNECT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &listen_session->second, this->client_addr, this->client_port, this->config, this->enet_server, true);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_ACCEPT:{
 			std::string connect_session_name = get_connect_session_name(init.dst_addr, init.dport, init.src_addr, init.sport);
@@ -193,12 +195,12 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 				LOG("%s: critical, ptp connect session removed during accept session creation, fix this\n", __func__);
 				exit(1);
 			}
-			return Session(SessionMode::PTP_ACCEPT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &connect_session->second, this->client_addr, this->client_port, this->config, this->enet_server);
+			return Session(SessionMode::PTP_ACCEPT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &connect_session->second, this->client_addr, this->client_port, this->config, this->enet_server, true);
 		}
 		default:{
 			LOG("%s: critical, unknown init type %d during session creation, fix this\n", __func__, init.init_type);
 			exit(1);
-			return Session(SessionMode::PDP, NULL, 0, NULL, 0, std::string(""), 0, NULL, std::string(""), 0, NULL, NULL);
+			return Session(SessionMode::PDP, NULL, 0, NULL, 0, std::string(""), 0, NULL, std::string(""), 0, NULL, NULL, true);
 		}
 	}
 }
@@ -210,7 +212,7 @@ void PendingSession::close_socket(){
 	}
 }
 
-Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config, aemu_postoffice_enet::BasicEnetClient *enet_server){
+Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config, aemu_postoffice_enet::BasicEnetClient *enet_server, bool enet_reliable){
 	this->mode = mode;
 	this->config = config;
 
@@ -227,6 +229,7 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 	this->client_port = client_port;
 	this->phase = SessionPhase::HEADER;
 	this->ptp_init_sent = false;
+	this->enet_reliable = enet_reliable;
 	if (mode != SessionMode::PTP_LISTEN){
 		this->from_client_data_buffer = initial_data_buffer;
 	}
@@ -453,7 +456,6 @@ SessionPumpStatus Session::pump_to_client(){
 			}
 			to_client_data_buffer.erase(0, send_status);
 		} else {
-			// TODO reliablity mode
 			int packet_size = 0;
 			switch(this->mode){
 				case SessionMode::PDP:{
@@ -495,7 +497,7 @@ SessionPumpStatus Session::pump_to_client(){
 				}
 			}
 			aemu_postoffice_enet::EnetSendStatus status;
-			int send_status = enet_server->send(sock_fd, to_client_data_buffer.data(), packet_size, 0, true, status);
+			int send_status = enet_server->send(sock_fd, to_client_data_buffer.data(), packet_size, 0, enet_reliable, status);
 			if (status != aemu_postoffice_enet::EnetSendStatus::SUCCESS){
 				LOG("%s: enet error %d on session %s with client %s\n",  __func__, status, this->get_identifier().c_str(), this->client_addr.c_str());
 				return SessionPumpStatus::SOCKET_CLOSED;

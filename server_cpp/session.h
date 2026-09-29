@@ -75,7 +75,7 @@ enum class SessionPhase{
 
 class Session{
 	public:
-		Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config, aemu_postoffice_enet::BasicEnetClient *enet_server);
+		Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config, aemu_postoffice_enet::BasicEnetClient *enet_server, bool enet_reliable);
 		~Session();
 		SessionPumpStatus pump_connect(); // 0. connect session has to be pumped until a connect accept pair is formed
 		SessionPumpStatus pump_from_client(); // 1. fetch data from client socket into buffer and put read data into send list
@@ -127,6 +127,7 @@ class Session{
 		int client_port;
 
 		bool ptp_init_sent;
+		bool enet_reliable;
 };
 
 }
