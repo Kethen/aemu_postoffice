@@ -104,11 +104,7 @@ WorkerTickStatus BasicEnetClient::worker_in_tick(){
 	}
 
 	if (service_state == 0){
-		return WorkerTickStatus::IDLE;
-	}
-
-	if (new_peers.size() == 0 && peers.size()){
-		return WorkerTickStatus::IDLE;
+		return WorkerTickStatus::SUCCESS;
 	}
 
 	switch(event.type){
