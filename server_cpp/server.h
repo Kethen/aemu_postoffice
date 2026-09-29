@@ -61,7 +61,6 @@ class Server{
 		aemu_postoffice_adhocctl_server::snapshot adhocctl_snapshot;
 
 		AddrFamily addr_family;
-		void *enet_host;
 
 		void pump_pending_sessions(int set);
 		void pump_connect_and_from_clients(int set);

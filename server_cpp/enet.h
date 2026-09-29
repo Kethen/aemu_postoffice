@@ -31,11 +31,13 @@ enum class EnetRecvStatus{
 	WOULD_BLOCK,
 	BUFFER_TOO_SMALL,
 	PEER_CLOSED,
+	PEER_NOT_FOUND,
 };
 
 enum class EnetSendStatus{
 	SUCCESS,
 	PEER_CLOSED,
+	PEER_NOT_FOUND,
 };
 
 enum class WorkerTickStatus{
@@ -48,18 +50,20 @@ struct send_op {
 	std::string data;
 	bool reliable;
 	int channel;
+
+	send_op(const std::string &data, bool reliable, int channel);
 };
 
 struct peer {
 	bool disconnected;
-	void *peer; // a ENetPeer pointer
+	void *enet_peer; // a ENetPeer pointer
 	std::mutex send_buf_mutex; // send locks for adding send operations, enet_host_service loop locks for draining send operations
 	std::list<send_op> send_buf;
 	std::mutex recv_buf_mutex; // recv locks for draining packet, enet_host_service loop locks for adding data
 	std::unordered_map<int, std::list<std::string>> recv_buf;
 
 	peer(void *peer);
-	peer(peer &copy);
+	peer(struct peer &copy);
 };
 
 enum class BasicEnetClientState{
@@ -76,11 +80,11 @@ class BasicEnetClient{
 		int accept(std::string &peer_addr, int &peer_port, EnetAcceptStatus &status); // returns a peer ref, or -1 on error, only usable in listen mode
 		int connect(const std::string &host, int port, int channels); // returns a peer ref, or -1 on error
 		int recv(int peer_ref, char *buf, int buf_len, int channel, EnetRecvStatus &status); // returns buffer used, -1 on error
-		int get_outgoing_data(int peer_ref); // returns data queued on enet for sending, returns -1 on a disconnected peer
 		int send(int peer_ref, const char *buf, int buf_len, int channel, bool reliable, EnetSendStatus &status); // returns data queued for sending, or -1 on error
-		int get_incoming_data(int peer_ref); // returns data queued on enet for receiving, returns -1 on a disconnected peer
+		int get_incoming_data(int peer_ref, int channel); // returns data queued on enet for receiving, returns -1 on a disconnected peer
+		int get_outgoing_data(int peer_ref, int channel); // returns data queued on enet for sending, returns -1 on a disconnected peer
 		void close(int peer_ref);
-		int reset();
+		void reset();
 
 	private:
 		bool stopping;
@@ -100,10 +104,10 @@ class BasicEnetClient{
 
 		WorkerTickStatus worker_in_tick();
 		WorkerTickStatus worker_out_tick();
-		void create_workers();
+		bool create_workers();
 
 		void create_peer_reference(void *peer); // this assumes peer mutex is locked by caller
-		bool upgrade_peer(void *peer); // this assumes peer mutex is locked by caller
+		int upgrade_peer(void *peer); // this assumes peer mutex is locked by caller
 };
 
 }
