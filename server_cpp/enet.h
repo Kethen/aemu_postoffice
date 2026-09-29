@@ -56,6 +56,7 @@ struct send_op {
 
 struct peer {
 	bool disconnected;
+	bool closed;
 	void *enet_peer; // a ENetPeer pointer
 	std::mutex send_buf_mutex; // send locks for adding send operations, enet_host_service loop locks for draining send operations
 	std::list<send_op> send_buf;

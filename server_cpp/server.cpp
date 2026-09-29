@@ -7,21 +7,13 @@
 
 #include "server.h"
 #include "log.h"
+#include "common.h"
 
 #include "native_socket.h"
 
 #include <mutex>
 
 namespace aemu_postoffice_server {
-
-static void set_thread_name(std::string name){
-	#if __unix__
-	pthread_t tid = pthread_self();
-	pthread_setname_np(tid, name.c_str());
-	#else
-	// hm, what do
-	#endif
-}
 
 Server::Server(const struct config &config){
 	this->config = config;
@@ -42,8 +34,16 @@ Server::Server(const struct config &config){
 	if (addr_family == AddrFamily::IPV4){
 		// TODO this is a mess, if only it is possible to move around mixed/ipv4 only modes runtime..
 		LOG("%s: not initializing enet in ipv4 only mode\n", __func__);
+		enet_server = NULL;
 	} else {
-		// TODO initialize enet
+		enet_server = new aemu_postoffice_enet::BasicEnetClient();
+		int listen_status = enet_server->listen(config.ip_addr, config.port, config.max_num_sessions, 1);
+		if (listen_status != 0){
+			LOG("%s: failed initializing enet\n", __func__);
+			delete enet_server;
+			enet_server = NULL;
+			return;
+		}
 	}
 
 	this->stopping = false;
@@ -124,8 +124,6 @@ Server::~Server(){
 		return;
 	}
 
-	// TODO cleanup enet
-
 	this->stopping = true;
 	for(auto &sema : this->pending_sessions_pump_worker_semas){
 		sema.release();
@@ -152,6 +150,11 @@ Server::~Server(){
 
 	for(auto &pending_session : this->pending_sessions){
 		pending_session.close_socket();
+	}
+
+	if (enet_server != NULL){
+		delete enet_server;
+		enet_server = NULL;
 	}
 }
 
@@ -272,7 +275,10 @@ ServerPumpStatus Server::pump(){
 	if (this->sock_fd == -1){
 		return ServerPumpStatus::LISTEN_SOCK_DEAD;
 	}
-	// TODO check if enet is started if addr_family == AddrFamily::IPV6
+
+	if (addr_family == AddrFamily::IPV6 && enet_server == NULL){
+		return ServerPumpStatus::LISTEN_SOCK_DEAD;
+	}
 
 	// create pending sessions from accept
 	while(true){
@@ -301,7 +307,24 @@ ServerPumpStatus Server::pump(){
 			continue;
 		}
 
-		pending_sessions.push_back(PendingSession(accept_status, peer_addr, peer_port, &this->config));
+		pending_sessions.emplace_back(accept_status, peer_addr, peer_port, &this->config, (aemu_postoffice_enet::BasicEnetClient *)NULL);
+	}
+
+	while(enet_server != NULL){
+		std::string peer_addr;
+		int peer_port;
+		aemu_postoffice_enet::EnetAcceptStatus status;
+
+		int ref = enet_server->accept(peer_addr, peer_port, status);
+		if (status == aemu_postoffice_enet::EnetAcceptStatus::NO_PEER){
+			break;
+		}
+		if (status != aemu_postoffice_enet::EnetAcceptStatus::SUCCESS){
+			LOG("%s: enet accept error %d\n", __func__, status);
+			return ServerPumpStatus::LISTEN_SOCK_DEAD;
+		}
+
+		pending_sessions.emplace_back(ref, peer_addr, peer_port, &this->config, enet_server);
 	}
 
 	if (pending_sessions.size() == 0 && sessions.size() == 0){

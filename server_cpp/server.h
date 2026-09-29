@@ -12,6 +12,7 @@
 #include "../adhocctl/server_cpp/snapshot.h"
 #include "snapshot.h"
 #include "native_socket.h"
+#include "enet.h"
 
 namespace aemu_postoffice_server {
 
@@ -59,6 +60,8 @@ class Server{
 		int sock_fd;
 		struct config config;
 		aemu_postoffice_adhocctl_server::snapshot adhocctl_snapshot;
+
+		aemu_postoffice_enet::BasicEnetClient *enet_server;
 
 		AddrFamily addr_family;
 

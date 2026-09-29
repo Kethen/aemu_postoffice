@@ -1,6 +1,7 @@
 #define ENET_IMPLEMENTATION
 #include "../ext/enet/enet.h"
 #include "log.h"
+#include "common.h"
 
 #include <stdlib.h>
 #include <limits.h>
@@ -37,6 +38,7 @@ class shared_lock_guard{
 peer::peer(void *peer){
 	this->enet_peer = peer;
 	disconnected = false;
+	closed = false;
 }
 
 peer::peer(peer &copy){
@@ -44,6 +46,7 @@ peer::peer(peer &copy){
 	send_buf = copy.send_buf;
 	recv_buf = copy.recv_buf;
 	disconnected = copy.disconnected;
+	closed = copy.closed;
 }
 
 BasicEnetClient::BasicEnetClient(){
@@ -139,7 +142,14 @@ WorkerTickStatus BasicEnetClient::worker_in_tick(){
 			auto peer_lookup = peers_lookup.find(event.peer);
 			if (peer_lookup != peers_lookup.end()){
 				auto peer = peers.find(peer_lookup->second);
-				peer->second.disconnected = true;
+				if (!peer->second.closed){
+					peer->second.disconnected = true;
+					return WorkerTickStatus::SUCCESS;
+				}
+
+				auto peer_lookup = peers_lookup.find(peer->second.enet_peer);
+				peers_lookup.erase(peer_lookup);
+				peers.erase(peer);
 				return WorkerTickStatus::SUCCESS;
 			}
 			LOG("%s: cannot handle peer %p disconnection, debug this\n", __func__, event.peer);
@@ -247,13 +257,14 @@ static int _enet_initialize(){
 bool BasicEnetClient::create_workers(){
 	stopping = false;
 	in_worker = new std::thread([this] {
+		set_thread_name("enet in");
 		const auto target_frametime = std::chrono::milliseconds(1000 / 120);
 		while (!stopping){
 			auto begin = std::chrono::high_resolution_clock::now();
 			WorkerTickStatus tick_status = worker_in_tick();
 			auto time_used = std::chrono::high_resolution_clock::now() - begin;
-			if (time_used > target_frametime && tick_status == WorkerTickStatus::IDLE){
-				std::this_thread::sleep_for(time_used - target_frametime);
+			if (time_used < target_frametime && tick_status == WorkerTickStatus::IDLE){
+				std::this_thread::sleep_for(target_frametime - time_used);
 			}
 			if (server == NULL){
 				break;
@@ -262,6 +273,7 @@ bool BasicEnetClient::create_workers(){
 	});
 
 	out_worker = new std::thread([this] {
+		set_thread_name("enet out");
 		const auto target_frametime = std::chrono::milliseconds(1000 / 120);
 		const auto target_frametime_idle = std::chrono::milliseconds(1000 / 30);
 		while (!stopping){
@@ -269,8 +281,8 @@ bool BasicEnetClient::create_workers(){
 			WorkerTickStatus tick_status = worker_out_tick();
 			auto time_used = std::chrono::high_resolution_clock::now() - begin;
 			const auto &final_frametime_target = tick_status == WorkerTickStatus::IDLE ? target_frametime_idle : target_frametime;
-			if (time_used > final_frametime_target){
-				std::this_thread::sleep_for(time_used - final_frametime_target);
+			if (time_used < final_frametime_target){
+				std::this_thread::sleep_for(final_frametime_target - time_used);
 			}
 			if (server == NULL){
 				break;
@@ -428,7 +440,7 @@ int BasicEnetClient::connect(const std::string &host, int port, int channels){
 int BasicEnetClient::recv(int peer_ref, char *buf, int buf_len, int channel, EnetRecvStatus &status){
 	const shared_lock_guard peer_guard(peer_mutex, true);
 	auto peer = peers.find(peer_ref);
-	if (peer == peers.end()){
+	if (peer == peers.end() || peer->second.closed){
 		status = EnetRecvStatus::PEER_NOT_FOUND;
 		return -1;
 	}
@@ -472,7 +484,7 @@ send_op::send_op(const std::string &data, bool reliable, int channel){
 int BasicEnetClient::send(int peer_ref, const char *buf, int buf_len, int channel, bool reliable, EnetSendStatus &status){
 	const shared_lock_guard peer_guard(peer_mutex, true);
 	auto peer = peers.find(peer_ref);
-	if (peer == peers.end()){
+	if (peer == peers.end() || peer->second.closed){
 		status = EnetSendStatus::PEER_NOT_FOUND;
 		return -1;
 	}
@@ -494,7 +506,7 @@ int BasicEnetClient::get_incoming_data(int peer_ref, int channel){
 	if (peer == peers.end()){
 		return -1;
 	}
-	if (peer->second.disconnected){
+	if (peer->second.disconnected || peer->second.closed){
 		return -1;
 	}
 
@@ -516,7 +528,7 @@ int BasicEnetClient::get_outgoing_data(int peer_ref, int channel){
 	if (peer == peers.end()){
 		return -1;
 	}
-	if (peer->second.disconnected){
+	if (peer->second.disconnected || peer->second.closed){
 		return -1;
 	}
 
@@ -533,11 +545,19 @@ int BasicEnetClient::get_outgoing_data(int peer_ref, int channel){
 }
 
 void BasicEnetClient::close(int peer_ref){
+	// changing the lock order here could cause dead lock with worker_in_tick
+	const std::lock_guard<std::mutex> guard(server_mutex);
 	const shared_lock_guard peer_guard(peer_mutex, false);
 	auto peer = peers.find(peer_ref);
 	if (peer == peers.end()){
 		LOG("%s: removing non existing peer %d\n", __func__, peer_ref);
 		exit(1);
+		return;
+	}
+
+	if (!peer->second.disconnected){
+		peer->second.closed = true;
+		enet_peer_disconnect((ENetPeer *)peer->second.enet_peer, 0);
 		return;
 	}
 

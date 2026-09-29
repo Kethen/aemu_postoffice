@@ -9,12 +9,13 @@
 
 namespace aemu_postoffice_server {
 
-PendingSession::PendingSession(int sock_fd, std::string client_addr, int client_port, struct config *config){
+PendingSession::PendingSession(int sock_fd, std::string client_addr, int client_port, struct config *config, aemu_postoffice_enet::BasicEnetClient *enet_server){
 	this->sock_fd = sock_fd;
 	this->client_addr = client_addr;
 	this->client_port = client_port;
 	this->create_time = std::chrono::high_resolution_clock::now();
 	this->config = config;
+	this->enet_server = enet_server;
 	LOG_TS("%s: %s connecting\n", __func__, client_addr.c_str());
 }
 
@@ -55,22 +56,31 @@ PendingSessionPumpStatus PendingSession::pump(std::unordered_map<std::string, Se
 		return PendingSessionPumpStatus::TIMEOUT;
 	}
 
-	int recv_status = native_recv(this->sock_fd, buf, sizeof(buf));
-	if (recv_status == 0){
-		LOG_TS("%s: client %s closed socket during init\n", __func__, this->client_addr.c_str());
-		native_close(this->sock_fd);
-		return PendingSessionPumpStatus::SOCKET_CLOSED;
-	}
-	if (recv_status < 0){
-		int error = native_get_last_socket_error();
-		if (!native_error_is_would_block(error)){
-			LOG_TS("%s: client %s has socket error 0x%x during init\n", __func__, this->client_addr.c_str(), error);
+	if (enet_server == NULL){
+		int recv_status = native_recv(this->sock_fd, buf, sizeof(buf));
+		if (recv_status == 0){
+			LOG_TS("%s: client %s closed socket during init\n", __func__, this->client_addr.c_str());
 			native_close(this->sock_fd);
 			return PendingSessionPumpStatus::SOCKET_CLOSED;
 		}
-	}
-	if (recv_status > 0){
-		// can be <0 if we got a would block, which happens during connect wait
+		if (recv_status < 0){
+			int error = native_get_last_socket_error();
+			if (!native_error_is_would_block(error)){
+				LOG_TS("%s: client %s has socket error 0x%x during init\n", __func__, this->client_addr.c_str(), error);
+				native_close(this->sock_fd);
+				return PendingSessionPumpStatus::SOCKET_CLOSED;
+			}
+		}
+		if (recv_status > 0){
+			// can be <0 if we got a would block, which happens during connect wait
+			init_data_buffer.append(buf, recv_status);
+		}
+	} else if (init_data_buffer.length() < sizeof(aemu_postoffice_init)) {
+		aemu_postoffice_enet::EnetRecvStatus status;
+		int recv_status = enet_server->recv(this->sock_fd, buf, sizeof(buf), 0, status);
+		if (recv_status == -1){
+			LOG_TS("%s: client %s has enet recv error %d during init\n", __func__, this->client_addr.c_str(), status);
+		}
 		init_data_buffer.append(buf, recv_status);
 	}
 
@@ -161,11 +171,11 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 	this->init_data_buffer.erase(0, sizeof(init));
 	switch(init.init_type){
 		case AEMU_POSTOFFICE_INIT_PDP:{
-			return Session(SessionMode::PDP, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config);
+			return Session(SessionMode::PDP, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config, this->enet_server);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_LISTEN:{
 			this->init_data_buffer = std::string("");
-			return Session(SessionMode::PTP_LISTEN, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config);
+			return Session(SessionMode::PTP_LISTEN, init.src_addr, init.sport, NULL, 0, this->init_data_buffer, this->sock_fd, NULL, this->client_addr, this->client_port, this->config, this->enet_server);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_CONNECT:{
 			std::string listen_session_name = get_listen_session_name(init.dst_addr, init.dport);
@@ -174,7 +184,7 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 				LOG("%s: critical, ptp listen session removed during ptp connect session creation, fix this\n", __func__);
 				exit(1);
 			}
-			return Session(SessionMode::PTP_CONNECT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &listen_session->second, this->client_addr, this->client_port, this->config);
+			return Session(SessionMode::PTP_CONNECT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &listen_session->second, this->client_addr, this->client_port, this->config, this->enet_server);
 		}
 		case AEMU_POSTOFFICE_INIT_PTP_ACCEPT:{
 			std::string connect_session_name = get_connect_session_name(init.dst_addr, init.dport, init.src_addr, init.sport);
@@ -183,12 +193,12 @@ Session PendingSession::create_session(std::unordered_map<std::string, Session> 
 				LOG("%s: critical, ptp connect session removed during accept session creation, fix this\n", __func__);
 				exit(1);
 			}
-			return Session(SessionMode::PTP_ACCEPT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &connect_session->second, this->client_addr, this->client_port, this->config);
+			return Session(SessionMode::PTP_ACCEPT, init.src_addr, init.sport, init.dst_addr, init.dport, this->init_data_buffer, this->sock_fd, &connect_session->second, this->client_addr, this->client_port, this->config, this->enet_server);
 		}
 		default:{
 			LOG("%s: critical, unknown init type %d during session creation, fix this\n", __func__, init.init_type);
 			exit(1);
-			return Session(SessionMode::PDP, NULL, 0, NULL, 0, std::string(""), 0, NULL, std::string(""), 0, NULL);
+			return Session(SessionMode::PDP, NULL, 0, NULL, 0, std::string(""), 0, NULL, std::string(""), 0, NULL, NULL);
 		}
 	}
 }
@@ -200,7 +210,7 @@ void PendingSession::close_socket(){
 	}
 }
 
-Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config){
+Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config, aemu_postoffice_enet::BasicEnetClient *enet_server){
 	this->mode = mode;
 	this->config = config;
 
@@ -211,10 +221,12 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 	}
 	this->to_port = to_port;
 	this->sock_fd = sock_fd;
+	this->enet_server = enet_server;
 	this->create_time = std::chrono::high_resolution_clock::now();
 	this->client_addr = client_addr;
 	this->client_port = client_port;
 	this->phase = SessionPhase::HEADER;
+	this->ptp_init_sent = false;
 	if (mode != SessionMode::PTP_LISTEN){
 		this->from_client_data_buffer = initial_data_buffer;
 	}
@@ -281,30 +293,48 @@ SessionPumpStatus Session::pump_from_client(){
 	SessionPumpStatus ret = SessionPumpStatus::SUCCESS;
 
 	while(true){
-		char buf[1024];
-		int recv_status = native_recv(this->sock_fd, buf, sizeof(buf));
-		if (recv_status == 0){
-			LOG_TS("%s: client %s of session %s has closed the socket\n", __func__, this->client_addr.c_str(), this->get_identifier().c_str());
-			ret = SessionPumpStatus::SOCKET_CLOSED;
-			break;
-		}
-		if (recv_status < 0){
-			int error = native_get_last_socket_error();
-			if (native_error_is_would_block(error)){
-				ret = SessionPumpStatus::SUCCESS;
+		char buf[(AEMU_POSTOFFICE_PDP_BLOCK_MAX > AEMU_POSTOFFICE_PTP_BLOCK_MAX ? AEMU_POSTOFFICE_PDP_BLOCK_MAX : AEMU_POSTOFFICE_PTP_BLOCK_MAX) * 2];
+		if (enet_server == NULL){
+			int recv_status = native_recv(this->sock_fd, buf, sizeof(buf));
+			if (recv_status == 0){
+				LOG_TS("%s: client %s of session %s has closed the socket\n", __func__, this->client_addr.c_str(), this->get_identifier().c_str());
+				ret = SessionPumpStatus::SOCKET_CLOSED;
 				break;
 			}
-			LOG_TS("%s: socket error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
-			ret = SessionPumpStatus::SOCKET_CLOSED;
-			break;
-		}
+			if (recv_status < 0){
+				int error = native_get_last_socket_error();
+				if (native_error_is_would_block(error)){
+					ret = SessionPumpStatus::SUCCESS;
+					break;
+				}
+				LOG_TS("%s: socket error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
+				ret = SessionPumpStatus::SOCKET_CLOSED;
+				break;
+			}
 
-		if (this->mode == SessionMode::PTP_LISTEN){
-			// we don't handle data from user listen session
-			continue;
-		}
+			if (this->mode == SessionMode::PTP_LISTEN){
+				// we don't handle data from user listen session
+				continue;
+			}
 
-		this->from_client_data_buffer.append(buf, recv_status);
+			this->from_client_data_buffer.append(buf, recv_status);
+		} else {
+			aemu_postoffice_enet::EnetRecvStatus status;
+			int recv_status = enet_server->recv(sock_fd, buf, sizeof(buf), 0, status);
+			if (status == aemu_postoffice_enet::EnetRecvStatus::WOULD_BLOCK){
+				break;
+			}
+			if (status != aemu_postoffice_enet::EnetRecvStatus::SUCCESS){
+				ret = SessionPumpStatus::SOCKET_CLOSED;
+			}
+
+			if (this->mode == SessionMode::PTP_LISTEN){
+				// we don't handle data from user listen session
+				continue;
+			}
+
+			this->from_client_data_buffer.append(buf, recv_status);
+		}
 	}
 
 	while(this->mode != SessionMode::PTP_LISTEN && this->phase != SessionPhase::PTP_CONNECTING){
@@ -411,16 +441,70 @@ SessionPumpStatus Session::pump_to_client(){
 			return SessionPumpStatus::SUCCESS;
 		}
 
-		int send_status = native_send(this->sock_fd, to_client_data_buffer.data(), to_client_data_buffer.length());
-		if (send_status < 0){
-			int error = native_get_last_socket_error();
-			if (native_error_is_would_block(error)){
-				 return SessionPumpStatus::SUCCESS;
+		if (enet_server == NULL){
+			int send_status = native_send(this->sock_fd, to_client_data_buffer.data(), to_client_data_buffer.length());
+			if (send_status < 0){
+				int error = native_get_last_socket_error();
+				if (native_error_is_would_block(error)){
+					return SessionPumpStatus::SUCCESS;
+				}
+				LOG_TS("%s: sock error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
+				return SessionPumpStatus::SOCKET_CLOSED;
 			}
-			LOG_TS("%s: sock error 0x%x on session %s with client %s\n", __func__, error, this->get_identifier().c_str(), this->client_addr.c_str());
-			return SessionPumpStatus::SOCKET_CLOSED;
+			to_client_data_buffer.erase(0, send_status);
+		} else {
+			// TODO reliablity mode
+			int packet_size = 0;
+			switch(this->mode){
+				case SessionMode::PDP:{
+					if (to_client_data_buffer.size() < sizeof(struct aemu_postoffice_pdp)){
+						return SessionPumpStatus::SUCCESS;
+					}
+					struct aemu_postoffice_pdp *header = (struct aemu_postoffice_pdp *)to_client_data_buffer.data();
+					packet_size = sizeof(struct aemu_postoffice_pdp) + header->size;
+					break;
+				}
+				case SessionMode::PTP_LISTEN:{
+					if (to_client_data_buffer.size() < sizeof(struct aemu_postoffice_ptp_connect)){
+						return SessionPumpStatus::SUCCESS;
+					}
+					struct aemu_postoffice_ptp_connect *header = (struct aemu_postoffice_ptp_connect *)to_client_data_buffer.data();
+					packet_size = sizeof(struct aemu_postoffice_ptp_connect);
+					break;
+				}
+				case SessionMode::PTP_CONNECT:
+				case SessionMode::PTP_ACCEPT:{
+					if (!ptp_init_sent){
+						if (to_client_data_buffer.size() < sizeof(struct aemu_postoffice_ptp_connect)){
+							return SessionPumpStatus::SUCCESS;
+						}
+						packet_size = sizeof(struct aemu_postoffice_ptp_connect);
+						break;
+					}
+
+					if (to_client_data_buffer.size() < sizeof(struct aemu_postoffice_ptp_data)){
+						return SessionPumpStatus::SUCCESS;
+					}
+					struct aemu_postoffice_ptp_data *header = (struct aemu_postoffice_ptp_data *)to_client_data_buffer.data();
+					packet_size = sizeof(struct aemu_postoffice_ptp_data) + header->size;
+					break;
+				}
+				default:{
+					LOG("%s: unreachable code path, debug this\n", __func__);
+					exit(1);
+				}
+			}
+			aemu_postoffice_enet::EnetSendStatus status;
+			int send_status = enet_server->send(sock_fd, to_client_data_buffer.data(), packet_size, 0, true, status);
+			if (status != aemu_postoffice_enet::EnetSendStatus::SUCCESS){
+				LOG("%s: enet error %d on session %s with client %s\n",  __func__, status, this->get_identifier().c_str(), this->client_addr.c_str());
+				return SessionPumpStatus::SOCKET_CLOSED;
+			}
+			if ((this->mode == SessionMode::PTP_CONNECT || this->mode == SessionMode::PTP_ACCEPT) && !ptp_init_sent){
+				ptp_init_sent = true;
+			}
+			to_client_data_buffer.erase(0, packet_size);
 		}
-		to_client_data_buffer.erase(0, send_status);
 	}
 }
 
