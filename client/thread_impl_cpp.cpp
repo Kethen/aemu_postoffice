@@ -16,12 +16,15 @@ struct thread{
 };
 
 void *thread_create(int (*func)(void *arg, int arg_size), void *arg, int arg_size){
-	void *arg_copy = malloc(arg_size);
-	if (arg == NULL){
-		LOG("%s: failed allocating memory for arg copy\n", __func__);
-		return NULL;
+	void *arg_copy = NULL;
+	if (arg != NULL){
+		arg_copy = malloc(arg_size);
+		if (arg == NULL){
+			LOG("%s: failed allocating memory for arg copy\n", __func__);
+			return NULL;
+		}
+		memcpy(arg_copy, arg, arg_size);
 	}
-	memcpy(arg_copy, arg, arg_size);
 
 	struct thread *ctx = new struct thread();
 
@@ -39,7 +42,8 @@ int thread_join(void *thread_handle){
 	struct thread *ctx = (struct thread *)thread_handle;
 	ctx->thread->join();
 	delete ctx->thread;
-	free(ctx->arg_copy);
+	if (ctx->arg_copy != NULL)
+		free(ctx->arg_copy);
 	int ret = ctx->ret;
 	delete ctx;
 	return ret;
