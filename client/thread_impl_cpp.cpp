@@ -21,7 +21,7 @@ void *thread_create(int (*func)(void *arg, int arg_size), void *arg, int arg_siz
 		LOG("%s: failed allocating memory for arg copy\n", __func__);
 		return NULL;
 	}
-	memcpy(arg_cpy, arg, arg_size);
+	memcpy(arg_copy, arg, arg_size);
 
 	struct thread *ctx = new struct thread();
 
@@ -29,14 +29,14 @@ void *thread_create(int (*func)(void *arg, int arg_size), void *arg, int arg_siz
 	ctx->arg_size = arg_size;
 
 	ctx->thread = new std::thread([ctx, func] {
-		ctx->ret = func(ctx->arg_cpy, ctx->arg_size);
+		ctx->ret = func(ctx->arg_copy, ctx->arg_size);
 	});
 
 	return ctx;
 }
 
 int thread_join(void *thread_handle){
-	struct thread *ctx = thread_handle;
+	struct thread *ctx = (struct thread *)thread_handle;
 	ctx->thread->join();
 	delete ctx->thread;
 	free(ctx->arg_copy);
