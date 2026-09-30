@@ -4,6 +4,7 @@
 #include "session.h"
 #include "native_socket.h"
 #include "log.h"
+#include "common.h"
 
 #include "../aemu_postoffice_packets.h"
 
@@ -296,9 +297,11 @@ SessionPumpStatus Session::pump_from_client(){
 	SessionPumpStatus ret = SessionPumpStatus::SUCCESS;
 
 	while(true){
-		char buf[(AEMU_POSTOFFICE_PDP_BLOCK_MAX > AEMU_POSTOFFICE_PTP_BLOCK_MAX ? AEMU_POSTOFFICE_PDP_BLOCK_MAX : AEMU_POSTOFFICE_PTP_BLOCK_MAX) * 2];
+		Buffer _buf((AEMU_POSTOFFICE_PDP_BLOCK_MAX > AEMU_POSTOFFICE_PTP_BLOCK_MAX ? AEMU_POSTOFFICE_PDP_BLOCK_MAX : AEMU_POSTOFFICE_PTP_BLOCK_MAX) * 2);
+		char *buf = _buf.get_buf();
+		int buf_size = _buf.get_size();
 		if (enet_server == NULL){
-			int recv_status = native_recv(this->sock_fd, buf, sizeof(buf));
+			int recv_status = native_recv(this->sock_fd, buf, buf_size);
 			if (recv_status == 0){
 				LOG_TS("%s: client %s of session %s has closed the socket\n", __func__, this->client_addr.c_str(), this->get_identifier().c_str());
 				ret = SessionPumpStatus::SOCKET_CLOSED;
@@ -323,7 +326,7 @@ SessionPumpStatus Session::pump_from_client(){
 			this->from_client_data_buffer.append(buf, recv_status);
 		} else {
 			aemu_postoffice_enet::EnetRecvStatus status;
-			int recv_status = enet_server->recv(sock_fd, buf, sizeof(buf), 0, status);
+			int recv_status = enet_server->recv(sock_fd, buf, buf_size, 0, status);
 			if (status == aemu_postoffice_enet::EnetRecvStatus::WOULD_BLOCK){
 				break;
 			}

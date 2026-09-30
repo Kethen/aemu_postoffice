@@ -1,3 +1,6 @@
+#include "common.h"
+#include "log.h"
+
 #include <stdio.h>
 #include <stdint.h>
 
@@ -20,6 +23,27 @@ void set_thread_name(std::string name){
 	#else
 	// hm, what do
 	#endif
+}
+
+Buffer::Buffer(int size){
+	buf = (char *)malloc(size);
+	if (buf == NULL){
+		LOG("%s: out of memory!\n", __func__);
+		exit(1);
+	}
+	this->size = size;
+}
+
+Buffer::~Buffer(){
+	free(buf);
+}
+
+int Buffer::get_size(){
+	return size;
+}
+
+char *Buffer::get_buf(){
+	return buf;
 }
 
 }
