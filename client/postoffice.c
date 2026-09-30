@@ -28,8 +28,7 @@ int aemu_post_office_init(){
 			ptp_sessions[i].sock = -1;
 		}
 
-		init_sock_alloc_mutex();
-		init_drain_mutex();
+		init_mutex();
 	}else{
 		// re-run, close all opened sessions
 		for (int i = 0;i < NUM_PDP_SESSIONS;i++){
