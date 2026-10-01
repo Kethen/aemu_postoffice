@@ -6,7 +6,8 @@
 #include "postoffice_client.h"
 #include "mutex_impl.h"
 
-int init_enet();
+int init_enet(); // returns 0 on success, -1 on error
+void deinit_enet();
 
 void *connect_v6_enet(const struct aemu_post_office_sock6_addr *addr, int channels); // returns a handle on success, NULL on error
 void *connect_v4_enet(const struct aemu_post_office_sock_addr *addr, int channels); // returns a handle on success, NULL on error
