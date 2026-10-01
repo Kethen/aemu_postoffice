@@ -87,6 +87,23 @@ int main(){
 		exit(1);
 	}
 
+	itr = list_begin_itr(list);
+	for (int i = 0;i < 3;i++){
+		if (itr == NULL){
+			LOG("%s,%d: list ended unexpectedly\n", __func__, __LINE__);
+			exit(1);
+		}
+		if (list_itr_get_data(itr) != data[2 - i]){
+			LOG("%s,%d: bad data from list itr\n", __func__, __LINE__);
+			exit(1);
+		}
+		itr = list_itr_next(itr);
+	}
+	if (itr != NULL){
+		LOG("%s,%d: itr is not null\n", __func__, __LINE__);
+		exit(1);
+	}
+
 	for (int i = 0;i < 3;i++){
 		if (list_get_front(list) != data[2 - i]){
 			LOG("%s,%d: bad front data %p\n", __func__, __LINE__, list_get_front(list));
