@@ -8,8 +8,8 @@
 
 int init_enet();
 
-void *connect_v6_enet(const struct aemu_post_office_sock6_addr *addr); // returns a handle on success, NULL on error
-void *connect_v4_enet(const struct aemu_post_office_sock_addr *addr); // returns a handle on success, NULL on error
+void *connect_v6_enet(const struct aemu_post_office_sock6_addr *addr, int channels); // returns a handle on success, NULL on error
+void *connect_v4_enet(const struct aemu_post_office_sock_addr *addr, int channels); // returns a handle on success, NULL on error
 void close_enet(void *handle);
 
 int recv_enet(void *handle, char *buf, int buf_size, int channel); // filled size on success, AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK when there is no packet, AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY when buffer is too small, -1 on error
