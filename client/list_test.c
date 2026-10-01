@@ -7,6 +7,7 @@
 int main(){
 	void *data[] = {(void *)0x1, (void *)0x2, (void *)0x3};
 
+	// push_back & pop_back
 	void *list = init_list();
 	list_push_back(list, data[0]);
 	list_push_back(list, data[1]);
@@ -70,6 +71,7 @@ int main(){
 		exit(1);
 	}
 
+	// push_front & pop_front
 	list_push_front(list, data[0]);
 	list_push_front(list, data[1]);
 	list_push_front(list, data[2]);
@@ -129,6 +131,74 @@ int main(){
 	}
 	if (list_get_size(list) != 0){
 		LOG("%s, %d: bad list size %d\n", __func__, __LINE__, list_get_size(list));
+		exit(1);
+	}
+
+	// remove
+	list_push_back(list, data[0]);
+	list_push_back(list, data[1]);
+	list_push_back(list, data[2]);
+
+	itr = list_begin_itr(list);
+	itr = list_itr_next(itr);
+	list_remove(list, itr);
+
+	if (list_get_front(list) != data[0]){
+		printf("%s,%d: bad front data\n", __func__, __LINE__);
+		exit(1);
+	}
+	if (list_get_back(list) != data[2]){
+		LOG("%s,%d: bad back data\n", __func__, __LINE__);
+		exit(1);
+	}
+	if (list_get_size(list) != 2){
+		LOG("%s,%d: bad list size %d\n", __func__, __LINE__, list_get_size(list));
+		exit(1);
+	}
+
+	list_push_back(list, data[1]);
+	itr = list_begin_itr(list);
+	list_remove(list, itr);
+
+	if (list_get_front(list) != data[2]){
+		printf("%s,%d: bad front data\n", __func__, __LINE__);
+		exit(1);
+	}
+	if (list_get_back(list) != data[1]){
+		LOG("%s,%d: bad back data\n", __func__, __LINE__);
+		exit(1);
+	}
+	if (list_get_size(list) != 2){
+		LOG("%s,%d: bad list size %d\n", __func__, __LINE__, list_get_size(list));
+		exit(1);
+	}
+
+	list_push_back(list, data[0]);
+	itr = list_begin_itr(list);
+	itr = list_itr_next(itr);
+	itr = list_itr_next(itr);
+	list_remove(list, itr);
+
+	if (list_get_front(list) != data[2]){
+		printf("%s,%d: bad front data\n", __func__, __LINE__);
+		exit(1);
+	}
+	if (list_get_back(list) != data[1]){
+		LOG("%s,%d: bad back data\n", __func__, __LINE__);
+		exit(1);
+	}
+	if (list_get_size(list) != 2){
+		LOG("%s,%d: bad list size %d\n", __func__, __LINE__, list_get_size(list));
+		exit(1);
+	}
+
+	itr = list_begin_itr(list);
+	list_remove(list, itr);
+	itr = list_begin_itr(list);
+	list_remove(list, itr);
+
+	if (list_get_size(list) != 0){
+		LOG("%s,%d: bad list size %d\n", __func__, __LINE__, list_get_size(list));
 		exit(1);
 	}
 

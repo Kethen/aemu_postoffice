@@ -24,5 +24,6 @@ int list_get_size(void *list_handle);
 void *list_begin_itr(void *list_handle);
 void *list_itr_next(void *list_itr);
 void *list_itr_get_data(void *list_itr);
+void list_remove(void *list_handle, void *list_itr);
 
 #endif

@@ -162,3 +162,27 @@ void *list_itr_get_data(void *list_itr){
 	struct list_node *list_node = (struct list_node*)list_itr;
 	return list_node->data;
 }
+
+void list_remove(void *list_handle, void *list_itr){
+	struct list *list = (struct list *)list_handle;
+	struct list_node *list_node = (struct list_node*)list_itr;
+	if (list->size == 0){
+		LOG("%s: trying to remove node on an empty list...\n", __func__);
+		return;
+	}
+
+	if (list_node->last == NULL){
+		list->begin = list_node->next;
+	} else {
+		list_node->last->next = list_node->next;
+	}
+
+	if (list_node->next == NULL){
+		list->end = list_node->last;
+	} else {
+		list_node->next->last = list_node->last;
+	}
+
+	free(list_node);
+	list->size--;
+}
