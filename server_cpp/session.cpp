@@ -296,10 +296,10 @@ SessionPumpStatus Session::pump_connect(){
 SessionPumpStatus Session::pump_from_client(){
 	SessionPumpStatus ret = SessionPumpStatus::SUCCESS;
 
+	Buffer _buf((AEMU_POSTOFFICE_PDP_BLOCK_MAX > AEMU_POSTOFFICE_PTP_BLOCK_MAX ? AEMU_POSTOFFICE_PDP_BLOCK_MAX : AEMU_POSTOFFICE_PTP_BLOCK_MAX) * 2);
+	char *buf = _buf.get_buf();
+	int buf_size = _buf.get_size();
 	while(true){
-		Buffer _buf((AEMU_POSTOFFICE_PDP_BLOCK_MAX > AEMU_POSTOFFICE_PTP_BLOCK_MAX ? AEMU_POSTOFFICE_PDP_BLOCK_MAX : AEMU_POSTOFFICE_PTP_BLOCK_MAX) * 2);
-		char *buf = _buf.get_buf();
-		int buf_size = _buf.get_size();
 		if (enet_server == NULL){
 			int recv_status = native_recv(this->sock_fd, buf, buf_size);
 			if (recv_status == 0){
