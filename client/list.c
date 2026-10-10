@@ -31,7 +31,7 @@ static struct list_node *allocate_list_node(void *data){
 	struct list_node *new_node = (struct list_node *)malloc(sizeof(struct list_node));
 	if (new_node == NULL){
 		LOG("%s: out of memory while allocating list node\n", __func__);
-		return false;
+		return NULL;
 	}
 
 	new_node->next = NULL;
