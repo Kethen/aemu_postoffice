@@ -820,6 +820,7 @@ void *adhocctl_ping_func(void *arg){
 			int status = adhocctl_ping(handle); \
 			if (status != ADHOCCTL_CALL_SUCCESS){ \
 				LOG("%s: adhocctl ping error\n", __func__); \
+				exit(1); \
 			} \
 		}
 		ping(adhocctl_handle_a);
