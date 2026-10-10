@@ -294,6 +294,7 @@ static int _pump_enet(){
 			continue;
 		}
 		if (connection->disconnected){
+			itr = list_itr_next(itr);
 			continue;
 		}
 		if (service_status < 0){
