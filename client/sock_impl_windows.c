@@ -135,6 +135,7 @@ int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const
 	setsockopt(sock, SOL_SOCKET, SO_SNDBUF, (char *)&sockopt, sizeof(sockopt));
 	setsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)&sockopt, sizeof(sockopt));
 
+	#if 0
 	// Show some socket options
 	int opt_len = sizeof(sockopt);
 	sockopt = 0;
@@ -150,6 +151,7 @@ int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const
 	sockopt = 0;
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, (char *)&sockopt, &opt_len);
 	LOG("%s: SO_RCVBUF is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? WSAGetLastError() : 0);
+	#endif
 
 	return sock;
 }

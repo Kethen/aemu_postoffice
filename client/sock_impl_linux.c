@@ -137,6 +137,7 @@ int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const
 	setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &sockopt, sizeof(sockopt));
 	#endif
 
+	#if 0
 	// Show some socket options
 	unsigned int opt_len = sizeof(sockopt);
 	sockopt = 0;
@@ -158,6 +159,7 @@ int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const
 	sockopt = 0;
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &sockopt, &opt_len);
 	LOG("%s: SO_NOSIGPIPE is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? errno : 0);
+	#endif
 	#endif
 
 	return sock;
