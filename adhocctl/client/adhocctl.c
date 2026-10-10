@@ -5,10 +5,42 @@
 #include "../../client/sock_impl.h"
 #include "../../client/log_impl.h"
 #include "../packets_v1.h"
+#include "../../client/delay_impl.h"
+
+// TODO finish enet mode for adhocctl
+
+#define ABORTED -100
+
+static int send_wrapped(int sock, void *enet_handle, bool enet_reliable, const char *buf, int len){
+	return native_send(sock, buf, len);
+}
+
+static int send_till_done(int fd, void *enet_handle, bool enet_reliable, const char *buf, int len, bool non_block, bool *abort){
+	int write_offset = 0;
+	while(write_offset != len){
+		if (*abort){
+			return ABORTED;
+		}
+		int write_status = send_wrapped(fd, enet_handle, enet_reliable, &buf[write_offset], len - write_offset);
+		if (write_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
+			if (non_block && write_offset == 0){
+				delay(0);
+				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+			}
+			delay(0);
+			continue;
+		}
+		if (write_status == -1){
+			return write_status;
+		}
+		write_offset += write_status;
+	}
+	return write_offset;
+}
 
 #define SEND_PACKET(sock_fd, packet) { \
 	bool abort = false; \
-	int send_status = native_send_till_done(sock_fd, (char *)&packet, sizeof(packet), true, &abort); \
+	int send_status = send_till_done(sock_fd, NULL, true, (char *)&packet, sizeof(packet), true, &abort); \
 	if (send_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){ \
 		return ADHOCCTL_CALL_WOULDBLOCK; \
 	} \
@@ -28,7 +60,17 @@ static enum adhocctl_call_status login_v1(int sock_fd, const char *game_code, co
 	SEND_PACKET(sock_fd, packet);
 }
 
-static void *create_adhocctl_v1_session(void *addr, int addrlen, const char *game_code, const char *nickname, const char *mac){
+static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v6 *addr6, const char *game_code, const char *nickname, const char *mac){
+	struct aemu_postoffice_sock_addr poaddr4;
+	struct aemu_postoffice_sock6_addr poaddr6;
+	if (addr4 != NULL){
+		poaddr4.addr = addr4->ip;
+		poaddr4.port = addr4->port;
+	} else {
+		memcpy(poaddr6.addr, addr6->ip, 16);
+		poaddr6.port = addr6->port;
+	}
+
 	struct session *slot = NULL;
 	for (int i = 0;i < *num_sessions;i++){
 		if (!sessions[i].in_use){
@@ -45,8 +87,14 @@ static void *create_adhocctl_v1_session(void *addr, int addrlen, const char *gam
 
 	slot->protocol_revision = 1;
 
-	int sock_fd = native_connect_tcp_sock(addr, addrlen);
+	int sock_fd = -1;
+	if (addr4 != NULL){
+		sock_fd = native_connect_tcp_sock(&poaddr4, NULL);
+	} else {
+		sock_fd = native_connect_tcp_sock(NULL, &poaddr6);
+	}
 	if (sock_fd < 0){
+		LOG("%s: failed creating connection to adhoccl server\n", __func__);
 		slot->in_use = false;
 		return NULL;
 	}
@@ -55,6 +103,7 @@ static void *create_adhocctl_v1_session(void *addr, int addrlen, const char *gam
 	enum adhocctl_call_status call_status = ADHOCCTL_CALL_SUCCESS;
 	call_status = login_v1(sock_fd, game_code, nickname, mac);
 	if (call_status != ADHOCCTL_CALL_SUCCESS){
+		LOG("%s: failed sending login packet\n", __func__);
 		slot->in_use = false;
 		return NULL;
 	}
@@ -63,22 +112,11 @@ static void *create_adhocctl_v1_session(void *addr, int addrlen, const char *gam
 }
 
 void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const char *game_code, const char *nickname, const char *mac){
-	struct aemu_post_office_sock_addr postoffice_addr = {
-		.addr = addr->ip,
-		.port = addr->port,
-	};
-	native_sock_addr native_addr = {0};
-	to_native_sock_addr(&native_addr, &postoffice_addr);
-	return create_adhocctl_v1_session(&native_addr, sizeof(native_addr), game_code, nickname, mac);
+	return create_adhocctl_v1_session(addr, NULL, game_code, nickname, mac);
 }
 
 void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const char *game_code, const char *nickname, const char *mac){
-	struct aemu_post_office_sock6_addr postoffice_addr = {0};
-	memcpy(postoffice_addr.addr, addr->ip, 16);
-	postoffice_addr.port = addr->port;
-	native_sock6_addr native_addr = {0};
-	to_native_sock6_addr(&native_addr, &postoffice_addr);
-	return create_adhocctl_v1_session(&native_addr, sizeof(native_addr), game_code, nickname, mac);
+	return create_adhocctl_v1_session(NULL, addr, game_code, nickname, mac);
 }
 
 void destroy_adhocctl_session(void *session){

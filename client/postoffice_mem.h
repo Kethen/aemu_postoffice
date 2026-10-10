@@ -11,6 +11,8 @@ struct pdp_session{
 	char *pdp_mac[6];
 	int16_t pdp_port;
 	int sock;
+	void *enet_handle;
+	bool enet_reliable;
 	bool dead;
 	bool abort;
 	char recv_ring_buf[AEMU_POSTOFFICE_PDP_BLOCK_MAX + sizeof(aemu_postoffice_pdp)];
@@ -27,15 +29,19 @@ struct ptp_listen_session{
 	char *ptp_mac[6];
 	int16_t ptp_port;
 	int sock;
+	void *enet_handle;
 	bool dead;
 	bool abort;
-	char addr[sizeof(native_sock6_addr) > sizeof(native_sock_addr) ? sizeof(native_sock6_addr) : sizeof(native_sock_addr)];
+	struct aemu_postoffice_sock_addr addr4;
+	struct aemu_postoffice_sock6_addr addr6;
+	bool is_addr6;
 	int addrlen;
 	bool accepting;
 };
 
 struct ptp_session{
 	int sock;
+	void *enet_handle;
 	bool dead;
 	bool abort;
 	char recv_ring_buf[AEMU_POSTOFFICE_PTP_BLOCK_MAX];
@@ -59,6 +65,7 @@ extern struct ptp_listen_session *ptp_listen_sessions;
 extern struct ptp_session *ptp_sessions;
 
 void init_postoffice_mem();
+void deinit_postoffice_mem();
 
 #ifdef __cplusplus
 }

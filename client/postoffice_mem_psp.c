@@ -10,6 +10,9 @@ int NUM_PDP_SESSIONS = 0;
 int NUM_PTP_LISTEN_SESSIONS = 0;
 int NUM_PTP_SESSIONS = 0;
 
+SceUID uid_pdp = -1;
+SceUID uid_ptp_listen = -1;
+SceUID uid_ptp = -1;
 struct pdp_session *pdp_sessions = NULL;
 struct ptp_listen_session *ptp_listen_sessions = NULL;
 struct ptp_session *ptp_sessions = NULL;
@@ -24,9 +27,9 @@ void init_postoffice_mem(){
 	}
 	LOG("%s: allocating for %d sessions per type\n", __func__, sessions_per_type);
 
-	SceUID uid_pdp = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_pdp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct pdp_session), (void *)4 /* alignment */);
-	SceUID uid_ptp_listen = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_ptp_listen_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_listen_session), (void *)4 /* alignment */);
-	SceUID uid_ptp = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_ptp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_session), (void *)4 /* alignment */);
+	uid_pdp = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_pdp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct pdp_session), (void *)4 /* alignment */);
+	uid_ptp_listen = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_ptp_listen_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_listen_session), (void *)4 /* alignment */);
+	uid_ptp = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice_ptp_sessions", 4 /* high aligned */, sessions_per_type * sizeof(struct ptp_session), (void *)4 /* alignment */);
 
 	if (uid_pdp >= 0){
 		pdp_sessions = sceKernelGetBlockHeadAddr(uid_pdp);
@@ -47,5 +50,20 @@ void init_postoffice_mem(){
 		NUM_PTP_SESSIONS = sessions_per_type;
 	}else{
 		LOG("%s: failed allocating memory for ptp sessions, 0x%x\n", __func__, uid_ptp);
+	}
+}
+
+void deinit_postoffice_mem(){
+	if (uid_pdp >= 0){
+		sceKernelFreePartitionMemory(uid_pdp);
+		uid_pdp = -1;
+	}
+	if (uid_ptp_listen >= 0){
+		sceKernelFreePartitionMemory(uid_ptp_listen);
+		uid_ptp_listen = -1;
+	}
+	if (uid_ptp){
+		sceKernelFreePartitionMemory(uid_ptp);
+		uid_ptp = -1;
 	}
 }

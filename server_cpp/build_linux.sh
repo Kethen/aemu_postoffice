@@ -1,8 +1,15 @@
 set -xe
 
-SRC="log native_socket_linux session server semaphore main ../adhocctl/server_cpp/log common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config snapshot http_status_server"
+SRC="log native_socket_linux session server semaphore main enet ../adhocctl/server_cpp/log common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config snapshot http_status_server"
+
+DEBUG=${DEBUG:-false}
 
 BUILD_FLAGS="-g -O2 -fPIC --std=c++20 -Wformat"
+if $DEBUG
+then
+	BUILD_FLAGS="-g -O0 -fPIC --std=c++20 -fsanitize=leak -Wformat"
+fi
+
 LINK_FLAGS=""
 
 CPPC=g++

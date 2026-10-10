@@ -22,20 +22,12 @@
 #include "log.h"
 #include "../adhocctl/server_cpp/server.h"
 #include "http_status_server.h"
+#include "common.h"
 
 #ifdef __unix__
 // for naming threads
 #include <pthread.h>
 #endif
-
-static void set_thread_name(std::string name){
-	#if __unix__
-	pthread_t tid = pthread_self();
-	pthread_setname_np(tid, name.c_str());
-	#else
-	// hm, what do
-	#endif
-}
 
 bool should_stop = false;
 
@@ -103,7 +95,7 @@ int main(int argc, char **argv){
 	std::mutex http_status_server_mutex;
 
 	threads.emplace_back([&config, &server, &relay_mutex, &http_status_server, &http_status_server_mutex] {
-		set_thread_name("relay main");
+		aemu_postoffice_server::set_thread_name("relay main");
 
 		auto last_http_publish = std::chrono::high_resolution_clock::now();
 		auto publish_to_http = [&http_status_server, &http_status_server_mutex, &server, &last_http_publish] () {
@@ -145,7 +137,7 @@ int main(int argc, char **argv){
 		http_status_server = new aemu_postoffice_server::HttpStatusServer(config, game_db);
 
 		threads.emplace_back([&config, &adhocctl_server, &relay_mutex, &server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex] {
-			set_thread_name("adhocctl main");
+			aemu_postoffice_server::set_thread_name("adhocctl main");
 
 			auto last_http_publish = std::chrono::high_resolution_clock::now();
 			auto last_relay_sync = std::chrono::high_resolution_clock::now();
@@ -199,7 +191,7 @@ int main(int argc, char **argv){
 		});
 
 		threads.emplace_back([&http_status_server, &http_status_server_mutex] {
-			set_thread_name("status watchdog");
+			aemu_postoffice_server::set_thread_name("status watchdog");
 
 			while(!should_stop){
 				{
@@ -215,7 +207,7 @@ int main(int argc, char **argv){
 	}
 
 	threads.emplace_back([&server, &relay_mutex, &adhocctl_server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex, &config, &game_db, &parse_config_and_game_db] () {
-		set_thread_name("config reload");
+		aemu_postoffice_server::set_thread_name("config reload");
 
 		auto last_parse = std::chrono::high_resolution_clock::now();
 		while(!should_stop){

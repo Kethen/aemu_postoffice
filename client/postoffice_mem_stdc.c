@@ -16,3 +16,6 @@ struct ptp_session *ptp_sessions = _ptp_sessions;
 
 void init_postoffice_mem(){
 }
+
+void deinit_postoffice_mem(){
+}
