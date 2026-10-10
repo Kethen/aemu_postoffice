@@ -19,6 +19,7 @@ void *init_list(){
 	struct list *new_list = (struct list *)malloc(sizeof(struct list));
 	if (new_list == NULL){
 		LOG("%s: out of memory while allocating list\n", __func__);
+		return NULL;
 	}
 	new_list->begin = NULL;
 	new_list->end = NULL;
