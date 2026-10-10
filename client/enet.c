@@ -401,7 +401,7 @@ static struct channel *find_channel(struct connection *connection, int channel){
 	return (struct channel*)list_itr_get_data(channel_itr);
 }
 
-int _recv_enet(void *handle, char *buf, int buf_size, int channel){
+static int _recv_enet(void *handle, char *buf, int buf_size, int channel){
 	if (connections == NULL){
 		LOG("%s: enet is not initialized\n", __func__);
 		return -1;
