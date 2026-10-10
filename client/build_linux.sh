@@ -18,7 +18,12 @@ C_SRC_TEST="test"
 lib_objs=""
 
 $CC $BUILD_FLAGS list.c list_test.c log_impl_stdc.c -o list_test.out
-./list_test.out
+if $DEBUG
+then
+	./list_test.out
+else
+	valgrind ./list_test.out
+fi
 
 for f in $C_SRC
 do
