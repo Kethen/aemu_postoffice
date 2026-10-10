@@ -43,7 +43,7 @@ int init_aemu_postoffice(bool with_enet){
 }
 
 int pump_enet_aemu_postoffice(){
-	pump_enet();
+	return pump_enet();
 }
 
 void deinit_aemu_postoffice(){
