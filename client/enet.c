@@ -11,6 +11,7 @@
 #define ENET_IMPLEMENTATION
 #ifdef __PSP__
 // TODO psp networking shims
+#include "psp_enet_shim.h"
 #define ENET_IPV4_ONLY
 #endif
 #include "../ext/enet/enet.h"

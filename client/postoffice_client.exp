@@ -11,7 +11,6 @@ PSP_EXPORT_FUNC_NID(pdp_create_v4, 0x1)
 PSP_EXPORT_FUNC_NID(pdp_delete, 0x2)
 PSP_EXPORT_FUNC_NID(pdp_send, 0x3)
 PSP_EXPORT_FUNC_NID(pdp_recv, 0x4)
-PSP_EXPORT_FUNC_NID(pdp_get_native_sock, 0x5)
 PSP_EXPORT_FUNC_NID(pdp_peek_next_size, 0x6)
 PSP_EXPORT_FUNC_NID(pdp_buffered_data_size, 0x7)
 PSP_EXPORT_FUNC_NID(pdp_send_buf_not_full, 0x8)
@@ -24,13 +23,23 @@ PSP_EXPORT_FUNC_NID(ptp_send, 0x104)
 PSP_EXPORT_FUNC_NID(ptp_recv, 0x105)
 PSP_EXPORT_FUNC_NID(ptp_close, 0x106)
 PSP_EXPORT_FUNC_NID(ptp_listen_close, 0x107)
-PSP_EXPORT_FUNC_NID(ptp_get_native_sock, 0x108)
-PSP_EXPORT_FUNC_NID(ptp_listen_get_native_sock, 0x109)
 PSP_EXPORT_FUNC_NID(ptp_peek_next_size, 0x10A)
 PSP_EXPORT_FUNC_NID(ptp_send_buf_not_full, 0x10B)
 PSP_EXPORT_FUNC_NID(ptp_listen_has_request, 0x10C)
 PSP_EXPORT_FUNC_NID(ptp_is_dead, 0x10D)
 PSP_EXPORT_FUNC_NID(ptp_listen_is_dead, 0x10E)
 PSP_EXPORT_END
+
+PSP_EXPORT_START(adhocctl, 0x0011, 0x0001)
+PSP_EXPORT_FUNC_NID(create_adhocctl_v1_session_v4, 0x1)
+PSP_EXPORT_FUNC_NID(destroy_adhocctl_session, 0x2)
+PSP_EXPORT_FUNC_NID(adhocctl_get_event, 0x3)
+PSP_EXPORT_FUNC_NID(adhocctl_ping, 0x4)
+PSP_EXPORT_FUNC_NID(adhocctl_connect, 0x5)
+PSP_EXPORT_FUNC_NID(adhocctl_disconnect, 0x6)
+PSP_EXPORT_FUNC_NID(adhocctl_scan, 0x7)
+PSP_EXPORT_FUNC_NID(adhocctl_chat, 0x8)
+PSP_EXPORT_END
+
 
 PSP_END_EXPORTS
