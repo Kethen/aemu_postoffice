@@ -62,7 +62,7 @@ void deinit_postoffice_mem(){
 		sceKernelFreePartitionMemory(uid_ptp_listen);
 		uid_ptp_listen = -1;
 	}
-	if (uid_ptp){
+	if (uid_ptp >= 0){
 		sceKernelFreePartitionMemory(uid_ptp);
 		uid_ptp = -1;
 	}
