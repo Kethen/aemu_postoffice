@@ -42,7 +42,7 @@ jobs:
            server_njs/config.json
            server_njs/sample_game_list_sync_request.json
            client/postoffice_client_import.S
-           client/aemu_postoffice.prx
+           #client/aemu_postoffice.prx
            client/postoffice_client.h
            client/adhocctl.h
            client/libaemu_postoffice_client.so

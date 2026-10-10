@@ -1,10 +1,10 @@
 set -xe
 
-SRC="log native_socket_windows session server semaphore main ../adhocctl/server_cpp/log common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config snapshot http_status_server"
+SRC="log native_socket_windows session server semaphore main enet ../adhocctl/server_cpp/log common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config snapshot http_status_server"
 
 BUILD_FLAGS="-g -O2 -fPIC --std=c++20 -Wformat"
 LINK_FLAGS="-static"
-LIBS="-lws2_32"
+LIBS="-lws2_32 -lwinmm"
 
 CPPC=x86_64-w64-mingw32-g++
 

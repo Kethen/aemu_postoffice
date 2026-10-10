@@ -4,6 +4,7 @@
 #include "../ext/json/json.hpp"
 #include "log.h"
 #include "file_util.h"
+#include "common.h"
 
 #include <chrono>
 #include <unordered_set>
@@ -18,15 +19,6 @@
 static const std::string HTTP_ASSET_PATH("./http_assets");
 
 namespace aemu_postoffice_server {
-
-static void set_thread_name(std::string name){
-	#if __unix__
-	pthread_t tid = pthread_self();
-	pthread_setname_np(tid, name.c_str());
-	#else
-	// hm, what do
-	#endif
-}
 
 HttpStatusServer::HttpStatusServer(const struct config &config, const struct aemu_postoffice_adhocctl_server::game_db &game_db){
 	this->game_db = game_db;

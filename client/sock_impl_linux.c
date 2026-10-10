@@ -14,18 +14,21 @@
 #include "sock_impl.h"
 #include "log_impl.h"
 
-void to_native_sock_addr(native_sock_addr *dst, const struct aemu_post_office_sock_addr *src){
+typedef struct sockaddr_in native_sock_addr;
+typedef struct sockaddr_in6 native_sock6_addr;
+
+static void to_native_sock_addr(native_sock_addr *dst, const struct aemu_postoffice_sock_addr *src){
+	memset(dst, 0, sizeof(native_sock_addr));
 	dst->sin_family = AF_INET;
 	dst->sin_addr.s_addr = src->addr;
 	dst->sin_port = src->port;
 }
 
-void to_native_sock6_addr(native_sock6_addr *dst, const struct aemu_post_office_sock6_addr *src){
+static void to_native_sock6_addr(native_sock6_addr *dst, const struct aemu_postoffice_sock6_addr *src){
+	memset(dst, 0, sizeof(native_sock6_addr));
 	dst->sin6_family = AF_INET6;
 	dst->sin6_port = src->port;
-	dst->sin6_flowinfo = 0;
 	memcpy(dst->sin6_addr.s6_addr, src->addr, 16);
-	dst->sin6_scope_id = 0;
 }
 
 // SO_SNDTIMEO can be used on linux, but no idea if it can be used on other unix likes
@@ -87,9 +90,21 @@ static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_m
 }
 
 
-int native_connect_tcp_sock(void *addr, int addrlen){
-	native_sock_addr *native_addr = addr;
-	int sock = socket(native_addr->sin_family, SOCK_STREAM, 0);
+int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6){
+	native_sock_addr native_addr4;
+	native_sock6_addr native_addr6;
+	int addrlen = 0;
+	native_sock_addr *addr = NULL;
+	if (addr4 != NULL){
+		to_native_sock_addr(&native_addr4, addr4);
+		addr = &native_addr4;
+		addrlen = sizeof(native_addr4);
+	} else {
+		to_native_sock6_addr(&native_addr6, addr6);
+		addr = (native_sock_addr *)&native_addr6;
+		addrlen = sizeof(native_addr6);
+	}
+	int sock = socket(addr->sin_family, SOCK_STREAM, 0);
 	if (sock == -1){
 		LOG("%s: failed creating socket, %s\n", __func__, strerror(errno));
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
@@ -122,6 +137,7 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	setsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &sockopt, sizeof(sockopt));
 	#endif
 
+	#if 0
 	// Show some socket options
 	unsigned int opt_len = sizeof(sockopt);
 	sockopt = 0;
@@ -144,6 +160,7 @@ int native_connect_tcp_sock(void *addr, int addrlen){
 	get_ret = getsockopt(sock, SOL_SOCKET, SO_NOSIGPIPE, &sockopt, &opt_len);
 	LOG("%s: SO_NOSIGPIPE is %d (0x%x)\n", __func__, sockopt, get_ret == -1 ? errno : 0);
 	#endif
+	#endif
 
 	return sock;
 }
@@ -165,28 +182,6 @@ int native_send(int fd, const char *buf, int len){
 	return write_status;
 }
 
-int native_send_till_done(int fd, const char *buf, int len, bool non_block, bool *abort){
-	int write_offset = 0;
-	while(write_offset != len){
-		if (*abort){
-			return NATIVE_SOCK_ABORTED;
-		}
-		int write_status = native_send(fd, &buf[write_offset], len - write_offset);
-		if (write_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
-			if (non_block && write_offset == 0){
-				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
-			}
-			sleep(0);
-			continue;
-		}
-		if (write_status == -1){
-			return write_status;
-		}
-		write_offset += write_status;
-	}
-	return write_offset;
-}
-
 int native_recv(int fd, char *buf, int len){
 	int recv_status = recv(fd, buf, len, 0);
 	if (recv_status == 0){
@@ -202,32 +197,6 @@ int native_recv(int fd, char *buf, int len){
 		return recv_status;
 	}
 	return recv_status;
-}
-
-int native_recv_till_done(int fd, char *buf, int len, bool non_block, bool *abort){
-	int read_offset = 0;
-	while(read_offset != len){
-		if (*abort){
-			return NATIVE_SOCK_ABORTED;
-		}
-		int recv_status = native_recv(fd, &buf[read_offset], len - read_offset);
-		if (recv_status == 0){
-			return recv_status;
-		}
-		if (recv_status < 0){
-			if (recv_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
-				if (non_block && read_offset == 0){
-					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
-				}
-				// Continue block receving, either in block mode or we already sent part of the message
-				sleep(0);
-				continue;
-			}
-			return recv_status;
-		}
-		read_offset += recv_status;
-	}
-	return read_offset;
 }
 
 int native_close_tcp_sock(int sock){

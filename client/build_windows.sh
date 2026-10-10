@@ -5,7 +5,7 @@ CPPC=x86_64-w64-mingw32-g++
 
 BUILD_FLAGS="-fPIC -g -O2 -Wformat"
 
-C_SRC="log_impl_stdc postoffice sock_impl_windows postoffice_mem_stdc ../adhocctl/client/adhocctl ../adhocctl/client/adhocctl_mem"
+C_SRC="log_impl_stdc postoffice sock_impl_windows postoffice_mem_stdc ../adhocctl/client/adhocctl ../adhocctl/client/adhocctl_mem list enet"
 CPP_SRC="mutex_impl_cpp delay_impl_cpp"
 C_SRC_TEST="test"
 
@@ -30,5 +30,5 @@ do
 	test_objs="$test_objs ${f}.o"
 done
 
-$CPPC $BUILD_FLAGS -static $lib_objs $test_objs -lws2_32 -lpthread -o test.exe
-$CPPC $BUILD_FLAGS -shared -static $lib_objs -lws2_32 -o libaemu_postoffice_client.dll
+$CPPC $BUILD_FLAGS -static $lib_objs $test_objs -lws2_32 -lwinmm -lpthread -o test.exe
+$CPPC $BUILD_FLAGS -shared -static $lib_objs -lws2_32 -lwinmm -o libaemu_postoffice_client.dll

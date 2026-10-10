@@ -4,12 +4,26 @@ CC=gcc
 CPPC=g++
 
 BUILD_FLAGS="-fPIC -g -O2 -Wformat"
+DEBUG="${DEBUG:-false}"
 
-C_SRC="log_impl_stdc postoffice sock_impl_linux postoffice_mem_stdc ../adhocctl/client/adhocctl ../adhocctl/client/adhocctl_mem"
+if $DEBUG
+then
+	BUILD_FLAGS="-fPIC -g -O0 -fsanitize=address -Wformat"
+fi
+
+C_SRC="log_impl_stdc postoffice sock_impl_linux postoffice_mem_stdc ../adhocctl/client/adhocctl ../adhocctl/client/adhocctl_mem list enet"
 CPP_SRC="mutex_impl_cpp delay_impl_cpp"
 C_SRC_TEST="test"
 
 lib_objs=""
+
+$CC $BUILD_FLAGS list.c list_test.c log_impl_stdc.c -o list_test.out
+if $DEBUG
+then
+	./list_test.out
+else
+	valgrind ./list_test.out
+fi
 
 for f in $C_SRC
 do

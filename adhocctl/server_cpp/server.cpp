@@ -12,15 +12,6 @@ using namespace aemu_postoffice_server;
 
 namespace aemu_postoffice_adhocctl_server{
 
-static void set_thread_name(std::string name){
-	#if __unix__
-	pthread_t tid = pthread_self();
-	pthread_setname_np(tid, name.c_str());
-	#else
-	// hm, what do
-	#endif
-}
-
 Server::Server(const struct aemu_postoffice_server::config &config, const struct game_db &game_db){
 	this->config = config;
 	this->game_db = game_db;
@@ -72,7 +63,7 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		pending_clients_workers.push_back(std::thread([this, i]{
 			char thread_name_buf[128] = {0};
 			snprintf(thread_name_buf, sizeof(thread_name_buf), "adhocctl_%d", i);
-			set_thread_name(std::string(thread_name_buf));
+			aemu_postoffice_server::set_thread_name(std::string(thread_name_buf));
 
 			while(true){
 				this->pending_clients_worker_start_sema[i].acquire();
@@ -102,7 +93,7 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		clients_recv_workers.push_back(std::thread([this, i]{
 			char thread_name_buf[128] = {0};
 			snprintf(thread_name_buf, sizeof(thread_name_buf), "adhocctl_recv_%d", i);
-			set_thread_name(std::string(thread_name_buf));
+			aemu_postoffice_server::set_thread_name(std::string(thread_name_buf));
 
 			while(true){
 				this->clients_recv_worker_start_sema[i].acquire();
@@ -172,7 +163,7 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		clients_send_workers.push_back(std::thread([this, i]{
 			char thread_name_buf[128] = {0};
 			snprintf(thread_name_buf, sizeof(thread_name_buf), "adhocctl_send_%d", i);
-			set_thread_name(std::string(thread_name_buf));
+			aemu_postoffice_server::set_thread_name(std::string(thread_name_buf));
 
 			while(true){
 				this->clients_send_worker_start_sema[i].acquire();
