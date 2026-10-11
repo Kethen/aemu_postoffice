@@ -133,6 +133,7 @@ int *__errno(){
 
 void abort(){
 	LOG("%s: abort called on addr %p...\n", __func__, __builtin_return_address(0));
+	_sw(0, 0);
 }
 
 char *strncpy(char *dest, const char *src, size_t count){
