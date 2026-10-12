@@ -167,7 +167,7 @@ void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const c
 void destroy_adhocctl_session(void *session){
 	struct session *slot = (struct session *)session;
 
-	native_close_tcp_sock(slot->sock_fd);
+	close_wrapped(slot->sock_fd, slot->enet_handle);
 	slot->in_use = false;
 }
 
