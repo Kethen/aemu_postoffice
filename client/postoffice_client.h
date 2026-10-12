@@ -33,7 +33,7 @@ extern "C" {
 #endif
 
 int init_aemu_postoffice(bool with_enet); // returns 0 on success, -1 on error
-int pump_enet_aemu_postoffice(); // returns 0 on success, -1 on error, this has to be called frequently to facilitate enet functionalities
+int pump_enet_aemu_postoffice(); // returns 0 on success,, 1 on idle, -1 on error, this has to be called frequently to facilitate enet functionalities
 void deinit_aemu_postoffice();
 
 /*

@@ -235,13 +235,15 @@ static void *pdp_create(const struct aemu_postoffice_sock_addr *addr4, const str
 		init_packet.init_type = AEMU_POSTOFFICE_INIT_PDP_UNRELIABLE;
 	}
 
-	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &session->sock, &session->enet_handle);
+	int sock = 0;
+	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &session->enet_handle);
 
 	if (!created){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		session->sock = -1;
 		return NULL;
 	}
+	session->sock = sock;
 
 	memcpy(session->pdp_mac, pdp_mac, 6);
 	session->pdp_port = pdp_port;
@@ -619,13 +621,15 @@ static void *ptp_listen(const struct aemu_postoffice_sock_addr *addr4, const str
 	memcpy(init_packet.src_addr, ptp_mac, 6);
 	init_packet.sport = ptp_port;
 
-	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &session->sock, &session->enet_handle);
+	int sock = 0;
+	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &session->enet_handle);
 
 	if (!created){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		session->sock = -1;
 		return NULL;
 	}
+	session->sock = sock;
 
 	memcpy(session->ptp_mac, ptp_mac, 6);
 	session->ptp_port = ptp_port;
@@ -717,10 +721,11 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	init_packet.dport = connect_packet.port;
 
 	bool created = false;
+	int sock = 0;
 	if (session->is_addr6){
-		created = create_and_init_socket(NULL, &session->addr6, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), __func__, &new_session->sock, &new_session->enet_handle);
+		created = create_and_init_socket(NULL, &session->addr6, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &new_session->enet_handle);
 	} else {
-		created = create_and_init_socket(&session->addr4, NULL, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), __func__, &new_session->sock, &new_session->enet_handle);
+		created = create_and_init_socket(&session->addr4, NULL, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &new_session->enet_handle);
 	}
 
 	if (!created){
@@ -728,6 +733,7 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 		new_session->sock = -1;
 		return NULL;
 	}
+	new_session->sock = sock;
 
 	// Consume the ack packet
 	bool abort = false;
@@ -786,13 +792,15 @@ static void *ptp_connect(const struct aemu_postoffice_sock_addr *addr4, const st
 	memcpy(init_packet.dst_addr, dst_ptp_mac, 6);
 	init_packet.dport = ptp_dport;
 
-	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &new_session->sock, &new_session->enet_handle);
+	int sock = 0;
+	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &new_session->enet_handle);
 
 	if (!created){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 		new_session->sock = -1;
 		return NULL;
 	}
+	new_session->sock = sock;
 
 	// Consume the ack packet
 	struct aemu_postoffice_ptp_connect connect_packet;

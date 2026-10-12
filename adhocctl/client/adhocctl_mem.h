@@ -9,6 +9,7 @@ struct session {
 	char nickname[128];
 	char mac[6];
 	int sock_fd;
+	void *enet_handle;
 	int protocol_revision;
 };
 

@@ -7,6 +7,7 @@
 #include <chrono>
 
 #include "../../server_cpp/config.h"
+#include "../../server_cpp/enet.h"
 
 namespace aemu_postoffice_adhocctl_server {
 
@@ -69,7 +70,7 @@ enum class ServerToClientOpQueueStatus {
 
 class Client {
 	public:
-		Client(int sock_fd, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, struct aemu_postoffice_server::config *config);
+		Client(int sock_fd, aemu_postoffice_enet::BasicEnetClient *enet_server, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, struct aemu_postoffice_server::config *config);
 		void close_socket();
 		~Client();
 
@@ -101,6 +102,7 @@ class Client {
 
 	private:
 		int sock_fd;
+		aemu_postoffice_enet::BasicEnetClient *enet_server;
 		std::string ip;
 		uint16_t port;
 		std::string socket_name;

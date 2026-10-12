@@ -18,6 +18,6 @@ int send_enet(void *handle, const char *buf, int buf_size, int channel, bool rel
 
 bool is_disconnected_enet(void *handle);
 
-int pump_enet(); // 0 on success, -1 on error, this has to be called regularly for enet processing
+int pump_enet(); // 0 on success, 1 on idle, -1 on error, this has to be called regularly for enet processing
 
 #endif
