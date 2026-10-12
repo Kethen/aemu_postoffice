@@ -8,6 +8,8 @@
 #include "../../server_cpp/config.h"
 #include "../../server_cpp/semaphore.h"
 #include "game_db.h"
+#include "../../server_cpp/enet.h"
+#include "../../server_cpp/native_socket.h"
 
 namespace aemu_postoffice_adhocctl_server {
 
@@ -68,6 +70,8 @@ class Server {
 		struct aemu_postoffice_server::config config;
 		struct game_db game_db;
 		int sock_fd;
+		aemu_postoffice_enet::BasicEnetClient *enet_server;
+		aemu_postoffice_server::AddrFamily addr_family;
 
 		void disconnect_client(std::string mac);
 		void remove_client(std::string mac);

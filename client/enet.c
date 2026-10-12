@@ -287,6 +287,7 @@ static int _pump_enet(){
 
 	void *itr = list_begin_itr(connections);
 	ENetEvent event;
+	int events_processed = 0;
 	while (itr != NULL){
 		struct connection *connection = list_itr_get_data(itr);
 		int service_status = enet_host_service(connection->host, &event, 0);
@@ -304,6 +305,7 @@ static int _pump_enet(){
 			itr = list_itr_next(itr);
 			continue;
 		}
+		events_processed++;
 		switch (event.type){
 			case ENET_EVENT_TYPE_CONNECT:
 				connection->connected = true;
@@ -378,13 +380,18 @@ static int _pump_enet(){
 		itr = list_itr_next(itr);
 	}
 
+	if (events_processed == 0){
+		return 1;
+	}
+
 	return 0;
 }
 
 int pump_enet(){
 	lock_enet_mutex();
-	_pump_enet();
+	int ret = _pump_enet();
 	unlock_enet_mutex();
+	return ret;
 }
 
 static struct channel *find_channel(struct connection *connection, int channel){

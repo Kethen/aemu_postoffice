@@ -45,6 +45,21 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		return;
 	}
 
+	addr_family = get_addr_family(config.ip_addr);
+	if (addr_family != aemu_postoffice_server::AddrFamily::IPV6){
+		LOG("%s: not enabling enet in ipv4 only mode\n", __func__);
+		enet_server = NULL;
+	} else {
+		enet_server = new aemu_postoffice_enet::BasicEnetClient();
+		int enet_listen_status = enet_server->listen(config.ip_addr, config.adhocctl_port, config.adhocctl_max_num_sessions, 1);
+		if (enet_listen_status != 0){
+			LOG("%s: failed creating enet socket\n", __func__);
+			delete enet_server;
+			enet_server = NULL;
+			return;
+		}
+	}
+
 	stopping = false;
 
 	for (int i = 0;i < config.adhocctl_num_threads;i++){
@@ -210,6 +225,12 @@ Server::~Server(){
 	for (auto client = clients.begin();client != clients.end();client++){
 		client->second.close_socket();
 	}
+
+	// stop enet
+	if (enet_server != NULL){
+		delete enet_server;
+		enet_server = NULL;
+	}
 }
 
 void Server::disconnect_client(std::string mac){
@@ -321,8 +342,18 @@ void Server::connect_client(std::string mac, std::string group_name, bool groupl
 	target->second.group = group_key;
 }
 
+static std::string make_socket_name(std::string ip, int port){
+	char socket_name_buf[128] = {0};
+	snprintf(socket_name_buf, sizeof(socket_name_buf), "%s:%u", ip.c_str(), port);
+	return std::string(socket_name_buf);
+}
+
 ServerPumpStatus Server::pump(){
 	if (sock_fd < 0){
+		return ServerPumpStatus::ERROR;
+	}
+
+	if (addr_family == aemu_postoffice_server::AddrFamily::IPV6 && enet_server == NULL){
 		return ServerPumpStatus::ERROR;
 	}
 
@@ -350,10 +381,32 @@ ServerPumpStatus Server::pump(){
 			continue;
 		}
 
-		char socket_name_buf[128] = {0};
-		snprintf(socket_name_buf, sizeof(socket_name_buf), "%s:%u", peer_addr.c_str(), peer_port);
-		std::string socket_name = std::string(socket_name_buf);
-		Client new_client(accept_status, peer_addr, peer_port, socket_name, 1, &config);
+		std::string socket_name = make_socket_name(peer_addr, peer_port);
+		Client new_client(accept_status, (aemu_postoffice_enet::BasicEnetClient *)NULL, peer_addr, peer_port, socket_name, 1, &config);
+		auto existing_pending_client = pending_clients.find(socket_name);
+		if (existing_pending_client != pending_clients.end()){
+			existing_pending_client->second.close_socket();
+			pending_clients.erase(existing_pending_client);
+		}
+
+		pending_clients.insert_or_assign(socket_name, new_client);
+	}
+
+	while (enet_server != NULL){
+		std::string peer_addr;
+		int peer_port;
+		aemu_postoffice_enet::EnetAcceptStatus status;
+		int peer_ref = enet_server->accept(peer_addr, peer_port, status);
+		if (peer_ref == -1){
+			if (status == aemu_postoffice_enet::EnetAcceptStatus::NO_PEER){
+				break;
+			}
+			LOG("%s: enet accept call failed, %d\n", __func__, status);
+			return ServerPumpStatus::ERROR;
+		}
+
+		std::string socket_name = make_socket_name(peer_addr, peer_port);
+		Client new_client(peer_ref, enet_server, peer_addr, peer_port, socket_name, 1, &config);
 		auto existing_pending_client = pending_clients.find(socket_name);
 		if (existing_pending_client != pending_clients.end()){
 			existing_pending_client->second.close_socket();

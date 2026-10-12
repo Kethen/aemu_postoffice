@@ -4,8 +4,11 @@
 
 #include <unistd.h>
 #include <time.h>
+#include <pthread.h>
 
 #include "adhocctl.h"
+
+#include "../../client/enet.h"
 
 void sleep_ms(int ms){
 	struct timespec sleep_time = {
@@ -27,9 +30,9 @@ void test_too_many_sessions(){
 	void *handles[17] = {0};
 	for (int i = 0;i < 17;i++){
 		char mac[6] = {0};
-		*(int *)mac = i + 1;
+		*(int *)&mac[1] = i + 1;
 		snprintf(nickname, sizeof(nickname), "%d", i);
-		handles[i] = create_adhocctl_v1_session_v4(&addr, game_code, nickname, mac);
+		handles[i] = create_adhocctl_v1_session_v4(&addr, game_code, nickname, mac, false);
 		sleep_ms(120);
 	}
 
@@ -56,7 +59,9 @@ void test_too_many_sessions(){
 	sleep_ms(120);
 }
 
-void test_protocol(){
+void test_protocol(bool enet){
+	printf("%s: testing with enet %s\n", __func__, enet ? "on" : "off");
+
 	struct adhocctl_addr_v4 addr = {
 		.ip = 0x0100007f,
 		.port = 0xb06a,
@@ -68,7 +73,7 @@ void test_protocol(){
 	snprintf(nickname_a, sizeof(nickname_a), "nickname a");
 	char mac_a[6];
 	memset(mac_a, 0xa, 6);
-	void *session_a = create_adhocctl_v1_session_v4(&addr, game_code, nickname_a, mac_a);
+	void *session_a = create_adhocctl_v1_session_v4(&addr, game_code, nickname_a, mac_a, enet);
 	if (session_a == NULL){
 		printf("%s: cannot create session a\n", __func__);
 		exit(1);
@@ -78,7 +83,7 @@ void test_protocol(){
 	snprintf(nickname_b, sizeof(nickname_b), "nickname b");
 	char mac_b[6];
 	memset(mac_b, 0xb, 6);
-	void *session_b = create_adhocctl_v1_session_v4(&addr, game_code, nickname_b, mac_b);
+	void *session_b = create_adhocctl_v1_session_v4(&addr, game_code, nickname_b, mac_b, enet);
 	if (session_b == NULL){
 		printf("%s: cannot create session b\n", __func__);
 		exit(1);
@@ -226,11 +231,45 @@ void test_protocol(){
 		printf("%s: expected event ADHOCCTL_EVENT_DISCONNECT, got %d\n", __func__, event.type);
 		exit(1);
 	}
+
+	destroy_adhocctl_session(session_a);
+	destroy_adhocctl_session(session_b);
+}
+
+bool stop_enet_pumping = false;
+void *enet_pump_func(void *arg){
+	while(!stop_enet_pumping){
+		const static int target_frametime = 1000 / 60;
+		int final_frametime = 0;
+		struct timespec begin;
+		clock_gettime(CLOCK_MONOTONIC, &begin);
+		int pump_status = pump_enet();
+		if (pump_status == 1){
+			final_frametime = target_frametime;
+		}
+		struct timespec end;
+		clock_gettime(CLOCK_MONOTONIC, &end);
+		int timespent_ms = (end.tv_sec - begin.tv_sec) * 1000 + (end.tv_nsec - begin.tv_nsec) / 1000000;
+		if (final_frametime > timespent_ms){
+			sleep_ms(final_frametime - timespent_ms);
+		}
+	}
 }
 
 int main(){
+	init_enet();
+
+	pthread_t enet_pump_thread;
+	pthread_create(&enet_pump_thread, NULL, enet_pump_func, NULL);
+
 	test_too_many_sessions();
-	test_protocol();
+	test_protocol(false);
+	test_protocol(true);
+
+	stop_enet_pumping = true;
+	pthread_join(enet_pump_thread, NULL);
+
+	deinit_enet();
 
 	printf("%s: test ok\n", __func__);
 }

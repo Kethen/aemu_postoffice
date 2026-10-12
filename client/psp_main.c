@@ -25,11 +25,17 @@ static bool enet_pump_stop = false;
 static int enet_pump_func(unsigned int arg_size, void *arg){
 	while (!enet_pump_stop){
 		static const int target_frametime_us = 1000000 / 120;
+		int final_frametime_us = 0;
 		uint64_t begin = sceKernelGetSystemTimeWide();
-		pump_enet_aemu_postoffice();
+		int pump_status = pump_enet_aemu_postoffice();
+		if (pump_status == 1){
+			final_frametime_us = target_frametime_us;
+		}
 		uint64_t time_used_us = sceKernelGetSystemTimeWide() - begin;
-		if (target_frametime_us > time_used_us){
-			sceKernelDelayThread(target_frametime_us - time_used_us);
+		if (final_frametime_us > time_used_us){
+			sceKernelDelayThread(final_frametime_us - time_used_us);
+		} else {
+			sceKernelDelayThread(0);
 		}
 	}
 	return 0;

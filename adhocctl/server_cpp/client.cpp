@@ -12,9 +12,10 @@ using namespace aemu_postoffice_server;
 
 namespace aemu_postoffice_adhocctl_server {
 
-Client::Client(int sock_fd, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, struct aemu_postoffice_server::config *config){
+Client::Client(int sock_fd, aemu_postoffice_enet::BasicEnetClient *enet_server, std::string ip, uint16_t port, std::string socket_name, int protocol_revision, struct aemu_postoffice_server::config *config){
 	this->sock_fd = sock_fd;
 	this->ip = ip;
+	this->enet_server = enet_server;
 	this->port = port;
 	this->socket_name = socket_name;
 	this->protocol_revision = protocol_revision;
@@ -31,7 +32,10 @@ Client::Client(int sock_fd, std::string ip, uint16_t port, std::string socket_na
 }
 
 void Client::close_socket(){
-	native_close(this->sock_fd);
+	if (enet_server == NULL)
+		native_close(this->sock_fd);
+	else
+		enet_server->close(this->sock_fd);
 }
 
 Client::~Client(){
@@ -362,23 +366,38 @@ ClientPumpStatus Client::pump_from_client(){
 	}
 
 	// drain kernel buffer into our buffer
+	Buffer _recv_buf(4096);
+	char *recv_buf = _recv_buf.get_buf();
+	int recv_buf_size = _recv_buf.get_size();
 	while(true){
-		char recv_buf[4096];
-		int recv_status = native_recv(sock_fd, recv_buf, sizeof(recv_buf));
-		if (recv_status == 0){
-			LOG_TS("%s: client %s %s has disconnected\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str());
-			return ClientPumpStatus::DISCONNECT;
-		}
-		if (recv_status == -1){
-			int error = native_get_last_socket_error();
-			if (native_error_is_would_block(error)){
-				break;
+		int recv_len = 0;
+		if (enet_server == NULL){
+			recv_len = native_recv(sock_fd, recv_buf, recv_buf_size);
+			if (recv_len == 0){
+				LOG_TS("%s: client %s %s has disconnected\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str());
+				return ClientPumpStatus::DISCONNECT;
 			}
-			LOG_TS("%s: client %s %s has errored 0x%x\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str(), error);
-			return ClientPumpStatus::ERROR;
+			if (recv_len == -1){
+				int error = native_get_last_socket_error();
+				if (native_error_is_would_block(error)){
+					break;
+				}
+				LOG_TS("%s: client %s %s has errored 0x%x\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str(), error);
+				return ClientPumpStatus::ERROR;
+			}
+		} else {
+			aemu_postoffice_enet::EnetRecvStatus status;
+			recv_len = enet_server->recv(sock_fd, recv_buf, recv_buf_size, 0, status);
+			if (recv_len == -1){
+				if (status == aemu_postoffice_enet::EnetRecvStatus::WOULD_BLOCK){
+					break;
+				}
+				LOG_TS("%s: client %s %s has enet error %d\n", __func__, get_socket_name().c_str(), mac_bytes_to_mac_string(mac).c_str(), status);
+				return ClientPumpStatus::ERROR;
+			}
 		}
 		// we have data otherwise
-		this->recv_buf.append(recv_buf, recv_status);
+		this->recv_buf.append(recv_buf, recv_len);
 	}
 
 	if (client_sent_too_much(recv_buf, config, this)){
@@ -403,17 +422,31 @@ ClientPumpStatus Client::pump_to_client(){
 			return ClientPumpStatus::SUCCESS;
 		}
 
-		int send_status = native_send(sock_fd, send_buf.data(), send_buf.length());
-		if (send_status == -1){
-			int err = native_get_last_socket_error();
-			if (native_error_is_would_block(err)){
-				return ClientPumpStatus::SUCCESS;
+		int send_len = 0;
+		if (enet_server == NULL) {
+			send_len = native_send(sock_fd, send_buf.data(), send_buf.length());
+			if (send_len == -1){
+				int err = native_get_last_socket_error();
+				if (native_error_is_would_block(err)){
+					return ClientPumpStatus::SUCCESS;
+				}
+				LOG_TS("%s: failed sending to client, 0x%x\n", __func__, err);
+				return ClientPumpStatus::ERROR;
 			}
-			LOG_TS("%s: failed sending to client, 0x%x\n", __func__, err);
-			return ClientPumpStatus::ERROR;
+		} else {
+			int to_send = send_buf.size();
+			if (to_send > 500){
+				to_send = 500;
+			}
+			aemu_postoffice_enet::EnetSendStatus status;
+			send_len = enet_server->send(sock_fd, send_buf.data(), to_send, 0, true, status);
+			if (send_len == -1){
+				LOG_TS("%s: failed sending to enet client, %d\n", __func__, status);
+				return ClientPumpStatus::ERROR;
+			}
 		}
 
-		send_buf.erase(0, send_status);
+		send_buf.erase(0, send_len);
 	}
 }
 
