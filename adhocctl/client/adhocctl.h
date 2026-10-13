@@ -21,8 +21,8 @@ struct adhocctl_addr_v6 {
 // do not create session on multiple threads at the same time
 // only protocol_revision 1 is currently supported
 // game code has to be a buffer of 9 bytes, nickname has to be a buffer of 128 bytes, mac has to be a buffer of 6 bytes
-void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const char *game_code, const char *nickname, const char *mac, bool enet);
-void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const char *game_code, const char *nickname, const char *mac, bool enet);
+void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const struct adhocctl_addr_v4 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet);
+void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const struct adhocctl_addr_v6 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet);
 
 void destroy_adhocctl_session(void *session);
 

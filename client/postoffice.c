@@ -116,7 +116,7 @@ static bool hung_up_wrapped(int sock, void *enet_handle){
 static bool connect_wrapped(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, bool enet, int *sock, void **enet_handle, const char *caller_name){
 	if (!enet){
 		enet_handle[0] = NULL;
-		sock[0] = native_connect_tcp_sock(addr4, addr6);
+		sock[0] = native_connect_tcp_sock(addr4, NULL, addr6, NULL);
 		if (sock[0] < 0){
 			LOG("%s: tcp connection failed\n", caller_name);
 			return false;
