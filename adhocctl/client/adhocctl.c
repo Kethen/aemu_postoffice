@@ -295,16 +295,16 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 	#define CHECK_RESULT(res, expected_size) { \
 		if (res == 0){ \
 			LOG("%s: remote disconnected\n", __func__); \
-			event_out->type = ADHOCCTL_EVENT_ERROR; \
+			event_out->type = ADHOCCTL_CLIENT_EVENT_ERROR; \
 			return; \
 		} \
 		if (res == -1){ \
 			LOG("%s: recv errored\n", __func__); \
-			event_out->type = ADHOCCTL_EVENT_ERROR; \
+			event_out->type = ADHOCCTL_CLIENT_EVENT_ERROR; \
 			return; \
 		} \
 		if (res == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK || res != expected_size){ \
-			event_out->type = ADHOCCTL_EVENT_WOULD_BLOCK; \
+			event_out->type = ADHOCCTL_CLIENT_EVENT_WOULD_BLOCK; \
 			return; \
 		} \
 	}
@@ -319,7 +319,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_SCAN;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_SCAN;
 			memcpy(event_out->scan.group_name, packet.group.data, 8);
 			memcpy(event_out->scan.leader_mac, packet.mac.data, 6);
 			return;
@@ -327,7 +327,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 		case OPCODE_SCAN_COMPLETE:{
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&base_packet, sizeof(base_packet));
 			CHECK_RESULT(recv_result, sizeof(base_packet));
-			event_out->type = ADHOCCTL_EVENT_SCAN_COMPLETE;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_SCAN_COMPLETE;
 			return;
 		}
 		case OPCODE_CONNECT:{
@@ -336,7 +336,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_CONNECT;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_CONNECT;
 			memcpy(event_out->connect.mac, packet.mac.data, 6);
 			memcpy(event_out->connect.nickname, packet.name.data, 127);
 			event_out->connect.id = packet.ip;
@@ -348,7 +348,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_LEADER_MAC;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_LEADER_MAC;
 			memcpy(event_out->leader_mac.mac, packet.mac.data, 6);
 			return;
 		}
@@ -358,7 +358,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_DISCONNECT;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_DISCONNECT;
 			event_out->disconnect.id = packet.ip;
 			return;
 		}
@@ -368,14 +368,14 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_CHAT;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_CHAT;
 			memcpy(event_out->chat.nickname, packet.name.data, 127);
 			memcpy(event_out->chat.message, packet.base.message, 64);
 			return;
 		}
 		default:
 			LOG("%s: remote sent unrecognized opcode %d\n", __func__, base_packet.opcode);
-			event_out->type = ADHOCCTL_EVENT_ERROR;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_ERROR;
 			return;
 	}
 	#undef CHECK_RESULT

@@ -812,10 +812,10 @@ void *adhocctl_ping_func(void *arg){
 		#define drain_events(handle) { \
 			while (true){ \
 				adhocctl_get_event(handle, &event); \
-				if (event.type == ADHOCCTL_EVENT_WOULD_BLOCK){ \
+				if (event.type == ADHOCCTL_CLIENT_EVENT_WOULD_BLOCK){ \
 					break; \
 				} \
-				if (event.type == ADHOCCTL_EVENT_ERROR){ \
+				if (event.type == ADHOCCTL_CLIENT_EVENT_ERROR){ \
 					LOG("%s: adhocctl event fetch error\n", __func__); \
 					exit(1); \
 				} \

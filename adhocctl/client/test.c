@@ -32,14 +32,14 @@ void test_too_many_sessions(){
 		char mac[6] = {0};
 		*(int *)&mac[1] = i + 1;
 		snprintf(nickname, sizeof(nickname), "%d", i);
-		handles[i] = create_adhocctl_v1_session_v4(&addr, game_code, nickname, mac, false);
+		handles[i] = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname, mac, false);
 		sleep_ms(120);
 	}
 
 	for (int i = 0;i < 16;i++){
 		struct adhocctl_event event = {0};
 		adhocctl_get_event(handles[i], &event);
-		if (event.type == ADHOCCTL_EVENT_ERROR){
+		if (event.type == ADHOCCTL_CLIENT_EVENT_ERROR){
 			printf("%s: session %d is somehow dead\n", __func__, i);
 			exit(1);
 		}
@@ -47,7 +47,7 @@ void test_too_many_sessions(){
 
 	struct adhocctl_event event = {0};
 	adhocctl_get_event(handles[16], &event);
-	if (event.type != ADHOCCTL_EVENT_ERROR){
+	if (event.type != ADHOCCTL_CLIENT_EVENT_ERROR){
 		printf("%s: session %d is somehow not dead\n", __func__, 16);
 		exit(1);
 	}
@@ -73,7 +73,7 @@ void test_protocol(bool enet){
 	snprintf(nickname_a, sizeof(nickname_a), "nickname a");
 	char mac_a[6];
 	memset(mac_a, 0xa, 6);
-	void *session_a = create_adhocctl_v1_session_v4(&addr, game_code, nickname_a, mac_a, enet);
+	void *session_a = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname_a, mac_a, enet);
 	if (session_a == NULL){
 		printf("%s: cannot create session a\n", __func__);
 		exit(1);
@@ -83,7 +83,7 @@ void test_protocol(bool enet){
 	snprintf(nickname_b, sizeof(nickname_b), "nickname b");
 	char mac_b[6];
 	memset(mac_b, 0xb, 6);
-	void *session_b = create_adhocctl_v1_session_v4(&addr, game_code, nickname_b, mac_b, enet);
+	void *session_b = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname_b, mac_b, enet);
 	if (session_b == NULL){
 		printf("%s: cannot create session b\n", __func__);
 		exit(1);
@@ -102,8 +102,8 @@ void test_protocol(bool enet){
 
 	struct adhocctl_event event = {0};
 	adhocctl_get_event(session_a, &event);
-	if (event.type != ADHOCCTL_EVENT_LEADER_MAC){
-		printf("%s: expected event ADHOCCTL_EVENT_LEADER_MAC, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_LEADER_MAC){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_LEADER_MAC, got %d\n", __func__, event.type);
 		exit(1);
 	}
 	if (memcmp(event.leader_mac.mac, mac_a, 6) != 0){
@@ -122,8 +122,8 @@ void test_protocol(bool enet){
 	sleep_ms(100);
 
 	adhocctl_get_event(session_b, &event);
-	if (event.type != ADHOCCTL_EVENT_SCAN){
-		printf("%s: expected event ADHOCCTL_EVENT_SCAN, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_SCAN){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_SCAN, got %d\n", __func__, event.type);
 		exit(1);
 	}
 	if (memcmp(event.scan.leader_mac, mac_a, 6) != 0){
@@ -136,8 +136,8 @@ void test_protocol(bool enet){
 	}
 
 	adhocctl_get_event(session_b, &event);
-	if (event.type != ADHOCCTL_EVENT_SCAN_COMPLETE){
-		printf("%s: expected event ADHOCCTL_EVENT_SCAN_COMPLETE, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_SCAN_COMPLETE){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_SCAN_COMPLETE, got %d\n", __func__, event.type);
 		exit(1);
 	}
 
@@ -150,8 +150,8 @@ void test_protocol(bool enet){
 	sleep_ms(100);
 
 	adhocctl_get_event(session_a, &event);
-	if (event.type != ADHOCCTL_EVENT_CONNECT){
-		printf("%s: expected event ADHOCCTL_EVENT_CONNECT, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_CONNECT){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_CONNECT, got %d\n", __func__, event.type);
 		exit(1);
 	}
 	if (memcmp(event.connect.nickname, nickname_b, 128) != 0){
@@ -164,8 +164,8 @@ void test_protocol(bool enet){
 	}
 
 	adhocctl_get_event(session_b, &event);
-	if (event.type != ADHOCCTL_EVENT_CONNECT){
-		printf("%s: expected event ADHOCCTL_EVENT_CONNECT, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_CONNECT){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_CONNECT, got %d\n", __func__, event.type);
 		exit(1);
 	}
 	if (memcmp(event.connect.nickname, nickname_a, 128) != 0){
@@ -178,8 +178,8 @@ void test_protocol(bool enet){
 	}
 
 	adhocctl_get_event(session_b, &event);
-	if (event.type != ADHOCCTL_EVENT_LEADER_MAC){
-		printf("%s: expected event ADHOCCTL_EVENT_LEADER_MAC, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_LEADER_MAC){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_LEADER_MAC, got %d\n", __func__, event.type);
 		exit(1);
 	}
 	if (memcmp(event.leader_mac.mac, mac_a, 6) != 0){
@@ -196,8 +196,8 @@ void test_protocol(bool enet){
 	sleep_ms(100);
 
 	adhocctl_get_event(session_a, &event);
-	if (event.type != ADHOCCTL_EVENT_CHAT){
-		printf("%s: expected event ADHOCCTL_EVENT_CHAT, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_CHAT){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_CHAT, got %d\n", __func__, event.type);
 		exit(1);
 	}
 	if (memcmp(event.chat.nickname, nickname_b, 128) != 0){
@@ -210,8 +210,8 @@ void test_protocol(bool enet){
 	}
 
 	adhocctl_get_event(session_b, &event);
-	if (event.type != ADHOCCTL_EVENT_CHAT){
-		printf("%s: expected event ADHOCCTL_EVENT_CHAT, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_CHAT){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_CHAT, got %d\n", __func__, event.type);
 		exit(1);
 	}
 	if (memcmp(event.chat.nickname, nickname_a, 128) != 0){
@@ -227,8 +227,8 @@ void test_protocol(bool enet){
 
 	sleep_ms(100);
 	adhocctl_get_event(session_b, &event);
-	if (event.type != ADHOCCTL_EVENT_DISCONNECT){
-		printf("%s: expected event ADHOCCTL_EVENT_DISCONNECT, got %d\n", __func__, event.type);
+	if (event.type != ADHOCCTL_CLIENT_EVENT_DISCONNECT){
+		printf("%s: expected event ADHOCCTL_CLIENT_EVENT_DISCONNECT, got %d\n", __func__, event.type);
 		exit(1);
 	}
 
