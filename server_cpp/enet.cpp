@@ -272,7 +272,7 @@ bool BasicEnetClient::create_workers(){
 	out_worker = new std::thread([this] {
 		set_thread_name("enet out");
 		const auto target_frametime = std::chrono::milliseconds(1000 / 120);
-		const auto target_frametime_idle = std::chrono::milliseconds(1000 / 30);
+		const auto target_frametime_idle = std::chrono::milliseconds(1000 / 60);
 		while (!stopping){
 			auto begin = std::chrono::high_resolution_clock::now();
 			WorkerTickStatus tick_status = worker_out_tick();
