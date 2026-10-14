@@ -509,6 +509,8 @@ static int _send_enet(void *handle, const char *buf, int buf_size, int channel, 
 	enet_uint32 flags = 0;
 	if (reliable){
 		flags |= ENET_PACKET_FLAG_RELIABLE;
+	} else {
+		flags |= ENET_PACKET_FLAG_UNSEQUENCED;
 	}
 	ENetPacket *packet = enet_packet_create(buf, buf_size, flags);
 	if (packet == NULL){

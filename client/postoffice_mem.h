@@ -15,6 +15,7 @@ struct pdp_session{
 	bool enet_reliable;
 	bool dead;
 	bool abort;
+	char send_buf[AEMU_POSTOFFICE_PDP_BLOCK_MAX + sizeof(aemu_postoffice_pdp)];
 	char recv_ring_buf[AEMU_POSTOFFICE_PDP_BLOCK_MAX + sizeof(aemu_postoffice_pdp)];
 	int recv_ring_buf_start;
 	int recv_ring_buf_used;

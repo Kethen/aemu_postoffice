@@ -215,6 +215,8 @@ WorkerTickStatus BasicEnetClient::worker_out_tick(){
 			enet_uint32 packet_flags = 0;
 			if (op.reliable){
 				packet_flags |= ENET_PACKET_FLAG_RELIABLE;
+			} else {
+				packet_flags |= ENET_PACKET_FLAG_UNSEQUENCED;
 			}
 			ENetPacket *packet = enet_packet_create(op.data.data(), op.data.size(), packet_flags);
 			if (packet == NULL){
