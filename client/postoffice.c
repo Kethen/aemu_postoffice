@@ -116,7 +116,7 @@ static bool hung_up_wrapped(int sock, void *enet_handle){
 static bool connect_wrapped(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, bool enet, int *sock, void **enet_handle, const char *caller_name){
 	if (!enet){
 		enet_handle[0] = NULL;
-		sock[0] = native_connect_tcp_sock(addr4, addr6);
+		sock[0] = native_connect_tcp_sock(addr4, NULL, addr6, NULL);
 		if (sock[0] < 0){
 			LOG("%s: tcp connection failed\n", caller_name);
 			return false;
@@ -291,29 +291,19 @@ int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *bu
 	};
 	memcpy(pdp_header.addr, pdp_mac, 6);
 
+	// need to send this in one go in the case of enet unreliable
+	// memcpy the header after creating it on stack so that we do not get into odd alignment issues on PSP
+	memcpy(session->send_buf, &pdp_header, sizeof(pdp_header));
+	memcpy(&session->send_buf[sizeof(pdp_header)], buf, len);
+
 	session->sending = true;
-	int send_status = send_till_done(session->sock, session->enet_handle, session->enet_reliable, (char *)&pdp_header, sizeof(pdp_header), non_block, &session->abort);
+	int send_status = send_till_done(session->sock, session->enet_handle, session->enet_reliable, session->send_buf, sizeof(pdp_header) + len, non_block, &session->abort);
 	session->sending = false;
 	if (send_status == ABORTED){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 	if (send_status == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
-	}
-
-	if (send_status < 0){
-		// Error
-		LOG("%s: failed sending header\n", __func__);
-		session->dead = true;
-		close_wrapped(session->sock, session->enet_handle);
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
-	}
-
-	session->sending = true;
-	send_status = send_till_done(session->sock, session->enet_handle, session->enet_reliable, buf, len, false, &session->abort);
-	session->sending = false;
-	if (send_status == ABORTED){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
 	if (send_status < 0){

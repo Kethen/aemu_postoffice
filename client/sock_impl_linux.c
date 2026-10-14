@@ -90,7 +90,7 @@ static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_m
 }
 
 
-int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6){
+int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock_addr *bind_addr4, const struct aemu_postoffice_sock6_addr *addr6, const struct aemu_postoffice_sock6_addr *bind_addr6){
 	native_sock_addr native_addr4;
 	native_sock6_addr native_addr6;
 	int addrlen = 0;
@@ -110,7 +110,29 @@ int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const
 		return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
 	}
 
-	// XXX this restricts latency to 500ms, if a server is even further away, connection won't be possible
+	if (bind_addr4 != NULL){
+		native_sock_addr bind_addr;
+		to_native_sock_addr(&bind_addr, bind_addr4);
+		int bind_result = bind(sock, (struct sockaddr*)&bind_addr, sizeof(bind_addr));
+		if (bind_result == -1){
+			native_close_tcp_sock(sock);
+			LOG("%s: failed binding socket, %s\n", __func__, strerror(errno));
+			return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
+		}
+	}
+
+	if (bind_addr6 != NULL){
+		native_sock6_addr bind_addr;
+		to_native_sock6_addr(&bind_addr, bind_addr6);
+		int bind_result = bind(sock, (struct sockaddr*)&bind_addr, sizeof(bind_addr));
+		if (bind_result == -1){
+			native_close_tcp_sock(sock);
+			LOG("%s: failed binding socket, %s\n", __func__, strerror(errno));
+			return AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
+		}
+	}
+
+	// XXX this restricts latency to 5000ms, if a server is even further away, connection won't be possible
 
 	// Connect
 	int error = 0;

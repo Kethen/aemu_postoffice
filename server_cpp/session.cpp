@@ -283,6 +283,9 @@ Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_
 	}
 
 	LOG_TS("%s: created session %s for %s\n", __func__, this->get_identifier().c_str(), this->client_addr.c_str());
+	if (this->enet_server != NULL && !this->enet_reliable){
+		LOG_TS("%s: session %s of %s uses unreliable enet, there be dragons\n", __func__, this->get_identifier().c_str(), this->client_addr.c_str());
+	}
 }
 
 Session::~Session(){

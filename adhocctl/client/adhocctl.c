@@ -12,11 +12,15 @@
 
 #define ABORTED -100
 
-static bool connect_wrapped(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v6 *addr6, bool enet, int *sock, void **enet_handle, const char *caller_name){
+static bool connect_wrapped(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v4 *bind_addr4, const struct adhocctl_addr_v6 *addr6, const struct adhocctl_addr_v6 *bind_addr6, bool enet, int *sock, void **enet_handle, const char *caller_name){
 	struct aemu_postoffice_sock_addr poaddr4 = {0};
 	struct aemu_postoffice_sock6_addr poaddr6 = {0};
+	struct aemu_postoffice_sock_addr bind_poaddr4 = {0};
+	struct aemu_postoffice_sock6_addr bind_poaddr6 = {0};
 	struct aemu_postoffice_sock_addr *_poaddr4 = NULL;
 	struct aemu_postoffice_sock6_addr *_poaddr6 = NULL;
+	struct aemu_postoffice_sock_addr *_bind_poaddr4 = NULL;
+	struct aemu_postoffice_sock6_addr *_bind_poaddr6 = NULL;
 
 	if (addr4 != NULL){
 		poaddr4.addr = addr4->ip;
@@ -28,9 +32,21 @@ static bool connect_wrapped(const struct adhocctl_addr_v4 *addr4, const struct a
 		_poaddr6 = &poaddr6;
 	}
 
+	if (bind_addr4 != NULL){
+		bind_poaddr4.addr = bind_addr4->ip;
+		bind_poaddr4.port = bind_addr4->port;
+		_bind_poaddr4 = &bind_poaddr4;
+	}
+
+	if (bind_addr6 != NULL){
+		memcpy(bind_poaddr6.addr, bind_addr6->ip, 16);
+		bind_poaddr6.port = bind_addr6->port;
+		_bind_poaddr6 = &bind_poaddr6;
+	}
+
 	if (!enet){
 		enet_handle[0] = NULL;
-		sock[0] = native_connect_tcp_sock(_poaddr4, _poaddr6);
+		sock[0] = native_connect_tcp_sock(_poaddr4, _bind_poaddr4, _poaddr6, _bind_poaddr6);
 		if (sock[0] < 0){
 			LOG("%s: tcp connection failed\n", caller_name);
 			return false;
@@ -122,7 +138,7 @@ static enum adhocctl_call_status login_v1(int sock_fd, void *enet_handle, const 
 	SEND_PACKET(sock_fd, enet_handle, packet);
 }
 
-static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v6 *addr6, const char *game_code, const char *nickname, const char *mac, bool enet){
+static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v4 *bind_addr4, const struct adhocctl_addr_v6 *addr6, const struct adhocctl_addr_v6 *bind_addr6, const char *game_code, const char *nickname, const char *mac, bool enet){
 	struct session *slot = NULL;
 	for (int i = 0;i < *num_sessions;i++){
 		if (!sessions[i].in_use){
@@ -139,7 +155,7 @@ static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, co
 
 	slot->protocol_revision = 1;
 
-	bool connected = connect_wrapped(addr4, addr6, enet, &slot->sock_fd, &slot->enet_handle, __func__);
+	bool connected = connect_wrapped(addr4, bind_addr4, addr6, bind_addr6, enet, &slot->sock_fd, &slot->enet_handle, __func__);
 	if (!connected){
 		LOG("%s: failed creating connection to adhoccl server\n", __func__);
 		slot->in_use = false;
@@ -156,12 +172,12 @@ static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, co
 	return slot;
 }
 
-void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const char *game_code, const char *nickname, const char *mac, bool enet){
-	return create_adhocctl_v1_session(addr, NULL, game_code, nickname, mac, enet);
+void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const struct adhocctl_addr_v4 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet){
+	return create_adhocctl_v1_session(addr, bind_addr, NULL, NULL, game_code, nickname, mac, enet);
 }
 
-void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const char *game_code, const char *nickname, const char *mac, bool enet){
-	return create_adhocctl_v1_session(NULL, addr, game_code, nickname, mac, enet);
+void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const struct adhocctl_addr_v6 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet){
+	return create_adhocctl_v1_session(NULL, NULL, addr, bind_addr, game_code, nickname, mac, enet);
 }
 
 void destroy_adhocctl_session(void *session){
@@ -279,16 +295,16 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 	#define CHECK_RESULT(res, expected_size) { \
 		if (res == 0){ \
 			LOG("%s: remote disconnected\n", __func__); \
-			event_out->type = ADHOCCTL_EVENT_ERROR; \
+			event_out->type = ADHOCCTL_CLIENT_EVENT_ERROR; \
 			return; \
 		} \
 		if (res == -1){ \
 			LOG("%s: recv errored\n", __func__); \
-			event_out->type = ADHOCCTL_EVENT_ERROR; \
+			event_out->type = ADHOCCTL_CLIENT_EVENT_ERROR; \
 			return; \
 		} \
 		if (res == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK || res != expected_size){ \
-			event_out->type = ADHOCCTL_EVENT_WOULD_BLOCK; \
+			event_out->type = ADHOCCTL_CLIENT_EVENT_WOULD_BLOCK; \
 			return; \
 		} \
 	}
@@ -303,7 +319,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_SCAN;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_SCAN;
 			memcpy(event_out->scan.group_name, packet.group.data, 8);
 			memcpy(event_out->scan.leader_mac, packet.mac.data, 6);
 			return;
@@ -311,7 +327,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 		case OPCODE_SCAN_COMPLETE:{
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&base_packet, sizeof(base_packet));
 			CHECK_RESULT(recv_result, sizeof(base_packet));
-			event_out->type = ADHOCCTL_EVENT_SCAN_COMPLETE;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_SCAN_COMPLETE;
 			return;
 		}
 		case OPCODE_CONNECT:{
@@ -320,7 +336,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_CONNECT;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_CONNECT;
 			memcpy(event_out->connect.mac, packet.mac.data, 6);
 			memcpy(event_out->connect.nickname, packet.name.data, 127);
 			event_out->connect.id = packet.ip;
@@ -332,7 +348,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_LEADER_MAC;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_LEADER_MAC;
 			memcpy(event_out->leader_mac.mac, packet.mac.data, 6);
 			return;
 		}
@@ -342,7 +358,7 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_DISCONNECT;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_DISCONNECT;
 			event_out->disconnect.id = packet.ip;
 			return;
 		}
@@ -352,14 +368,14 @@ void get_event_v1(int sock_fd, void *enet_handle, struct adhocctl_event *event_o
 			CHECK_RESULT(peek_result, sizeof(packet));
 			int recv_result = recv_wrapped(sock_fd, enet_handle, (char *)&packet, sizeof(packet));
 			CHECK_RESULT(recv_result, sizeof(packet));
-			event_out->type = ADHOCCTL_EVENT_CHAT;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_CHAT;
 			memcpy(event_out->chat.nickname, packet.name.data, 127);
 			memcpy(event_out->chat.message, packet.base.message, 64);
 			return;
 		}
 		default:
 			LOG("%s: remote sent unrecognized opcode %d\n", __func__, base_packet.opcode);
-			event_out->type = ADHOCCTL_EVENT_ERROR;
+			event_out->type = ADHOCCTL_CLIENT_EVENT_ERROR;
 			return;
 	}
 	#undef CHECK_RESULT

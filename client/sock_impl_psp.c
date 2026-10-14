@@ -26,7 +26,9 @@ static void to_native_sock_addr(native_sock_addr *dst, const struct aemu_postoff
 
 int has_high_mem();
 
-int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6){
+int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock_addr *bind_addr4, const struct aemu_postoffice_sock6_addr *addr6, const struct aemu_postoffice_sock6_addr *bind_addr6){
+	// XXX note that binding is simply ignored on PSP
+
 	int addrlen = sizeof(native_sock_addr);
 	native_sock_addr addr;
 	to_native_sock_addr(&addr, addr4);
