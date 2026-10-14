@@ -46,7 +46,7 @@ struct adhocctl_event_scan{
 };
 
 struct adhocctl_event_scan_complete{
-
+	char _msvc_dummy;
 };
 
 struct adhocctl_event_connect{
