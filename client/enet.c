@@ -9,12 +9,22 @@
 #include <stdint.h>
 
 #define ENET_IMPLEMENTATION
+
 #ifdef __PSP__
 // TODO psp networking shims
 #include "psp_enet_shim.h"
 #define ENET_IPV4_ONLY
 #endif
+
+#if __APPLE__ && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+#define __MAC_OS_X_VERSION_MIN_REQUIRED 101200
+#endif
+
 #include "../ext/enet/enet.h"
+
+#if __APPLE__ && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
+#undef __MAC_OS_X_VERSION_MIN_REQUIRED
+#endif
 
 struct channel{
 	int channel;
