@@ -190,6 +190,29 @@ static bool is_connected(struct connection *connection){
 	return connected;
 }
 
+static void *find_connection_itr(struct connection *connection){
+	void *itr = list_begin_itr(connections);
+	while(itr != NULL){
+		if (list_itr_get_data(itr) == connection){
+			break;
+		}
+		itr = list_itr_next(itr);
+	}
+	return itr;
+}
+
+// looking at enet.h, it seems that calling enet_peer_disconnect on not connected peer will just do a enet_peer_reset, and there will be no ENET_EVENT_TYPE_DISCONNECT nor ENET_EVENT_TYPE_DISCONNECT_TIMEOUT later
+// this behavior is not documented anywhere, so I also can't take this as a contract to how future revision of enet would work
+// enet_peer_disconnect_now however promises on documentation to perform a event-less best effort disconnect without waiting for remote acknowledgement
+static void close_now_enet(struct connection *connection){
+	lock_enet_mutex();
+	void *itr = find_connection_itr(connection);
+	enet_peer_disconnect_now(connection->peer, 0);
+	free_connection(connection);
+	list_remove(connections, itr);
+	unlock_enet_mutex();
+}
+
 void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, int channels){
 	ENetAddress enet_addr = {0};
 	if (addr4 != NULL){
@@ -224,17 +247,17 @@ void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct a
 	}
 
 	lock_enet_mutex();
-	void *ret = _connect_enet(&enet_addr, channels);
+	struct connection *ret = (struct connection *)_connect_enet(&enet_addr, channels);
 	unlock_enet_mutex();
 
 	if (ret != NULL){
 		int time_spent_ms = 0;
 		while (true){
-			if (is_connected((struct connection *)ret)){
+			if (is_connected(ret)){
 				break;
 			}
 			if (time_spent_ms >= 5000){
-				close_enet(ret);
+				close_now_enet(ret);
 				return NULL;
 			}
 			delay(100);
@@ -244,17 +267,6 @@ void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct a
 
 	return ret;
 };
-
-static void *find_connection_itr(struct connection *connection){
-	void *itr = list_begin_itr(connections);
-	while(itr != NULL){
-		if (list_itr_get_data(itr) == connection){
-			break;
-		}
-		itr = list_itr_next(itr);
-	}
-	return itr;
-}
 
 static void _close_enet(void *handle){
 	if (connections == NULL){
