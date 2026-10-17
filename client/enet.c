@@ -213,7 +213,7 @@ static void close_now_enet(struct connection *connection){
 	unlock_enet_mutex();
 }
 
-void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, int channels){
+void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, int channels, bool (*abort_connection)(void *arg), void *abort_connection_arg){
 	ENetAddress enet_addr = {0};
 	if (addr4 != NULL){
 		#ifdef __PSP__
@@ -256,7 +256,7 @@ void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct a
 			if (is_connected(ret)){
 				break;
 			}
-			if (time_spent_ms >= 5000){
+			if (time_spent_ms >= 5000 || (abort_connection != NULL && abort_connection(abort_connection_arg))){
 				close_now_enet(ret);
 				return NULL;
 			}

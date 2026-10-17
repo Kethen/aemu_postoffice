@@ -113,17 +113,17 @@ static bool hung_up_wrapped(int sock, void *enet_handle){
 	return is_disconnected_enet(enet_handle);
 }
 
-static bool connect_wrapped(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, bool enet, int *sock, void **enet_handle, const char *caller_name){
+static bool connect_wrapped(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, bool enet, int *sock, void **enet_handle, bool (*abort_connection)(void *arg), void *abort_connection_arg, const char *caller_name){
 	if (!enet){
 		enet_handle[0] = NULL;
-		sock[0] = native_connect_tcp_sock(addr4, NULL, addr6, NULL);
+		sock[0] = native_connect_tcp_sock(addr4, NULL, addr6, NULL, abort_connection, abort_connection_arg);
 		if (sock[0] < 0){
 			LOG("%s: tcp connection failed\n", caller_name);
 			return false;
 		}
 	} else {
 		sock[0] = 0;
-		enet_handle[0] = connect_enet(addr4, addr6, 1);
+		enet_handle[0] = connect_enet(addr4, addr6, 1, abort_connection, abort_connection_arg);
 		if (enet_handle[0] == NULL){
 			LOG("%s: enet connection failed\n", caller_name);
 			return false;
@@ -193,7 +193,7 @@ static int recv_till_done(int fd, void *enet_handle, char *buf, int len, bool no
 }
 
 static bool create_and_init_socket(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, bool enet, const char *init_packet, int init_packet_len, const char *caller_name, int *sock, void **enet_handle){
-	if (!connect_wrapped(addr4, addr6, enet, sock, enet_handle, caller_name)){
+	if (!connect_wrapped(addr4, addr6, enet, sock, enet_handle, NULL, NULL, caller_name)){
 		LOG("%s: failed connecting to server\n", caller_name);
 		return false;
 	}

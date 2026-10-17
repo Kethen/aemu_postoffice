@@ -39,7 +39,7 @@ static void init_winsock2(){
 	}
 }
 
-static int connect_with_timeout(int sock, native_sock_addr *addr, int addrlen, int timeout_ms, int *error){
+static int connect_with_timeout(int sock, native_sock_addr *addr, int addrlen, int timeout_ms, int *error, bool (*abort_connection)(void *arg), void *abort_connection_arg){
 	u_long ioctlopt = 1;
 	ioctlsocket(sock, FIONBIO, &ioctlopt);
 
@@ -60,7 +60,7 @@ static int connect_with_timeout(int sock, native_sock_addr *addr, int addrlen, i
 			LARGE_INTEGER now = {0};
 			QueryPerformanceCounter(&now);
 			int ms_since_begin = (now.QuadPart - begin.QuadPart) * 1000 / ticks_per_seconds.QuadPart;
-			if (ms_since_begin > timeout_ms){
+			if (ms_since_begin > timeout_ms || (abort_connection != NULL && abort_connection(abort_connection_arg))){
 				*error = WSAETIMEDOUT;
 				ret = -1;
 				break;
@@ -90,7 +90,7 @@ static int connect_with_timeout(int sock, native_sock_addr *addr, int addrlen, i
 	return ret;
 }
 
-int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock_addr *bind_addr4, const struct aemu_postoffice_sock6_addr *addr6, const struct aemu_postoffice_sock6_addr *bind_addr6){
+int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock_addr *bind_addr4, const struct aemu_postoffice_sock6_addr *addr6, const struct aemu_postoffice_sock6_addr *bind_addr6, bool (*abort_connection)(void *arg), void *abort_connection_arg){
 	init_winsock2();
 
 	native_sock_addr native_addr4;
@@ -140,7 +140,7 @@ int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const
 
 	// Connect
 	int error = 0;
-	int connect_status = connect_with_timeout(sock, addr, addrlen, 5000, &error);
+	int connect_status = connect_with_timeout(sock, addr, addrlen, 5000, &error, abort_connection, abort_connection_arg);
 	if (connect_status == -1){
 		LOG("%s: failed connecting, %d\n", __func__, error);
 		closesocket(sock);

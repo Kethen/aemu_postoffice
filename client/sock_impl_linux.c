@@ -32,7 +32,7 @@ static void to_native_sock6_addr(native_sock6_addr *dst, const struct aemu_posto
 }
 
 // SO_SNDTIMEO can be used on linux, but no idea if it can be used on other unix likes
-static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_ms, int *error){
+static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_ms, int *error, bool (*abort_connection)(void *arg), void *abort_connection_arg){
 	int flags = fcntl(sock, F_GETFL, 0);
 	flags |= O_NONBLOCK;
 	fcntl(sock, F_SETFL, flags);
@@ -55,7 +55,7 @@ static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_m
 			clock_gettime(CLOCK_MONOTONIC, &now);
 
 			int ms_since_begin = (now.tv_sec - begin.tv_sec) * 1000 + (now.tv_nsec - begin.tv_nsec) / 1000000;
-			if (ms_since_begin > timeout_ms){
+			if (ms_since_begin > timeout_ms || (abort_connection != NULL && abort_connection(abort_connection_arg))){
 				*error = ETIMEDOUT;
 				ret = -1;
 				break;
@@ -90,7 +90,7 @@ static int connect_with_timeout(int sock, void *addr, int addrlen, int timeout_m
 }
 
 
-int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock_addr *bind_addr4, const struct aemu_postoffice_sock6_addr *addr6, const struct aemu_postoffice_sock6_addr *bind_addr6){
+int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock_addr *bind_addr4, const struct aemu_postoffice_sock6_addr *addr6, const struct aemu_postoffice_sock6_addr *bind_addr6, bool (*abort_connection)(void *arg), void *abort_connection_arg){
 	native_sock_addr native_addr4;
 	native_sock6_addr native_addr6;
 	int addrlen = 0;
@@ -136,7 +136,7 @@ int native_connect_tcp_sock(const struct aemu_postoffice_sock_addr *addr4, const
 
 	// Connect
 	int error = 0;
-	int connect_status = connect_with_timeout(sock, addr, addrlen, 5000, &error);
+	int connect_status = connect_with_timeout(sock, addr, addrlen, 5000, &error, abort_connection, abort_connection_arg);
 	if (connect_status == -1){
 		LOG("%s: failed connecting, %s\n", __func__, strerror(error));
 		close(sock);

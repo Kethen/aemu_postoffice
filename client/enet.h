@@ -9,7 +9,7 @@
 int init_enet(); // returns 0 on success, -1 on error
 void deinit_enet();
 
-void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, int channels); // returns a handle on success, NULL on error
+void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, int channels, bool (*abort_connection)(void *arg), void *abort_connection_arg); // returns a handle on success, NULL on error
 void close_enet(void *handle);
 
 int recv_enet(void *handle, char *buf, int buf_size, int channel); // filled size on success, AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK when there is no packet, 0 on remote disconnected, -1 on error, note that this wrapper operates in stream mode

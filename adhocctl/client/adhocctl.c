@@ -12,7 +12,7 @@
 
 #define ABORTED -100
 
-static bool connect_wrapped(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v4 *bind_addr4, const struct adhocctl_addr_v6 *addr6, const struct adhocctl_addr_v6 *bind_addr6, bool enet, int *sock, void **enet_handle, const char *caller_name){
+static bool connect_wrapped(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v4 *bind_addr4, const struct adhocctl_addr_v6 *addr6, const struct adhocctl_addr_v6 *bind_addr6, bool enet, int *sock, void **enet_handle, bool (*abort_connection)(void *arg), void *abort_connection_arg, const char *caller_name){
 	struct aemu_postoffice_sock_addr poaddr4 = {0};
 	struct aemu_postoffice_sock6_addr poaddr6 = {0};
 	struct aemu_postoffice_sock_addr bind_poaddr4 = {0};
@@ -46,14 +46,14 @@ static bool connect_wrapped(const struct adhocctl_addr_v4 *addr4, const struct a
 
 	if (!enet){
 		enet_handle[0] = NULL;
-		sock[0] = native_connect_tcp_sock(_poaddr4, _bind_poaddr4, _poaddr6, _bind_poaddr6);
+		sock[0] = native_connect_tcp_sock(_poaddr4, _bind_poaddr4, _poaddr6, _bind_poaddr6, abort_connection, abort_connection_arg);
 		if (sock[0] < 0){
 			LOG("%s: tcp connection failed\n", caller_name);
 			return false;
 		}
 	} else {
 		sock[0] = 0;
-		enet_handle[0] = connect_enet(_poaddr4, _poaddr6, 1);
+		enet_handle[0] = connect_enet(_poaddr4, _poaddr6, 1, abort_connection, abort_connection_arg);
 		if (enet_handle[0] == NULL){
 			LOG("%s: enet connection failed\n", caller_name);
 			return false;
@@ -155,7 +155,7 @@ static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, co
 
 	slot->protocol_revision = 1;
 
-	bool connected = connect_wrapped(addr4, bind_addr4, addr6, bind_addr6, enet, &slot->sock_fd, &slot->enet_handle, __func__);
+	bool connected = connect_wrapped(addr4, bind_addr4, addr6, bind_addr6, enet, &slot->sock_fd, &slot->enet_handle, NULL, NULL, __func__);
 	if (!connected){
 		LOG("%s: failed creating connection to adhoccl server\n", __func__);
 		slot->in_use = false;
