@@ -138,7 +138,7 @@ static enum adhocctl_call_status login_v1(int sock_fd, void *enet_handle, const 
 	SEND_PACKET(sock_fd, enet_handle, packet);
 }
 
-static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v4 *bind_addr4, const struct adhocctl_addr_v6 *addr6, const struct adhocctl_addr_v6 *bind_addr6, const char *game_code, const char *nickname, const char *mac, bool enet){
+static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, const struct adhocctl_addr_v4 *bind_addr4, const struct adhocctl_addr_v6 *addr6, const struct adhocctl_addr_v6 *bind_addr6, const char *game_code, const char *nickname, const char *mac, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg){
 	struct session *slot = NULL;
 	for (int i = 0;i < *num_sessions;i++){
 		if (!sessions[i].in_use){
@@ -155,7 +155,7 @@ static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, co
 
 	slot->protocol_revision = 1;
 
-	bool connected = connect_wrapped(addr4, bind_addr4, addr6, bind_addr6, enet, &slot->sock_fd, &slot->enet_handle, NULL, NULL, __func__);
+	bool connected = connect_wrapped(addr4, bind_addr4, addr6, bind_addr6, enet, &slot->sock_fd, &slot->enet_handle, abort_connection, abort_connection_arg, __func__);
 	if (!connected){
 		LOG("%s: failed creating connection to adhoccl server\n", __func__);
 		slot->in_use = false;
@@ -172,12 +172,12 @@ static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, co
 	return slot;
 }
 
-void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const struct adhocctl_addr_v4 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet){
-	return create_adhocctl_v1_session(addr, bind_addr, NULL, NULL, game_code, nickname, mac, enet);
+void *create_adhocctl_v1_session_v4(const struct adhocctl_addr_v4 *addr, const struct adhocctl_addr_v4 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg){
+	return create_adhocctl_v1_session(addr, bind_addr, NULL, NULL, game_code, nickname, mac, enet, abort_connection, abort_connection_arg);
 }
 
-void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const struct adhocctl_addr_v6 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet){
-	return create_adhocctl_v1_session(NULL, NULL, addr, bind_addr, game_code, nickname, mac, enet);
+void *create_adhocctl_v1_session_v6(const struct adhocctl_addr_v6 *addr, const struct adhocctl_addr_v6 *bind_addr, const char *game_code, const char *nickname, const char *mac, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg){
+	return create_adhocctl_v1_session(NULL, NULL, addr, bind_addr, game_code, nickname, mac, enet, abort_connection, abort_connection_arg);
 }
 
 void destroy_adhocctl_session(void *session){

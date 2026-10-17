@@ -738,7 +738,7 @@ void adhocctl_init(){
 	char group[8] = "abcd1234";
 	int channel = 1;
 
-	adhocctl_handle_a = create_adhocctl_v1_session_v4(&adhocctl_addr, &adhocctl_bind_addr, gamecode, nickname_a, (const char *)mac_a, false);
+	adhocctl_handle_a = create_adhocctl_v1_session_v4(&adhocctl_addr, &adhocctl_bind_addr, gamecode, nickname_a, (const char *)mac_a, false, NULL, NULL);
 	if (adhocctl_handle_a == NULL){
 		LOG("%s: failed creating adhocctl session for a\n", __func__);
 		exit(1);
@@ -752,7 +752,7 @@ void adhocctl_init(){
 		exit(1);
 	}
 
-	adhocctl_handle_b = create_adhocctl_v1_session_v4(&adhocctl_addr, &adhocctl_bind_addr, gamecode_2, nickname_b, (const char *)mac_b, false);
+	adhocctl_handle_b = create_adhocctl_v1_session_v4(&adhocctl_addr, &adhocctl_bind_addr, gamecode_2, nickname_b, (const char *)mac_b, false, NULL, NULL);
 	if (adhocctl_handle_b == NULL){
 		LOG("%s: failed creating adhocctl session for b\n", __func__);
 		exit(1);
@@ -769,7 +769,7 @@ void adhocctl_init(){
 	// create the rest of adhocctl sessions, the success case will be tested later
 	adhocctl_connect(adhocctl_handle_b, group);
 
-	adhocctl_handle_c = create_adhocctl_v1_session_v4(&adhocctl_addr, &adhocctl_bind_addr, gamecode_2, nickname_c, (const char *)mac_c, false);
+	adhocctl_handle_c = create_adhocctl_v1_session_v4(&adhocctl_addr, &adhocctl_bind_addr, gamecode_2, nickname_c, (const char *)mac_c, false, NULL, NULL);
 	if (adhocctl_handle_c == NULL){
 		LOG("%s: failed creating adhocctl session for c\n", __func__);
 		exit(1);

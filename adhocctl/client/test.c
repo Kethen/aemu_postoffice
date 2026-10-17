@@ -32,7 +32,7 @@ void test_too_many_sessions(){
 		char mac[6] = {0};
 		*(int *)&mac[1] = i + 1;
 		snprintf(nickname, sizeof(nickname), "%d", i);
-		handles[i] = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname, mac, false);
+		handles[i] = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname, mac, false, NULL, NULL);
 		sleep_ms(120);
 	}
 
@@ -73,7 +73,7 @@ void test_protocol(bool enet){
 	snprintf(nickname_a, sizeof(nickname_a), "nickname a");
 	char mac_a[6];
 	memset(mac_a, 0xa, 6);
-	void *session_a = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname_a, mac_a, enet);
+	void *session_a = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname_a, mac_a, enet, NULL, NULL);
 	if (session_a == NULL){
 		printf("%s: cannot create session a\n", __func__);
 		exit(1);
@@ -83,7 +83,7 @@ void test_protocol(bool enet){
 	snprintf(nickname_b, sizeof(nickname_b), "nickname b");
 	char mac_b[6];
 	memset(mac_b, 0xb, 6);
-	void *session_b = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname_b, mac_b, enet);
+	void *session_b = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname_b, mac_b, enet, NULL, NULL);
 	if (session_b == NULL){
 		printf("%s: cannot create session b\n", __func__);
 		exit(1);
