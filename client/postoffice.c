@@ -192,8 +192,8 @@ static int recv_till_done(int fd, void *enet_handle, char *buf, int len, bool no
 	return read_offset;
 }
 
-static bool create_and_init_socket(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, bool enet, const char *init_packet, int init_packet_len, const char *caller_name, int *sock, void **enet_handle){
-	if (!connect_wrapped(addr4, addr6, enet, sock, enet_handle, NULL, NULL, caller_name)){
+static bool create_and_init_socket(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, bool enet, const char *init_packet, int init_packet_len, bool (*abort_connection)(void *arg), void *abort_connection_arg, const char *caller_name, int *sock, void **enet_handle){
+	if (!connect_wrapped(addr4, addr6, enet, sock, enet_handle, abort_connection, abort_connection_arg, caller_name)){
 		LOG("%s: failed connecting to server\n", caller_name);
 		return false;
 	}
@@ -209,7 +209,7 @@ static bool create_and_init_socket(const struct aemu_postoffice_sock_addr *addr4
 	return sock;
 }
 
-static void *pdp_create(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, const char *pdp_mac, int pdp_port, bool enet, bool enet_reliable, int *state){
+static void *pdp_create(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, const char *pdp_mac, int pdp_port, bool enet, bool enet_reliable, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
 	struct pdp_session* session = NULL;
 	lock_sock_alloc_mutex();
 	for(int i = 0;i < NUM_PDP_SESSIONS;i++){
@@ -236,7 +236,7 @@ static void *pdp_create(const struct aemu_postoffice_sock_addr *addr4, const str
 	}
 
 	int sock = 0;
-	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &session->enet_handle);
+	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), abort_connection, abort_connection_arg, __func__, &sock, &session->enet_handle);
 
 	if (!created){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
@@ -262,12 +262,12 @@ static void *pdp_create(const struct aemu_postoffice_sock_addr *addr4, const str
 	return session;
 }
 
-void *pdp_create_v6(const struct aemu_postoffice_sock6_addr *addr, const char *pdp_mac, int pdp_port, bool enet, bool enet_reliable, int *state){
-	return pdp_create(NULL, addr, pdp_mac, pdp_port, enet, enet_reliable, state);
+void *pdp_create_v6(const struct aemu_postoffice_sock6_addr *addr, const char *pdp_mac, int pdp_port, bool enet, bool enet_reliable, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
+	return pdp_create(NULL, addr, pdp_mac, pdp_port, enet, enet_reliable, abort_connection, abort_connection_arg, state);
 }
 
-void *pdp_create_v4(const struct aemu_postoffice_sock_addr *addr, const char *pdp_mac, int pdp_port, bool enet, bool enet_reliable, int *state){
-	return pdp_create(addr, NULL, pdp_mac, pdp_port, enet, enet_reliable, state);
+void *pdp_create_v4(const struct aemu_postoffice_sock_addr *addr, const char *pdp_mac, int pdp_port, bool enet, bool enet_reliable, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
+	return pdp_create(addr, NULL, pdp_mac, pdp_port, enet, enet_reliable, abort_connection, abort_connection_arg, state);
 }
 
 int pdp_send(void *pdp_handle, const char *pdp_mac, int pdp_port, const char *buf, int len, bool non_block){
@@ -588,7 +588,7 @@ int pdp_send_buf_not_full(void *pdp_handle){
 	return send_buf_not_full_wrapped(session->sock, session->enet_handle);
 }
 
-static void *ptp_listen(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, const char *ptp_mac, int ptp_port, bool enet, int *state){
+static void *ptp_listen(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, const char *ptp_mac, int ptp_port, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
 	struct ptp_listen_session* session = NULL;
 	lock_sock_alloc_mutex();
 	for(int i = 0;i < NUM_PTP_LISTEN_SESSIONS;i++){
@@ -612,7 +612,7 @@ static void *ptp_listen(const struct aemu_postoffice_sock_addr *addr4, const str
 	init_packet.sport = ptp_port;
 
 	int sock = 0;
-	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &session->enet_handle);
+	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), abort_connection, abort_connection_arg, __func__, &sock, &session->enet_handle);
 
 	if (!created){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
@@ -638,15 +638,15 @@ static void *ptp_listen(const struct aemu_postoffice_sock_addr *addr4, const str
 	return session;
 }
 
-void *ptp_listen_v6(const struct aemu_postoffice_sock6_addr *addr, const char *ptp_mac, int ptp_port, bool enet, int *state){
-	return ptp_listen(NULL, addr, ptp_mac, ptp_port, enet, state);
+void *ptp_listen_v6(const struct aemu_postoffice_sock6_addr *addr, const char *ptp_mac, int ptp_port, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
+	return ptp_listen(NULL, addr, ptp_mac, ptp_port, enet, abort_connection, abort_connection_arg, state);
 }
 
-void *ptp_listen_v4(const struct aemu_postoffice_sock_addr *addr, const char *ptp_mac, int ptp_port, bool enet, int *state){
-	return ptp_listen(addr, NULL, ptp_mac, ptp_port, enet, state);
+void *ptp_listen_v4(const struct aemu_postoffice_sock_addr *addr, const char *ptp_mac, int ptp_port, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
+	return ptp_listen(addr, NULL, ptp_mac, ptp_port, enet, abort_connection, abort_connection_arg, state);
 }
 
-void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool nonblock, int *state){
+void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool nonblock, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
 	if (ptp_listen_handle == NULL){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		return NULL;
@@ -713,9 +713,9 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	bool created = false;
 	int sock = 0;
 	if (session->is_addr6){
-		created = create_and_init_socket(NULL, &session->addr6, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &new_session->enet_handle);
+		created = create_and_init_socket(NULL, &session->addr6, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), abort_connection, abort_connection_arg, __func__, &sock, &new_session->enet_handle);
 	} else {
-		created = create_and_init_socket(&session->addr4, NULL, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &new_session->enet_handle);
+		created = create_and_init_socket(&session->addr4, NULL, session->enet_handle != NULL, (char *)&init_packet, sizeof(init_packet), abort_connection, abort_connection_arg, __func__, &sock, &new_session->enet_handle);
 	}
 
 	if (!created){
@@ -757,7 +757,7 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	return new_session;
 }
 
-static void *ptp_connect(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, const char *src_ptp_mac, int ptp_sport, const char *dst_ptp_mac, int ptp_dport, bool enet, int *state){
+static void *ptp_connect(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, const char *src_ptp_mac, int ptp_sport, const char *dst_ptp_mac, int ptp_dport, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
 	// Allocate memory
 	struct ptp_session *new_session = NULL;
 	lock_sock_alloc_mutex();
@@ -783,7 +783,7 @@ static void *ptp_connect(const struct aemu_postoffice_sock_addr *addr4, const st
 	init_packet.dport = ptp_dport;
 
 	int sock = 0;
-	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), __func__, &sock, &new_session->enet_handle);
+	bool created = create_and_init_socket(addr4, addr6, enet, (char *)&init_packet, sizeof(init_packet), abort_connection, abort_connection_arg, __func__, &sock, &new_session->enet_handle);
 
 	if (!created){
 		*state = AEMU_POSTOFFICE_CLIENT_SESSION_NETWORK;
@@ -823,12 +823,12 @@ static void *ptp_connect(const struct aemu_postoffice_sock_addr *addr4, const st
 	return new_session;
 }
 
-void *ptp_connect_v6(const struct aemu_postoffice_sock6_addr *addr, const char *src_ptp_mac, int ptp_sport, const char *dst_ptp_mac, int ptp_dport, bool enet, int *state){
-	return ptp_connect(NULL, addr, src_ptp_mac, ptp_sport, dst_ptp_mac, ptp_dport, enet, state);
+void *ptp_connect_v6(const struct aemu_postoffice_sock6_addr *addr, const char *src_ptp_mac, int ptp_sport, const char *dst_ptp_mac, int ptp_dport, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
+	return ptp_connect(NULL, addr, src_ptp_mac, ptp_sport, dst_ptp_mac, ptp_dport, enet, abort_connection, abort_connection_arg, state);
 }
 
-void *ptp_connect_v4(const struct aemu_postoffice_sock_addr *addr, const char *src_ptp_mac, int ptp_sport, const char *dst_ptp_mac, int ptp_dport, bool enet, int *state){
-	return ptp_connect(addr, NULL, src_ptp_mac, ptp_sport, dst_ptp_mac, ptp_dport, enet, state);
+void *ptp_connect_v4(const struct aemu_postoffice_sock_addr *addr, const char *src_ptp_mac, int ptp_sport, const char *dst_ptp_mac, int ptp_dport, bool enet, bool (*abort_connection)(void *arg), void *abort_connection_arg, int *state){
+	return ptp_connect(addr, NULL, src_ptp_mac, ptp_sport, dst_ptp_mac, ptp_dport, enet, abort_connection, abort_connection_arg, state);
 }
 
 int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
