@@ -557,7 +557,6 @@ void BasicEnetClient::close(int peer_ref){
 	if (!peer->second.disconnected){
 		peer->second.closed = true;
 		enet_peer_disconnect((ENetPeer *)peer->second.enet_peer, 0);
-		enet_host_flush((ENetHost *)server);
 		return;
 	}
 

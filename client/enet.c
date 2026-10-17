@@ -278,7 +278,6 @@ static void _close_enet(void *handle){
 	}
 
 	enet_peer_disconnect(connection->peer, 0);
-	enet_host_flush(connection->host);
 	connection->closed = true;
 	return;
 }
