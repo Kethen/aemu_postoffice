@@ -43,7 +43,27 @@ struct connection{
 
 static void *connections = NULL; // list of struct connection *
 
+static int _enet_initialize(){
+	static bool initialized = false;
+
+	if (initialized){
+		return 0;
+	}
+
+	int initialize_result = enet_initialize();
+	if (initialize_result == 0){
+		initialized = true;
+		return 0;
+	}
+	LOG("%s: failed initializing enet, 0x%x\n", __func__, initialize_result);
+	return initialize_result;
+}
+
 static int _init_enet(){
+	if (_enet_initialize() != 0){
+		return -1;
+	}
+
 	if (connections != NULL){
 		return 0;
 	}
