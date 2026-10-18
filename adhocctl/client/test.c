@@ -67,6 +67,12 @@ void test_protocol(bool enet){
 		.port = 0xb06a,
 	};
 
+	struct adhocctl_addr_v6 addr6 = {0};
+	addr6.ip[10] = 0xff;
+	addr6.ip[11] = 0xff;
+	*(uint32_t *)&addr6.ip[12] = addr.ip;
+	addr6.port = addr.port;
+
 	char game_code[] = "ABCD12345";
 
 	char nickname_a[128] = {0};
@@ -83,7 +89,7 @@ void test_protocol(bool enet){
 	snprintf(nickname_b, sizeof(nickname_b), "nickname b");
 	char mac_b[6];
 	memset(mac_b, 0xb, 6);
-	void *session_b = create_adhocctl_v1_session_v4(&addr, NULL, game_code, nickname_b, mac_b, enet, NULL, NULL);
+	void *session_b = create_adhocctl_v1_session_v6(&addr6, NULL, game_code, nickname_b, mac_b, enet, NULL, NULL);
 	if (session_b == NULL){
 		printf("%s: cannot create session b\n", __func__);
 		exit(1);

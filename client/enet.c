@@ -239,7 +239,6 @@ void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct a
 
 		#else
 
-		ENetAddress enet_addr = {0};
 		memcpy(enet_addr.host.s6_addr, addr6->addr, 16);
 		enet_addr.port = _ntohs(addr6->port);
 

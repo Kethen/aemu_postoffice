@@ -90,6 +90,12 @@ void test_pdp(bool enet, bool enet_reliable){
 		.addr = _htonl(TARGET_INADDR),
 		.port = _htons(SERVER_PORT)
 	};
+	struct aemu_postoffice_sock6_addr local_addr6 = {0};
+	local_addr6.port = _htons(SERVER_PORT);
+	local_addr6.addr[10] = 0xff;
+	local_addr6.addr[11] = 0xff;
+	*(uint32_t *)&local_addr6.addr[12] = _htonl(TARGET_INADDR);
+
 	static const uint8_t pdp_mac_a[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
 	static const uint8_t pdp_mac_b[6] = {0xbb, 0xcc, 0xdd, 0x11, 0x22, 0x33};
 	static const uint8_t pdp_mac_c[6] = {0xcc, 0xdd, 0xee, 0x11, 0x22, 0x33};
@@ -98,7 +104,7 @@ void test_pdp(bool enet, bool enet_reliable){
 	static const int port_c = 34567;
 
 	int state;
-	void *pdp_handle_a_replace = pdp_create_v4(&local_addr, (const char *)pdp_mac_a, port_a, enet, enet_reliable, NULL, NULL, &state);
+	void *pdp_handle_a_replace = pdp_create_v6(&local_addr6, (const char *)pdp_mac_a, port_a, enet, enet_reliable, NULL, NULL, &state);
 	if (pdp_handle_a_replace == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
 		exit(1);
@@ -107,7 +113,7 @@ void test_pdp(bool enet, bool enet_reliable){
 	// just so we know the last socket is the one gets replaced
 	sleep_ms(1000);
 
-	void *pdp_handle_a = pdp_create_v4(&local_addr, (const char *)pdp_mac_a, port_a, enet, enet_reliable, NULL, NULL, &state);
+	void *pdp_handle_a = pdp_create_v6(&local_addr6, (const char *)pdp_mac_a, port_a, enet, enet_reliable, NULL, NULL, &state);
 
 	if (pdp_handle_a == NULL){
 		LOG("%s: failed creating pdp socket\n", __func__);
