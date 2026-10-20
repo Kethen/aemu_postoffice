@@ -330,12 +330,12 @@ static int _pump_enet(){
 	int events_processed = 0;
 	while (itr != NULL){
 		struct connection *connection = list_itr_get_data(itr);
-		int service_status = enet_host_service(connection->host, &event, 0);
-		if (service_status == 0){
+		if (connection->disconnected){
 			itr = list_itr_next(itr);
 			continue;
 		}
-		if (connection->disconnected){
+		int service_status = enet_host_service(connection->host, &event, 0);
+		if (service_status == 0){
 			itr = list_itr_next(itr);
 			continue;
 		}
