@@ -340,7 +340,7 @@ static int _pump_enet(){
 			continue;
 		}
 		if (service_status < 0){
-			LOG("%s: servicing of connection %p failed...\n", __func__);
+			LOG("%s: servicing of connection %p failed...\n", __func__, connection);
 			connection->disconnected = true;
 			itr = list_itr_next(itr);
 			continue;
