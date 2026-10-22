@@ -16,6 +16,11 @@
 #define ENET_IPV4_ONLY
 #endif
 
+#ifdef __APPLE__
+// Older Apple clang (Xcode 16.0) doesn't predefine the TARGET_OS_* macros.
+#include <TargetConditionals.h>
+#endif
+
 #if __APPLE__ && (TARGET_OS_SIMULATOR || TARGET_OS_IPHONE)
 #define __MAC_OS_X_VERSION_MIN_REQUIRED 101200
 #endif
