@@ -39,6 +39,8 @@ void handle_sigterm(int signum){
 }
 #endif
 
+static const std::string config_path("./config.json");
+
 int main(int argc, char **argv){
 	#ifdef __unix__
 	signal(SIGTERM, handle_sigterm);
@@ -53,15 +55,18 @@ int main(int argc, char **argv){
 	struct aemu_postoffice_server::config config;
 	struct aemu_postoffice_adhocctl_server::game_db game_db;
 
-	auto parse_config_and_game_db = [&config, &game_db] () -> bool {
+	auto parse_config = [&config] () -> bool {
 		std::unordered_set<std::string> defaulted_keys;
 		std::unordered_set<std::string> forced_keys;
-		bool config_parse_result = aemu_postoffice_server::parse_config_from_json("./config.json", config, defaulted_keys, forced_keys);
+		bool config_parse_result = aemu_postoffice_server::parse_config_from_json(config_path, config, defaulted_keys, forced_keys);
 		if (!config_parse_result){
 			aemu_postoffice_server::LOG("%s: config parse failed\n", __func__);
 			return false;
 		}
+		return true;
+	};
 
+	auto parse_game_db = [&config, &game_db] () -> bool {
 		bool game_db_parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json("./game_db.json", game_db);
 		if (!game_db_parse_result){
 			aemu_postoffice_server::LOG("%s: game db parsing failed!\n", __func__);
@@ -70,7 +75,7 @@ int main(int argc, char **argv){
 		return true;
 	};
 
-	if (!parse_config_and_game_db()){
+	if (!parse_config() || !parse_game_db()){
 		aemu_postoffice_server::LOG("%s: bad config or game database on launch, please fix configuration issues\n", __func__);
 		exit(1);
 	}
@@ -210,7 +215,7 @@ int main(int argc, char **argv){
 		});
 	}
 
-	threads.emplace_back([&server, &relay_mutex, &adhocctl_server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex, &config, &game_db, &parse_config_and_game_db] () {
+	threads.emplace_back([&server, &relay_mutex, &adhocctl_server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex, &config, &game_db, &parse_game_db] () {
 		aemu_postoffice_server::set_thread_name("config reload");
 
 		auto last_parse = std::chrono::high_resolution_clock::now();
@@ -221,23 +226,40 @@ int main(int argc, char **argv){
 				continue;
 			}
 
-			last_parse = now;
-			if (!parse_config_and_game_db()){
-				std::this_thread::sleep_for(std::chrono::milliseconds(250));
-				continue;
+			std::unordered_set<std::string> defaulted_keys;
+			std::unordered_set<std::string> forced_keys;
+			struct aemu_postoffice_server::config new_config;
+			bool config_parse_result = aemu_postoffice_server::parse_config_from_json(config_path, new_config, defaulted_keys, forced_keys);
+			bool config_changed = false;
+			if (config_parse_result){
+				config_changed = aemu_postoffice_server::merge_config(config, new_config);
 			}
 
-			relay_mutex.lock();
-			server.set_config(config);
-			relay_mutex.unlock();
-			if (adhocctl_server != NULL){
-				const std::lock_guard<std::mutex> guard(adhocctl_mutex);
-				adhocctl_server->set_config(config);
-				adhocctl_server->set_game_db(game_db);
+			// TODO actually check for game db change
+			bool game_db_changed = parse_game_db();
+
+			last_parse = now;
+
+			if (config_changed){
+				relay_mutex.lock();
+				server.set_config(config);
+				relay_mutex.unlock();
+				if (adhocctl_server != NULL){
+					const std::lock_guard<std::mutex> guard(adhocctl_mutex);
+					adhocctl_server->set_config(config);
+				}
+				// TODO update game config into http server
 			}
-			if (http_status_server != NULL){
-				const std::lock_guard<std::mutex> guard(http_status_server_mutex);
-				http_status_server->set_game_db(game_db);
+
+			if (game_db_changed){
+				if (adhocctl_server != NULL){
+					const std::lock_guard<std::mutex> guard(adhocctl_mutex);
+					adhocctl_server->set_game_db(game_db);
+				}
+				if (http_status_server != NULL){
+					const std::lock_guard<std::mutex> guard(http_status_server_mutex);
+					http_status_server->set_game_db(game_db);
+				}
 			}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(250));
