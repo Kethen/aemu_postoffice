@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+#include <unordered_set>
+
 namespace aemu_postoffice_server {
 
 struct config {
@@ -80,7 +82,8 @@ struct config {
 
 };
 
-bool parse_config_from_json(std::string path, struct config &out);
+bool parse_config_from_json(std::string path, struct config &out, std::unordered_set<std::string> &defaulted_keys, std::unordered_set<std::string> &forced_keys);
 void dump_config_to_log(const struct config &config);
+bool merge_config(struct config &merge_into, const struct config &merge_from);
 
 }

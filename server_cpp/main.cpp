@@ -54,7 +54,9 @@ int main(int argc, char **argv){
 	struct aemu_postoffice_adhocctl_server::game_db game_db;
 
 	auto parse_config_and_game_db = [&config, &game_db] () -> bool {
-		bool config_parse_result = aemu_postoffice_server::parse_config_from_json("./config.json", config);
+		std::unordered_set<std::string> defaulted_keys;
+		std::unordered_set<std::string> forced_keys;
+		bool config_parse_result = aemu_postoffice_server::parse_config_from_json("./config.json", config, defaulted_keys, forced_keys);
 		if (!config_parse_result){
 			aemu_postoffice_server::LOG("%s: config parse failed\n", __func__);
 			return false;
@@ -69,6 +71,7 @@ int main(int argc, char **argv){
 	};
 
 	if (!parse_config_and_game_db()){
+		aemu_postoffice_server::LOG("%s: bad config or game database on launch, please fix configuration issues\n", __func__);
 		exit(1);
 	}
 
