@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include <pspthreadman.h>
 
 static SceLwMutexWorkarea sock_alloc_mutex;

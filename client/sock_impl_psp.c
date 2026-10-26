@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pspnet_inet.h>

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __LOG_IMPL_H
 #define __LOG_IMPL_H
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __DELAY_IMPL_H
 #define __DELAY_IMPL_H
 

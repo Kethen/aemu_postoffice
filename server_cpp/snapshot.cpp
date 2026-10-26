@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include "snapshot.h"
 #include "log.h"
 #include "common.h"

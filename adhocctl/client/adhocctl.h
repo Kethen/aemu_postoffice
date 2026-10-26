@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __ADHOCCTL_H
 #define __ADHOCCTL_H
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
 // enet is... oddly shaped, and there's not a lot of guide line to use it not in it's event thread shape

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifdef __unix__
 #include <pthread.h>
 #endif
