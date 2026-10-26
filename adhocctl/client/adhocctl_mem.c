@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include "adhocctl_mem.h"
 
 #define NUM_SESSIONS 32

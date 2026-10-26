@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __POSTOFFICE_CLIENT_H
 #define __POSTOFFICE_CLIENT_H
 

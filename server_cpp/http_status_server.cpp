@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include "http_status_server.h"
 
 #include "../ext/cpp-httplib/httplib.h"

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include "game_db.h"
 #include "log.h"
 #include "../../server_cpp/file_util.h"

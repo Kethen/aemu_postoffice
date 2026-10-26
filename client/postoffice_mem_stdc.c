@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include "postoffice_mem.h"
 
 #define SESSIONS_PER_TYPE 32

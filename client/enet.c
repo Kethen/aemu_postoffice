@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #include "enet.h"
 #include "mutex_impl.h"
 #include "log_impl.h"

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __PSP_ENET_SHIM_H
 #define __PSP_ENET_SHIM_H
 

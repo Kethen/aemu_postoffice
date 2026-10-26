@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __AEMU_POSTOFFICE_PACKETS_H
 #define __AEMU_POSTOFFICE_PACKETS_H
 

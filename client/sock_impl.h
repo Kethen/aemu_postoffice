@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __SOCK_IMPL_COMMON_H
 #define __SOCK_IMPL_COMMON_H
 

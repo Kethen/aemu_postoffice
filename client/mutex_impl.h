@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-only
 #ifndef __MUTEX_IMPL_H
 #define __MUTEX_IMPL_H
 
