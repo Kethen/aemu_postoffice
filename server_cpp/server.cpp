@@ -267,7 +267,7 @@ void Server::pump_to_clients(int set){
 		SessionPumpStatus pump_status = session->pump_to_client();
 		if (pump_status == SessionPumpStatus::SOCKET_CLOSED){
 			sessions_to_remove[set].insert(identifier);
-			break;
+			continue;
 		}
 	}
 }
