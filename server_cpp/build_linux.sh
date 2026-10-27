@@ -1,6 +1,10 @@
 set -xe
 
 bash config_test.sh
+(
+	cd ../adhocctl/server_cpp
+	bash game_db_test.sh
+)
 
 SRC="log native_socket_linux session server semaphore main enet ../adhocctl/server_cpp/log common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config snapshot http_status_server"
 

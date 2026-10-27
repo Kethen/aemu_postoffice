@@ -11,6 +11,7 @@ bool write_to_file(const std::string &content, std::string path){
 	FILE *out_file = fopen(path.c_str(), "w");
 	if (out_file == NULL){
 		printf("%s: failed opening %s for writing\n", __func__, path.c_str());
+		exit(1);
 		return false;
 	}
 
@@ -18,6 +19,7 @@ bool write_to_file(const std::string &content, std::string path){
 	fclose(out_file);
 	if (write_status != 1){
 		printf("%s: failed writing to %s\n", __func__, path.c_str());
+		exit(1);
 		return false;
 	}
 
