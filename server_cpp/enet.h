@@ -65,7 +65,7 @@ struct peer {
 	std::unordered_map<int, std::list<std::string>> recv_buf;
 
 	peer(void *peer);
-	peer(struct peer &copy);
+	peer(const struct peer &copy);
 };
 
 enum class BasicEnetClientState{

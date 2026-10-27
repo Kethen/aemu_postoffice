@@ -4,7 +4,6 @@
 #include <unordered_map>
 #include <list>
 #include <thread>
-#include <semaphore>
 #include <unordered_set>
 
 #include "config.h"

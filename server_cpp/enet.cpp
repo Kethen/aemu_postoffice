@@ -41,7 +41,7 @@ peer::peer(void *peer){
 	closed = false;
 }
 
-peer::peer(peer &copy){
+peer::peer(const peer &copy){
 	enet_peer = copy.enet_peer;
 	send_buf = copy.send_buf;
 	recv_buf = copy.recv_buf;

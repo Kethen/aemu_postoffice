@@ -1,31 +1,43 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "semaphore.h"
 
-#include <semaphore>
+#include <condition_variable>
+#include <mutex>
 
 namespace aemu_postoffice_server {
 
+// C++17 replacement for std::counting_semaphore from C++20.
+struct SemaphoreImpl{
+	std::mutex mutex;
+	std::condition_variable cond;
+	unsigned int count = 0;
+};
+
 Semaphore::Semaphore(){
-	std::counting_semaphore<65535> *sema = new std::counting_semaphore<65535>(0);
-	sema_impl = sema;
+	sema_impl = new SemaphoreImpl();
 }
 
 Semaphore::~Semaphore(){
 	if (sema_impl == nullptr){
 		return;
 	}
-	std::counting_semaphore<65535> *sema = (std::counting_semaphore<65535> *)sema_impl;
-	delete(sema);
+	delete (SemaphoreImpl *)sema_impl;
 }
 
 void Semaphore::acquire(){
-	std::counting_semaphore<65535> *sema = (std::counting_semaphore<65535> *)sema_impl;
-	sema->acquire();
+	SemaphoreImpl *sema = (SemaphoreImpl *)sema_impl;
+	std::unique_lock<std::mutex> lock(sema->mutex);
+	sema->cond.wait(lock, [sema]{ return sema->count > 0; });
+	sema->count--;
 }
 
 void Semaphore::release(){
-	std::counting_semaphore<65535> *sema = (std::counting_semaphore<65535> *)sema_impl;
-	sema->release();
+	SemaphoreImpl *sema = (SemaphoreImpl *)sema_impl;
+	{
+		std::lock_guard<std::mutex> lock(sema->mutex);
+		sema->count++;
+	}
+	sema->cond.notify_one();
 }
 
 }
