@@ -37,6 +37,18 @@ bool native_error_is_emfile(int error){
 	return error == WSAEMFILE;
 }
 
+bool native_error_is_accept_transient(int error){
+	switch(error){
+		case WSAECONNRESET:
+		case WSAEINTR:
+		case WSAENETDOWN:
+		case WSAENOBUFS:
+			return true;
+		default:
+			return false;
+	}
+}
+
 AddrFamily get_addr_family(std::string ip){
 	int family = AF_INET6;
 	struct in6_addr addr6;

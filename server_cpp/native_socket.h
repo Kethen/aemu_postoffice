@@ -22,6 +22,8 @@ int native_get_last_socket_error();
 bool native_error_is_would_block(int error);
 bool native_error_is_no_mem(int error);
 bool native_error_is_emfile(int error);
+// errors from accept that concern only the connection being accepted
+bool native_error_is_accept_transient(int error);
 int native_tcp_listen(std::string ip, uint16_t port);
 int native_accept(int sock_fd, std::string *peer_addr, uint16_t *peer_port);
 AddrFamily get_addr_family(std::string ip);

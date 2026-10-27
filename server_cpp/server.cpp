@@ -121,7 +121,11 @@ Server::Server(const struct config &config){
 Server::~Server(){
 	if (this->sock_fd >= 0){
 		native_close(this->sock_fd);
-	}else{
+	}
+
+	// pump() may close the listen socket on accept errors while the workers keep running.
+	// Check the pending worker count to see whether to return.
+	if (this->pending_sessions_pump_workers.empty()){
 		return;
 	}
 
@@ -294,6 +298,10 @@ ServerPumpStatus Server::pump(){
 			}
 			if (native_error_is_emfile(error)){
 				LOG_TS("%s: warning, new relay connection dropped as system limit has been reached\n", __func__);
+				break;
+			}
+			if (native_error_is_accept_transient(error)){
+				LOG_TS("%s: new relay connection dropped, 0x%x\n", __func__, error);
 				break;
 			}
 			LOG_TS("%s: failed accepting connection, 0x%x\n", __func__, error);

@@ -44,6 +44,30 @@ bool native_error_is_emfile(int error){
 	return error == EMFILE;
 }
 
+bool native_error_is_accept_transient(int error){
+	// Linux passes pending network errors of the new connection up through accept
+	switch(error){
+		case ECONNABORTED:
+		case EINTR:
+		case EPROTO:
+		case ENOPROTOOPT:
+		case ENETDOWN:
+		case ENETUNREACH:
+		case EHOSTDOWN:
+		case EHOSTUNREACH:
+		case EOPNOTSUPP:
+		case ENOBUFS:
+		case ENOMEM:
+		case ENFILE:
+		#ifdef ENONET
+		case ENONET:
+		#endif
+			return true;
+		default:
+			return false;
+	}
+}
+
 AddrFamily get_addr_family(std::string ip){
 	int family = AF_INET6;
 	struct in6_addr addr6;
