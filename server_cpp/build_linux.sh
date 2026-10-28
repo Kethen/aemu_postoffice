@@ -1,6 +1,6 @@
 set -xe
 
-SRC="log native_socket_linux session server semaphore main enet ../adhocctl/server_cpp/log common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config snapshot http_status_server"
+SRC="log native_socket_linux session server semaphore main enet enet_impl ../adhocctl/server_cpp/log common ../adhocctl/server_cpp/client ../adhocctl/server_cpp/server ../adhocctl/server_cpp/snapshot file_util ../adhocctl/server_cpp/game_db config snapshot http_status_server"
 
 DEBUG=${DEBUG:-false}
 
