@@ -26,7 +26,7 @@ int native_get_last_socket_error(){
 }
 
 bool native_error_is_would_block(int error){
-	return error == WSAEWOULDBLOCK;
+	return error == WSAEWOULDBLOCK || error == WSAEINTR;
 }
 
 bool native_error_is_no_mem(int error){
@@ -40,9 +40,6 @@ bool native_error_is_emfile(int error){
 bool native_error_is_accept_transient(int error){
 	switch(error){
 		case WSAECONNRESET:
-		case WSAEINTR:
-		case WSAENETDOWN:
-		case WSAENOBUFS:
 			return true;
 		default:
 			return false;

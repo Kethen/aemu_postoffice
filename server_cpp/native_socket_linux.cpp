@@ -41,11 +41,12 @@ bool native_error_is_no_mem(int error){
 }
 
 bool native_error_is_emfile(int error){
-	return error == EMFILE;
+	return error == EMFILE || error == ENFILE;
 }
 
 bool native_error_is_accept_transient(int error){
 	// Linux passes pending network errors of the new connection up through accept
+	// https://manpages.debian.org/bullseye/manpages-dev/accept.2.en.html
 	switch(error){
 		case ECONNABORTED:
 		case EINTR:
@@ -56,9 +57,6 @@ bool native_error_is_accept_transient(int error){
 		case EHOSTDOWN:
 		case EHOSTUNREACH:
 		case EOPNOTSUPP:
-		case ENOBUFS:
-		case ENOMEM:
-		case ENFILE:
 		#ifdef ENONET
 		case ENONET:
 		#endif
