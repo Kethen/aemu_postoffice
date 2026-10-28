@@ -6,7 +6,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#if __unix__
 #include <pthread.h>
+#endif
 
 #include <string>
 
