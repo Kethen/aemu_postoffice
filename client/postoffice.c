@@ -112,6 +112,16 @@ static bool send_buf_not_full_wrapped(int sock, void *enet_handle){
 	return true;
 }
 
+// waits a little for a blocking send or recv to be able to go on
+static void wait_wrapped(int sock, void *enet_handle, bool for_write){
+	if (enet_handle == NULL){
+		// up to 1 ms at a time, to notice an abort
+		native_wait(sock, for_write, 1);
+		return;
+	}
+	delay(0);
+}
+
 static bool hung_up_wrapped(int sock, void *enet_handle){
 	if (enet_handle == NULL){
 		return native_hung_up(sock);
@@ -160,7 +170,7 @@ static int send_till_done(int fd, void *enet_handle, bool enet_reliable, const c
 				delay(0);
 				return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 			}
-			delay(0);
+			wait_wrapped(fd, enet_handle, true);
 			continue;
 		}
 		if (write_status == -1){
@@ -188,7 +198,7 @@ static int recv_till_done(int fd, void *enet_handle, char *buf, int len, bool no
 					return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 				}
 				// Continue block receving, either in block mode or we already received part of the message
-				delay(0);
+				wait_wrapped(fd, enet_handle, false);
 				continue;
 			}
 			return recv_status;
