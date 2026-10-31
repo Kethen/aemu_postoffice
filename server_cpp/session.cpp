@@ -222,6 +222,10 @@ void PendingSession::close_socket(){
 	}
 }
 
+int PendingSession::get_wait_fd(){
+	return enet_server == NULL ? sock_fd : -1;
+}
+
 Session::Session(SessionMode mode, char *from_mac, uint16_t from_port, char *to_mac, uint16_t to_port, std::string initial_data_buffer, int sock_fd, Session *peer_session, std::string client_addr, int client_port, struct config *config, aemu_postoffice_enet::BasicEnetClient *enet_server, bool enet_reliable){
 	this->mode = mode;
 	this->config = config;
@@ -605,6 +609,14 @@ uint16_t Session::get_to_port(){
 
 int Session::get_client_port(){
 	return client_port;
+}
+
+int Session::get_wait_fd(){
+	return enet_server == NULL ? sock_fd : -1;
+}
+
+bool Session::has_data_to_send(){
+	return to_client_data_buffer.size() != 0;
 }
 
 }

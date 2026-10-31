@@ -179,4 +179,20 @@ void native_close(int sock_fd){
 	closesocket(sock_fd);
 }
 
+void native_wait_multiple(const std::vector<int> &read_fds, const std::vector<int> &write_fds, int timeout_ms){
+	std::vector<WSAPOLLFD> fds;
+	for (int fd : read_fds){
+		fds.push_back({(SOCKET)fd, POLLRDNORM, 0});
+	}
+	for (int fd : write_fds){
+		fds.push_back({(SOCKET)fd, POLLWRNORM, 0});
+	}
+	if (fds.empty()){
+		// WSAPoll fails at once on an empty set
+		Sleep(timeout_ms);
+		return;
+	}
+	WSAPoll(fds.data(), (ULONG)fds.size(), timeout_ms);
+}
+
 }
