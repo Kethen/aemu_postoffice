@@ -78,6 +78,11 @@ int main(){
 	SHOULD_BE_DEFAULTED(adhocctl_max_num_sessions);
 	SHOULD_BE_DEFAULTED(adhocctl_max_num_sessions_per_ip);
 	SHOULD_BE_DEFAULTED(http_status_server_port);
+	SHOULD_BE_DEFAULTED(metadata_name);
+	SHOULD_BE_DEFAULTED(metadata_location);
+	SHOULD_BE_DEFAULTED(metadata_website);
+	SHOULD_BE_DEFAULTED(metadata_admin_email);
+	SHOULD_BE_DEFAULTED(metadata_owner_name);
 
 	#define ASSIGN_DEFAULT(name) { \
 	test_config[STR(name)] = default_config.name; \
@@ -105,6 +110,11 @@ int main(){
 	ASSIGN_DEFAULT(adhocctl_max_num_sessions);
 	ASSIGN_DEFAULT(adhocctl_max_num_sessions_per_ip);
 	ASSIGN_DEFAULT(http_status_server_port);
+	ASSIGN_DEFAULT(metadata_name);
+	ASSIGN_DEFAULT(metadata_location);
+	ASSIGN_DEFAULT(metadata_website);
+	ASSIGN_DEFAULT(metadata_admin_email);
+	ASSIGN_DEFAULT(metadata_owner_name);
 
 	write_to_file(test_config.dump(), test_config_path);
 
@@ -154,6 +164,11 @@ int main(){
 	CHECK_DEFAULT(adhocctl_max_num_sessions);
 	CHECK_DEFAULT(adhocctl_max_num_sessions_per_ip);
 	CHECK_DEFAULT(http_status_server_port);
+	CHECK_DEFAULT(metadata_name);
+	CHECK_DEFAULT(metadata_location);
+	CHECK_DEFAULT(metadata_website);
+	CHECK_DEFAULT(metadata_admin_email);
+	CHECK_DEFAULT(metadata_owner_name);
 
 	test_config["enable_adhocctl"] = false;
 	write_to_file(test_config.dump(), test_config_path);

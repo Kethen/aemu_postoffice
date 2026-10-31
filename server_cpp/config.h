@@ -82,6 +82,12 @@ struct config {
 	// http port serving the status page
 	int http_status_server_port = 8888;
 
+	// metadata for data.json and metadata.json
+	std::string metadata_name = "PSP multiplayer server";
+	std::string metadata_location = "On the internet";
+	std::string metadata_website = "http://website.psp/";
+	std::string metadata_admin_email = "admin@website.psp";
+	std::string metadata_owner_name = "Admin";
 };
 
 bool parse_config_from_json(std::string path, struct config &out, std::unordered_set<std::string> &defaulted_keys, std::unordered_set<std::string> &forced_keys);

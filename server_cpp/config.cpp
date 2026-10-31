@@ -102,6 +102,11 @@ bool parse_config_from_json(std::string path, struct config &out, std::unordered
 	PARSE_INTEGER(adhocctl_max_num_sessions);
 	PARSE_INTEGER(adhocctl_max_num_sessions_per_ip);
 	PARSE_INTEGER(http_status_server_port);
+	PARSE_STRING(metadata_name);
+	PARSE_STRING(metadata_location);
+	PARSE_STRING(metadata_website);
+	PARSE_STRING(metadata_admin_email);
+	PARSE_STRING(metadata_owner_name);
 
 	#undef PARSE_INTEGER
 	#undef PARSE_STRING
@@ -257,6 +262,11 @@ bool merge_config(struct config &merge_into, const struct config &merge_from){
 	COPY_WARN(adhocctl_max_num_sessions);
 	COPY(adhocctl_max_num_sessions_per_ip);
 	NO_RUNTIME_CHANGE(http_status_server_port);
+	COPY(metadata_name);
+	COPY(metadata_location);
+	COPY(metadata_website);
+	COPY(metadata_admin_email);
+	COPY(metadata_owner_name);
 
 	return config_changed;
 }

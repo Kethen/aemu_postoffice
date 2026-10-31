@@ -158,6 +158,17 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 			output["capabilities"] = capabilities;
 			output_metadata["capabilities"] = capabilities;
 
+			auto set_metadata = [&output, &output_metadata] (const std::string &key, const std::string &value) {
+				output[key] = value;
+				output_metadata[key] = value;
+			};
+
+			set_metadata("name", config_copy.metadata_name);
+			set_metadata("location", config_copy.metadata_location);
+			set_metadata("website", config_copy.metadata_website);
+			set_metadata("admin-email", config_copy.metadata_admin_email);
+			set_metadata("owner-name", config_copy.metadata_owner_name);
+
 			std::string output_string = output.dump();
 			crunched_snapshot_mutex.lock();
 			crunched_snapshot = output_string;
