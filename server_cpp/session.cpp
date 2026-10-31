@@ -312,7 +312,8 @@ SessionPumpStatus Session::pump_connect(){
 SessionPumpStatus Session::pump_from_client(){
 	SessionPumpStatus ret = SessionPumpStatus::SUCCESS;
 
-	Buffer _buf((AEMU_POSTOFFICE_PDP_BLOCK_MAX > AEMU_POSTOFFICE_PTP_BLOCK_MAX ? AEMU_POSTOFFICE_PDP_BLOCK_MAX : AEMU_POSTOFFICE_PTP_BLOCK_MAX) * 2 + (sizeof(aemu_postoffice_pdp) > sizeof(aemu_postoffice_ptp_data) ? sizeof(aemu_postoffice_pdp) : sizeof(aemu_postoffice_ptp_data)));
+	// malloc once per worker thread, not on every pump
+	static thread_local Buffer _buf((AEMU_POSTOFFICE_PDP_BLOCK_MAX > AEMU_POSTOFFICE_PTP_BLOCK_MAX ? AEMU_POSTOFFICE_PDP_BLOCK_MAX : AEMU_POSTOFFICE_PTP_BLOCK_MAX) * 2 + (sizeof(aemu_postoffice_pdp) > sizeof(aemu_postoffice_ptp_data) ? sizeof(aemu_postoffice_pdp) : sizeof(aemu_postoffice_ptp_data)));
 	char *buf = _buf.get_buf();
 	int buf_size = _buf.get_size();
 	while(true){
