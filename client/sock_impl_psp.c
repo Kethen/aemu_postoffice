@@ -131,6 +131,11 @@ typedef struct SceNetInetPollfd {
 
 int sceNetInetPoll(struct SceNetInetPollfd *fds, size_t nfds, int timeout);
 
+void native_wait(int fd, bool for_write, int timeout_ms){
+	// yield, as before
+	sceKernelDelayThread(0);
+}
+
 bool native_send_buf_not_full(int fd){
 	struct SceNetInetPollfd pfd;
 	pfd.fd = fd;

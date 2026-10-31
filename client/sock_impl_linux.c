@@ -242,6 +242,14 @@ int native_peek(int fd, char *buf, int len){
 	return read_result;
 }
 
+void native_wait(int fd, bool for_write, int timeout_ms){
+	struct pollfd pfd = {
+		.fd = fd,
+		.events = for_write ? POLLOUT : POLLIN,
+	};
+	poll(&pfd, 1, timeout_ms);
+}
+
 bool native_send_buf_not_full(int fd){
 	struct pollfd pfd;
 	pfd.fd = fd;
