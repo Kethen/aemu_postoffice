@@ -40,6 +40,7 @@ void handle_sigterm(int signum){
 #endif
 
 static const std::string config_path("./config.json");
+static const std::string game_db_path("./game_db.json");
 
 int main(int argc, char **argv){
 	#ifdef __unix__
@@ -67,7 +68,7 @@ int main(int argc, char **argv){
 	};
 
 	auto parse_game_db = [&config, &game_db] () -> bool {
-		bool game_db_parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json("./game_db.json", game_db);
+		bool game_db_parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json(game_db_path, game_db);
 		if (!game_db_parse_result){
 			aemu_postoffice_server::LOG("%s: game db parsing failed!\n", __func__);
 			return false;
@@ -215,7 +216,7 @@ int main(int argc, char **argv){
 		});
 	}
 
-	threads.emplace_back([&server, &relay_mutex, &adhocctl_server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex, &config, &game_db, &parse_game_db] () {
+	threads.emplace_back([&server, &relay_mutex, &adhocctl_server, &adhocctl_mutex, &http_status_server, &http_status_server_mutex, &config, &game_db] () {
 		aemu_postoffice_server::set_thread_name("config reload");
 
 		auto last_parse = std::chrono::high_resolution_clock::now();
@@ -235,12 +236,17 @@ int main(int argc, char **argv){
 				config_changed = aemu_postoffice_server::merge_config(config, new_config);
 			}
 
-			// TODO actually check for game db change
-			bool game_db_changed = parse_game_db();
+			struct aemu_postoffice_adhocctl_server::game_db new_game_db;
+			bool game_db_parse_result = aemu_postoffice_adhocctl_server::parse_game_db_from_json(game_db_path, new_game_db);
+			bool game_db_changed = false;
+			if (game_db_parse_result){
+				game_db_changed = !game_db_same(game_db, new_game_db);
+			}
 
 			last_parse = now;
 
 			if (config_changed){
+				aemu_postoffice_server::LOG_TS("config change detected\n");
 				relay_mutex.lock();
 				server.set_config(config);
 				relay_mutex.unlock();
@@ -252,6 +258,8 @@ int main(int argc, char **argv){
 			}
 
 			if (game_db_changed){
+				aemu_postoffice_server::LOG_TS("game_db change detected\n");
+				game_db = new_game_db;
 				if (adhocctl_server != NULL){
 					const std::lock_guard<std::mutex> guard(adhocctl_mutex);
 					adhocctl_server->set_game_db(game_db);
