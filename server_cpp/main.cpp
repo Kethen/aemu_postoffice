@@ -254,7 +254,10 @@ int main(int argc, char **argv){
 					const std::lock_guard<std::mutex> guard(adhocctl_mutex);
 					adhocctl_server->set_config(config);
 				}
-				// TODO update game config into http server
+				if (http_status_server != NULL){
+					const std::lock_guard<std::mutex> guard(http_status_server_mutex);
+					http_status_server->set_config(config);
+				}
 			}
 
 			if (game_db_changed){

@@ -22,6 +22,7 @@ static const std::string HTTP_ASSET_PATH("./http_assets");
 namespace aemu_postoffice_server {
 
 HttpStatusServer::HttpStatusServer(const struct config &config, const struct aemu_postoffice_adhocctl_server::game_db &game_db){
+	this->config = config;
 	this->game_db = game_db;
 	stopping = false;
 
@@ -49,6 +50,10 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 			game_db_mutex.lock();
 			auto game_db_copy = this->game_db;
 			game_db_mutex.unlock();
+
+			config_mutex.lock();
+			auto config_copy = this->config;
+			config_mutex.unlock();
 
 			nlohmann::json output = {};
 			output["games"] = nlohmann::json::array();
@@ -124,10 +129,44 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 				output["games"].push_back(game_entry);
 			}
 
+			nlohmann::json output_metadata = {};
+
+			auto capabilities = nlohmann::json::array();
+			capabilities.push_back("RELAY_TRANSPORT_TCP");
+			if (config_copy.enable_enet){
+				capabilities.push_back("RELAY_TRANSPORT_ENET");
+			}
+
+			// TODO when we do have more than one versions of these protocols, these has to be dynamic
+			capabilities.push_back("RELAY_PDP_PROTOCOL_V1");
+			capabilities.push_back("RELAY_PTP_PROTOCOL_V1");
+
+			if (config_copy.enable_adhocctl){
+				capabilities.push_back("ADHOCCTL_TRANSPORT_TCP");
+				if (config_copy.enable_enet){
+					capabilities.push_back("ADHOCCTL_TRANSPORT_ENET");
+				}
+				// TODO when we do have another version of adhocctl, this has to be dynamic
+				capabilities.push_back("ADHOCCTL_PROTOCOL_V1");
+				if (config_copy.adhocctl_relay_only){
+					// adhocctl_relay_only here means the server's adhocctl does not pass IP addresses around for P2P
+					// in adhocctl v1 protocol it means the ip field is replaced by an unique ID on the server
+					capabilities.push_back("ADHOCCTL_RELAY_ONLY");
+				}
+			}
+
+			output["capabilities"] = capabilities;
+			output_metadata["capabilities"] = capabilities;
+
 			std::string output_string = output.dump();
 			crunched_snapshot_mutex.lock();
 			crunched_snapshot = output_string;
 			crunched_snapshot_mutex.unlock();
+
+			std::string output_metadata_string = output_metadata.dump();
+			crunched_metadata_mutex.lock();
+			crunched_metadata = output_metadata_string = output_metadata_string;
+			crunched_metadata_mutex.unlock();
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(250));
 		}
@@ -137,10 +176,20 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 	server_impl = server;
 
 	server->set_mount_point("/assets", HTTP_ASSET_PATH);
+
 	server->Get("/data.json", [this] (const httplib::Request &req, httplib::Response &res) {
 		crunched_snapshot_mutex.lock();
 		std::string output = crunched_snapshot;
 		crunched_snapshot_mutex.unlock();
+		res.status = 200;
+		res.set_content(output, "application/json;charset=UTF-8");
+		res.set_header("Access-Control-Allow-Origin", "*");
+	});
+
+	server->Get("/metadata.json", [this] (const httplib::Request &req, httplib::Response &res) {
+		crunched_metadata_mutex.lock();
+		std::string output = crunched_metadata;
+		crunched_metadata_mutex.unlock();
 		res.status = 200;
 		res.set_content(output, "application/json;charset=UTF-8");
 		res.set_header("Access-Control-Allow-Origin", "*");
@@ -162,9 +211,11 @@ HttpStatusServer::HttpStatusServer(const struct config &config, const struct aem
 
 	server_running = true;
 
-	server_thread = new std::thread([this, server, config] () {
+	std::string ip_addr = config.ip_addr;
+	int port = config.http_status_server_port;
+	server_thread = new std::thread([this, server, ip_addr, port] () {
 		set_thread_name("http status");
-		server->listen(config.ip_addr, config.http_status_server_port);
+		server->listen(ip_addr, port);
 		server_running = false;
 	});
 }
@@ -196,9 +247,16 @@ void HttpStatusServer::update_adhocctl_snapshot(const struct aemu_postoffice_adh
 }
 
 void HttpStatusServer::set_game_db(const struct aemu_postoffice_adhocctl_server::game_db &game_db){
-	game_db_mutex.lock();
+	const std::lock_guard<std::mutex> guard(game_db_mutex);
 	this->game_db = game_db;
-	game_db_mutex.unlock();
+}
+
+void HttpStatusServer::set_config(const struct config &config){
+	const std::lock_guard<std::mutex> guard(config_mutex);
+	auto old_config = this->config;
+	this->config = config;
+
+	this->config.enable_enet = old_config.enable_enet;
 }
 
 bool HttpStatusServer::is_server_running(){
