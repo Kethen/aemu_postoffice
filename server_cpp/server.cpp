@@ -12,6 +12,7 @@
 
 #include "native_socket.h"
 
+#include <algorithm>
 #include <mutex>
 
 namespace aemu_postoffice_server {
@@ -274,6 +275,38 @@ void Server::pump_to_clients(int set){
 			continue;
 		}
 	}
+}
+
+void Server::wait(int timeout_ms){
+	if (this->enet_server != NULL){
+		// enet traffic can't be waited for with the sockets, so check for it at least every ms
+		timeout_ms = std::min(timeout_ms, 1);
+	}
+
+	std::vector<int> read_fds;
+	std::vector<int> write_fds;
+	read_fds.push_back(this->sock_fd);
+	for(auto &pending_session : this->pending_sessions){
+		int fd = pending_session.get_wait_fd();
+		if (fd != -1){
+			read_fds.push_back(fd);
+		}
+	}
+	for(auto &session : this->sessions){
+		int fd = session.second.get_wait_fd();
+		if (fd == -1){
+			continue;
+		}
+		read_fds.push_back(fd);
+		if (session.second.has_data_to_send()){
+			write_fds.push_back(fd);
+		}
+		// a connect is matched with its listener by pumping, nothing arrives on its socket meanwhile
+		if (session.second.get_session_phase() == SessionPhase::PTP_CONNECTING){
+			timeout_ms = std::min(timeout_ms, 1);
+		}
+	}
+	native_wait_multiple(read_fds, write_fds, timeout_ms);
 }
 
 ServerPumpStatus Server::pump(){

@@ -31,6 +31,8 @@ class PendingSession{
 		// The pending session should be discarded after creating a session
 		Session create_session(std::unordered_map<std::string, Session> &global_sessions);
 		void close_socket();
+		// the socket to wait on, -1 for enet
+		int get_wait_fd();
 
 	private:
 		std::string init_data_buffer;
@@ -94,6 +96,9 @@ class Session{
 		uint16_t get_from_port();
 		uint16_t get_to_port();
 		int get_client_port();
+		// the socket to wait on, -1 for enet
+		int get_wait_fd();
+		bool has_data_to_send();
 
 	protected:
 		// processed data from client to be sent to other sessions

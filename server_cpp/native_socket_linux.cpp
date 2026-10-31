@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include <poll.h>
 
 #include <stdint.h>
 
@@ -184,6 +185,17 @@ int native_accept(int sock_fd, std::string *peer_addr, uint16_t *peer_port){
 
 void native_close(int sock_fd){
 	close(sock_fd);
+}
+
+void native_wait_multiple(const std::vector<int> &read_fds, const std::vector<int> &write_fds, int timeout_ms){
+	std::vector<struct pollfd> fds;
+	for (int fd : read_fds){
+		fds.push_back({fd, POLLIN, 0});
+	}
+	for (int fd : write_fds){
+		fds.push_back({fd, POLLOUT, 0});
+	}
+	poll(fds.data(), fds.size(), timeout_ms);
 }
 
 }
