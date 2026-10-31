@@ -15,6 +15,11 @@
 #include "../aemu_postoffice_packets.h"
 
 static bool initialized = false;
+static int close_delay_ms = 50;
+
+void set_close_delay_aemu_postoffice(int delay_ms){
+	close_delay_ms = delay_ms;
+}
 
 int init_aemu_postoffice(bool with_enet){
 	if (initialized){
@@ -512,7 +517,7 @@ void pdp_delete(void *pdp_handle){
 
 	// make sure we are clear of send/recv operations
 	do{
-		delay(50);
+		delay(close_delay_ms);
 	}while(session->sending || session->recving);
 
 	if (!session->dead)
@@ -1031,7 +1036,7 @@ void ptp_close(void *ptp_handle){
 
 	// make sure we are clear of send/recv operations
 	do{
-		delay(50);
+		delay(close_delay_ms);
 	}while(session->sending || session->recving);
 
 	if (!session->dead)
@@ -1051,7 +1056,7 @@ void ptp_listen_close(void *ptp_listen_handle){
 
 	// make sure we are clear of send/recv operations
 	do{
-		delay(50);
+		delay(close_delay_ms);
 	}while(session->accepting);
 
 	if (!session->dead)
