@@ -16,6 +16,7 @@ namespace aemu_postoffice_adhocctl_server{
 Server::Server(const struct aemu_postoffice_server::config &config, const struct game_db &game_db){
 	this->config = config;
 	this->game_db = game_db;
+	dead = false;
 
 	switch (get_addr_family(config.ip_addr)){
 		case AddrFamily::IPV6:
@@ -28,6 +29,7 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 		case AddrFamily::UNKNOWN:
 			LOG("%s: invalid address %s, not starting adhocctl server\n", __func__, config.ip_addr.c_str());
 			sock_fd = -3;
+			dead = true;
 			return;
 			break;
 		default:
@@ -39,24 +41,28 @@ Server::Server(const struct aemu_postoffice_server::config &config, const struct
 	sock_fd = native_tcp_listen(config.ip_addr, config.adhocctl_port);
 	if (sock_fd == -1){
 		LOG("%s: failed creating socket, 0x%x\n", __func__, native_get_last_socket_error());
+		dead = true;
 		return;
 	}
 	if (sock_fd == -2){
 		LOG("%s: failed parsing %s as ipv4 nor ipv6\n", __func__, config.ip_addr.c_str());
+		dead = true;
 		return;
 	}
 
 	addr_family = get_addr_family(config.ip_addr);
+	enet_server = NULL;
 	if (addr_family != aemu_postoffice_server::AddrFamily::IPV6){
 		LOG("%s: not enabling enet in ipv4 only mode\n", __func__);
 		enet_server = NULL;
-	} else {
+	} else if (config.enable_enet) {
 		enet_server = new aemu_postoffice_enet::BasicEnetClient();
 		int enet_listen_status = enet_server->listen(config.ip_addr, config.adhocctl_port, config.adhocctl_max_num_sessions, 1);
 		if (enet_listen_status != 0){
 			LOG("%s: failed creating enet socket\n", __func__);
 			delete enet_server;
 			enet_server = NULL;
+			dead = true;
 			return;
 		}
 	}
@@ -205,26 +211,36 @@ Server::~Server(){
 	// close listen socket
 	if (sock_fd >= 0){
 		native_close(sock_fd);
-	} else {
-		return;
 	}
 
 	// cleanup threads
 	stopping = true;
-	for (int i = 0;i < config.adhocctl_num_threads;i++){
-		pending_clients_worker_start_sema[i].release();
-		clients_recv_worker_start_sema[i].release();
-		clients_send_worker_start_sema[i].release();
+	for (auto &sema : pending_clients_worker_start_sema){
+		sema.release();
 	}
-	for (int i = 0;i < config.adhocctl_num_threads;i++){
-		pending_clients_workers[i].join();
-		clients_recv_workers[i].join();
-		clients_send_workers[i].join();
+	for (auto &sema : clients_recv_worker_start_sema){
+		sema.release();
+	}
+	for (auto &sema : clients_send_worker_start_sema){
+		sema.release();
+	}
+	for (auto &worker : pending_clients_workers){
+		worker.join();
+	}
+	for (auto &worker : clients_recv_workers){
+		worker.join();
+	}
+	for (auto &worker : clients_send_workers){
+		worker.join();
 	}
 
 	// close client sockets
-	for (auto client = clients.begin();client != clients.end();client++){
-		client->second.close_socket();
+	for (auto &client : pending_clients){
+		client.second.close_socket();
+	}
+
+	for (auto &client : clients){
+		client.second.close_socket();
 	}
 
 	// stop enet
@@ -350,11 +366,7 @@ static std::string make_socket_name(std::string ip, int port){
 }
 
 ServerPumpStatus Server::pump(){
-	if (sock_fd < 0){
-		return ServerPumpStatus::ERROR;
-	}
-
-	if (addr_family == aemu_postoffice_server::AddrFamily::IPV6 && enet_server == NULL){
+	if (dead){
 		return ServerPumpStatus::ERROR;
 	}
 
@@ -372,7 +384,12 @@ ServerPumpStatus Server::pump(){
 				LOG_TS("%s: warning, new adhocctl connection dropped as system limit has been reached\n", __func__);
 				break;
 			}
+			if (native_error_is_accept_transient(err)){
+				LOG_TS("%s: new adhocctl connection dropped, 0x%x\n", __func__, err);
+				break;
+			}
 			LOG("%s: accept call failed, 0x%x\n", __func__, err);
+			dead = true;
 			return ServerPumpStatus::ERROR;
 		}
 
@@ -403,7 +420,14 @@ ServerPumpStatus Server::pump(){
 				break;
 			}
 			LOG("%s: enet accept call failed, %d\n", __func__, status);
+			dead = true;
 			return ServerPumpStatus::ERROR;
+		}
+
+		if (pending_clients.size() + clients.size() >= config.adhocctl_max_num_sessions){
+			LOG_TS("%s: warning, new connection from %s dropped as maximum number of adhocctl sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.adhocctl_max_num_sessions);
+			enet_server->close(peer_ref);
+			continue;
 		}
 
 		std::string socket_name = make_socket_name(peer_addr, peer_port);
@@ -597,6 +621,7 @@ void Server::set_config(const struct aemu_postoffice_server::config &config){
 	this->config.adhocctl_relay_only = old_config.adhocctl_relay_only;
 	this->config.adhocctl_num_threads = old_config.adhocctl_num_threads;
 	this->config.adhocctl_port = old_config.adhocctl_port;
+	this->config.enable_enet = old_config.enable_enet;
 }
 
 void Server::set_game_db(const struct game_db &game_db){

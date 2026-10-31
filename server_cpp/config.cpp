@@ -82,6 +82,7 @@ bool parse_config_from_json(std::string path, struct config &out, std::unordered
 	PARSE_INTEGER(target_tick_interval_ms);
 	PARSE_INTEGER(target_tick_interval_idle_ms);
 	PARSE_STRING(ip_addr);
+	PARSE_BOOL(enable_enet);
 	PARSE_INTEGER(port);
 	PARSE_INTEGER(num_threads);
 	PARSE_INTEGER(session_init_time_limit_ms);
@@ -154,6 +155,13 @@ bool parse_config_from_json(std::string path, struct config &out, std::unordered
 		forced_keys.insert("adhocctl_relay_only");
 	}
 
+	if (addr_family == AddrFamily::IPV4 && out.enable_enet){
+		LOG("%s: enet is disabled in ipv4 only mode\n", __func__);
+		out.enable_enet = false;
+		good_config = false;
+		forced_keys.insert("enable_enet");
+	}
+
 	if (!out.enable_adhocctl && out.strict_mode) {
 		LOG("%s: enable_adhocctl is set to false, strict_mode must also be false\n", __func__);
 		out.strict_mode = false;
@@ -181,6 +189,7 @@ void dump_config_to_log(const struct config &config){
 	DUMP_INTEGER(target_tick_interval_ms);
 	DUMP_INTEGER(target_tick_interval_idle_ms);
 	DUMP_STRING(ip_addr);
+	DUMP_BOOL(enable_enet);
 	DUMP_INTEGER(port);
 	DUMP_INTEGER(num_threads);
 	DUMP_INTEGER(session_init_time_limit_ms);
@@ -228,6 +237,7 @@ bool merge_config(struct config &merge_into, const struct config &merge_from){
 	COPY(target_tick_interval_ms);
 	COPY(target_tick_interval_idle_ms);
 	NO_RUNTIME_CHANGE(ip_addr);
+	NO_RUNTIME_CHANGE(enable_enet);
 	NO_RUNTIME_CHANGE(port);
 	NO_RUNTIME_CHANGE(num_threads);
 	COPY(session_init_time_limit_ms);

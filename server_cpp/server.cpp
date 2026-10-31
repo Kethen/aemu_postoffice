@@ -19,31 +19,36 @@ namespace aemu_postoffice_server {
 
 Server::Server(const struct config &config){
 	this->config = config;
+	dead = false;
+
 	this->sock_fd = native_tcp_listen(config.ip_addr, config.port);
 
 	if (this->sock_fd == -1){
 		LOG("%s: failed creating listen socket, 0x%x\n", __func__, native_get_last_socket_error());
+		dead = true;
 		return;
 	}
 
 	if (this->sock_fd == -2){
-		this->sock_fd = -1;
 		LOG("%s: failed parsing %s as ipv6 nor ipv4\n", __func__, config.ip_addr.c_str());
+		dead = true;
 		return;
 	}
 
 	addr_family = get_addr_family(config.ip_addr);
+	enet_server = NULL;
 	if (addr_family == AddrFamily::IPV4){
 		// TODO this is a mess, if only it is possible to move around mixed/ipv4 only modes runtime..
 		LOG("%s: not initializing enet in ipv4 only mode\n", __func__);
 		enet_server = NULL;
-	} else {
+	} else if (config.enable_enet) {
 		enet_server = new aemu_postoffice_enet::BasicEnetClient();
 		int listen_status = enet_server->listen(config.ip_addr, config.port, config.max_num_sessions, 1);
 		if (listen_status != 0){
 			LOG("%s: failed initializing enet\n", __func__);
 			delete enet_server;
 			enet_server = NULL;
+			dead = true;
 			return;
 		}
 	}
@@ -132,12 +137,6 @@ Server::Server(const struct config &config){
 Server::~Server(){
 	if (this->sock_fd >= 0){
 		native_close(this->sock_fd);
-	}
-
-	// pump() may close the listen socket on accept errors while the workers keep running.
-	// The lists are only there when the constructor got as far as the workers.
-	if (this->to_pump_pending_sessions.empty()){
-		return;
 	}
 
 	this->stopping = true;
@@ -287,7 +286,11 @@ void Server::pump_to_clients(int set){
 	}
 }
 
-void Server::wait(int timeout_ms){
+ServerPumpStatus Server::wait(int timeout_ms){
+	if (dead){
+		return ServerPumpStatus::LISTEN_SOCK_DEAD;
+	}
+
 	if (this->enet_server != NULL){
 		// enet traffic can't be waited for with the sockets, so check for it at least every ms
 		timeout_ms = std::min(timeout_ms, 1);
@@ -317,14 +320,11 @@ void Server::wait(int timeout_ms){
 		}
 	}
 	native_wait_multiple(read_fds, write_fds, timeout_ms);
+	return ServerPumpStatus::SUCCESS;
 }
 
 ServerPumpStatus Server::pump(){
-	if (this->sock_fd == -1){
-		return ServerPumpStatus::LISTEN_SOCK_DEAD;
-	}
-
-	if (addr_family == AddrFamily::IPV6 && enet_server == NULL){
+	if (dead){
 		return ServerPumpStatus::LISTEN_SOCK_DEAD;
 	}
 
@@ -348,8 +348,7 @@ ServerPumpStatus Server::pump(){
 				break;
 			}
 			LOG_TS("%s: failed accepting connection, 0x%x\n", __func__, error);
-			native_close(this->sock_fd);
-			this->sock_fd = -1;
+			dead = true;
 			return ServerPumpStatus::LISTEN_SOCK_DEAD;
 		}
 
@@ -373,7 +372,14 @@ ServerPumpStatus Server::pump(){
 		}
 		if (status != aemu_postoffice_enet::EnetAcceptStatus::SUCCESS){
 			LOG("%s: enet accept error %d\n", __func__, status);
+			dead = true;
 			return ServerPumpStatus::LISTEN_SOCK_DEAD;
+		}
+
+		if (this->pending_sessions.size() + this->sessions.size() >= this->config.max_num_sessions){
+			LOG_TS("%s: warning, new relay connection from %s dropped as maximum number of sessions (%d) has been reached\n", __func__, peer_addr.c_str(), config.max_num_sessions);
+			enet_server->close(ref);
+			continue;
 		}
 
 		pending_sessions.emplace_back(ref, peer_addr, peer_port, &this->config, enet_server);
@@ -551,6 +557,7 @@ void Server::set_config(const struct config &config){
 	this->config.ip_addr = old_config.ip_addr;
 	this->config.port = old_config.port;
 	this->config.num_threads = old_config.num_threads;
+	this->config.enable_enet = old_config.enable_enet;
 }
 
 struct snapshot Server::get_snapshot(){

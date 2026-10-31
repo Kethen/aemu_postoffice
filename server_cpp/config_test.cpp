@@ -58,6 +58,7 @@ int main(){
 	SHOULD_BE_DEFAULTED(target_tick_interval_ms);
 	SHOULD_BE_DEFAULTED(target_tick_interval_idle_ms);
 	SHOULD_BE_DEFAULTED(ip_addr);
+	SHOULD_BE_DEFAULTED(enable_enet);
 	SHOULD_BE_DEFAULTED(port);
 	SHOULD_BE_DEFAULTED(num_threads);
 	SHOULD_BE_DEFAULTED(session_init_time_limit_ms);
@@ -84,6 +85,7 @@ int main(){
 	ASSIGN_DEFAULT(target_tick_interval_ms);
 	ASSIGN_DEFAULT(target_tick_interval_idle_ms);
 	ASSIGN_DEFAULT(ip_addr);
+	ASSIGN_DEFAULT(enable_enet);
 	ASSIGN_DEFAULT(port);
 	ASSIGN_DEFAULT(num_threads);
 	ASSIGN_DEFAULT(session_init_time_limit_ms);
@@ -132,6 +134,7 @@ int main(){
 	CHECK_DEFAULT(target_tick_interval_ms);
 	CHECK_DEFAULT(target_tick_interval_idle_ms);
 	CHECK_DEFAULT(ip_addr);
+	CHECK_DEFAULT(enable_enet);
 	CHECK_DEFAULT(port);
 	CHECK_DEFAULT(num_threads);
 	CHECK_DEFAULT(session_init_time_limit_ms);
@@ -163,8 +166,8 @@ int main(){
 		printf("%s: strict_mode should have been force disabed\n", __func__);
 		exit(1);
 	}
-
 	test_config["enable_adhocctl"] = true;
+
 	test_config["adhocctl_relay_only"] = false;
 	write_to_file(test_config.dump(), test_config_path);
 	parse_result = parse_config_from_json(test_config_path, parsed_config, defaulted_keys, forced_keys);
@@ -174,6 +177,19 @@ int main(){
 	}
 	if (forced_keys.size() != 1 || forced_keys.find("adhocctl_relay_only") == forced_keys.end() || !parsed_config.adhocctl_relay_only){
 		printf("%s: adhocctl_relay_only should have been force enabled\n", __func__);
+		exit(1);
+	}
+	test_config["adhocctl_relay_only"] = true;
+
+	test_config["ip_addr"] = "127.0.0.1";
+	write_to_file(test_config.dump(), test_config_path);
+	parse_result = parse_config_from_json(test_config_path, parsed_config, defaulted_keys, forced_keys);
+	if (parse_result != false){
+		printf("%s: parse was expected to fail with enet enabled with ipv4\n", __func__);
+		exit(1);
+	}
+	if (forced_keys.size() != 1 || forced_keys.find("enable_enet") == forced_keys.end() || parsed_config.enable_enet){
+		printf("%s: enet should have been force disabled\n", __func__);
 		exit(1);
 	}
 

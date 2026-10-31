@@ -21,6 +21,8 @@ struct config {
 	// used by both realy and adhocctl
 	std::string ip_addr = std::string("::FFFF:0.0.0.0");
 
+	// whether enet(udp) should be used for relay and adhocctl
+	bool enable_enet = true;
 
 	// -- relay settings --
 	// TCP port to listen to for relay

@@ -2,6 +2,7 @@
     "target_tick_interval_ms":8,
     "target_tick_interval_idle_ms":500,
     "ip_addr":"::FFFF:0.0.0.0",
+    "enable_enet":true,
     "port":27313,
     "num_threads":4,
     "session_init_time_limit_ms":5000,
