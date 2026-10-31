@@ -1,4 +1,19 @@
 {
+   "admin-email" : "admin@website.psp",
+   "capabilities" : [
+      "RELAY_TRANSPORT_TCP",
+      "RELAY_TRANSPORT_ENET",
+      "RELAY_PDP_PROTOCOL_V1",
+      "RELAY_PTP_PROTOCOL_V1",
+      "ADHOCCTL_TRANSPORT_TCP",
+      "ADHOCCTL_TRANSPORT_ENET",
+      "ADHOCCTL_PROTOCOL_V1",
+      "ADHOCCTL_RELAY_ONLY"
+   ],
+   "location" : "On the internet",
+   "name" : "PSP multiplayer server",
+   "owner-name" : "Admin",
+   "website" : "http://website.psp/",
    "games" : [
       {
          "game_ids" : [

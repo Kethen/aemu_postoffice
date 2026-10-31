@@ -9,6 +9,7 @@ namespace aemu_postoffice_adhocctl_server {
 bool parse_game_db_from_json(std::string path, struct game_db &out){
 	out.crosslinks.clear();
 	out.names.clear();
+	out.cod_quirk_games.clear();
 
 	std::string raw_json = aemu_postoffice_server::read_file_to_string(path);
 	if (raw_json == std::string("")){
@@ -82,6 +83,65 @@ bool parse_game_db_from_json(std::string path, struct game_db &out){
 
 	for (auto entry : cod_quirk_games.value()){
 		out.cod_quirk_games.insert(entry);
+	}
+
+	return true;
+}
+
+bool game_db_same(const struct game_db &left, const struct game_db &right){
+	if (left.crosslinks.size() != right.crosslinks.size()){
+		return false;
+	}
+	if (left.names.size() != right.names.size()){
+		return false;
+	}
+	if (left.cod_quirk_games.size() != right.cod_quirk_games.size()){
+		return false;
+	}
+
+	auto left_crosslink_itr = left.crosslinks.begin();
+	auto right_crosslink_itr = right.crosslinks.begin();
+	while (true){
+		if (left_crosslink_itr == left.crosslinks.end()){
+			break;
+		}
+		if (left_crosslink_itr->first != right_crosslink_itr->first){
+			return false;
+		}
+		if (left_crosslink_itr->second != right_crosslink_itr->second){
+			return false;
+		}
+		left_crosslink_itr++;
+		right_crosslink_itr++;
+	}
+
+	auto left_name_itr = left.names.begin();
+	auto right_name_itr = right.names.begin();
+	while (true){
+		if (left_name_itr == left.names.end()){
+			break;
+		}
+		if (left_name_itr->first != right_name_itr->first){
+			return false;
+		}
+		if (left_name_itr->second != right_name_itr->second){
+			return false;
+		}
+		left_name_itr++;
+		right_name_itr++;
+	}
+
+	auto left_cod_quirk_games_itr = left.cod_quirk_games.begin();
+	auto right_cod_quirk_games_itr = right.cod_quirk_games.begin();
+	while (true){
+		if (left_cod_quirk_games_itr == left.cod_quirk_games.end()){
+			break;
+		}
+		if (*left_cod_quirk_games_itr != *right_cod_quirk_games_itr){
+			return false;
+		}
+		left_cod_quirk_games_itr++;
+		right_cod_quirk_games_itr++;
 	}
 
 	return true;

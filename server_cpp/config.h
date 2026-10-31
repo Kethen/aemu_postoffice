@@ -5,6 +5,8 @@
 
 #include <stdint.h>
 
+#include <unordered_set>
+
 namespace aemu_postoffice_server {
 
 struct config {
@@ -19,6 +21,8 @@ struct config {
 	// used by both realy and adhocctl
 	std::string ip_addr = std::string("::FFFF:0.0.0.0");
 
+	// whether enet(udp) should be used for relay and adhocctl
+	bool enable_enet = true;
 
 	// -- relay settings --
 	// TCP port to listen to for relay
@@ -78,9 +82,16 @@ struct config {
 	// http port serving the status page
 	int http_status_server_port = 8888;
 
+	// metadata for data.json and metadata.json
+	std::string metadata_name = "PSP multiplayer server";
+	std::string metadata_location = "On the internet";
+	std::string metadata_website = "http://website.psp/";
+	std::string metadata_admin_email = "admin@website.psp";
+	std::string metadata_owner_name = "Admin";
 };
 
-bool parse_config_from_json(std::string path, struct config &out);
+bool parse_config_from_json(std::string path, struct config &out, std::unordered_set<std::string> &defaulted_keys, std::unordered_set<std::string> &forced_keys);
 void dump_config_to_log(const struct config &config);
+bool merge_config(struct config &merge_into, const struct config &merge_from);
 
 }

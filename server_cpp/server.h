@@ -29,7 +29,7 @@ class Server{
 		// pump server processing
 		ServerPumpStatus pump();
 		// wait until there's something to pump, or timeout_ms has passed
-		void wait(int timeout_ms);
+		ServerPumpStatus wait(int timeout_ms);
 		void update_adhocctl_data(const aemu_postoffice_adhocctl_server::snapshot &snapshot);
 		void set_config(const struct config &config);
 		struct snapshot get_snapshot();
@@ -61,6 +61,7 @@ class Server{
 
 		int sock_fd;
 		struct config config;
+		bool dead;
 		aemu_postoffice_adhocctl_server::snapshot adhocctl_snapshot;
 
 		aemu_postoffice_enet::BasicEnetClient *enet_server;

@@ -71,6 +71,7 @@ class Server {
 		struct aemu_postoffice_server::config config;
 		struct game_db game_db;
 		int sock_fd;
+		bool dead;
 		aemu_postoffice_enet::BasicEnetClient *enet_server;
 		aemu_postoffice_server::AddrFamily addr_family;
 

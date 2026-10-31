@@ -2,6 +2,7 @@
     "target_tick_interval_ms":8,
     "target_tick_interval_idle_ms":500,
     "ip_addr":"::FFFF:0.0.0.0",
+    "enable_enet":true,
     "port":27313,
     "num_threads":4,
     "session_init_time_limit_ms":5000,
@@ -20,5 +21,10 @@
     "adhocctl_timeout_ms":30000,
     "adhocctl_max_num_sessions":1000,
     "adhocctl_max_num_sessions_per_ip":16,
-    "http_status_server_port":8888
+    "http_status_server_port":8888,
+    "metadata_name":"PSP multiplayer server",
+    "metadata_location":"On the internet",
+    "metadata_website":"http://website.psp/",
+    "metadata_admin_email":"admin@website.psp",
+    "metadata_owner_name":"Admin"
 }
