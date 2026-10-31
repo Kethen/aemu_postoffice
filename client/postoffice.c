@@ -983,17 +983,19 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	struct ptp_session *session = (struct ptp_session *)ptp_handle;
-	if (session->dead || session->abort){
+	if (session->abort){
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 	}
 
-	while(true){
+	// Data that has already been received before the remote closed is still delivered.
+	// Confirmed by hardware test net/adhoc/pair/ptpclose.
+	while(!session->dead){
 		if (session->abort){
 			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
 		}
 		int drain_result = ptp_drain_blocks_to_ring_buf_locked(session);
 		if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
-			return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			break;
 		}
 		if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 			if (non_block){
@@ -1008,7 +1010,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	if (session->recv_ring_buf_used == 0){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		return session->dead ? AEMU_POSTOFFICE_CLIENT_SESSION_DEAD : AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 	}
 
 	int ring_buffer_consumed = consume_ring_buf((uint8_t *)buf, *len, (uint8_t *)session->recv_ring_buf, sizeof(session->recv_ring_buf), &session->recv_ring_buf_start, &session->recv_ring_buf_used);
