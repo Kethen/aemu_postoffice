@@ -50,6 +50,16 @@ Server::Server(const struct config &config){
 
 	this->stopping = false;
 
+	// with no workers, just do it on the calling thread.
+	if (config.num_threads == 0){
+		this->to_pump_pending_sessions.push_back(std::list<PendingSession*>());
+		this->pending_sessions_to_remove.push_back(std::list<PendingSession*>());
+		this->ready_pending_sessions.push_back(std::list<PendingSession*>());
+		this->sessions_to_pump.push_back(std::list<Session *>());
+		this->sessions_to_remove.push_back(std::unordered_set<std::string>());
+		this->send_list.push_back(std::unordered_map<std::string, std::list<SendListItem>>());
+	}
+
 	for(int i = 0;i < config.num_threads;i++){
 		this->pending_sessions_pump_worker_semas.push_back(Semaphore());
 		this->pending_sessions_pump_worker_done_semas.push_back(Semaphore());
@@ -125,8 +135,8 @@ Server::~Server(){
 	}
 
 	// pump() may close the listen socket on accept errors while the workers keep running.
-	// Check the pending worker count to see whether to return.
-	if (this->pending_sessions_pump_workers.empty()){
+	// The lists are only there when the constructor got as far as the workers.
+	if (this->to_pump_pending_sessions.empty()){
 		return;
 	}
 
@@ -389,11 +399,14 @@ ServerPumpStatus Server::pump(){
 
 	int i = 0;
 	for(auto &pending_session : this->pending_sessions){
-		int worker = i % this->pending_sessions_pump_workers.size();
+		int worker = i % this->to_pump_pending_sessions.size();
 		this->to_pump_pending_sessions[worker].push_back(&pending_session);
 		i++;
 	}
 
+	if (this->pending_sessions_pump_workers.empty()){
+		pump_pending_sessions(0);
+	}
 	for(auto &sema : this->pending_sessions_pump_worker_semas){
 		sema.release();
 	}
@@ -457,11 +470,14 @@ ServerPumpStatus Server::pump(){
 
 	i = 0;
 	for(auto &session : this->sessions){
-		int worker = i % this->session_from_client_pump_workers.size();
+		int worker = i % this->sessions_to_pump.size();
 		this->sessions_to_pump[worker].push_back(&(session.second));
 		i++;
 	}
 
+	if (this->session_from_client_pump_workers.empty()){
+		this->pump_connect_and_from_clients(0);
+	}
 	for(auto &sema : this->session_from_client_pump_worker_semas){
 		sema.release();
 	}
@@ -471,6 +487,9 @@ ServerPumpStatus Server::pump(){
 	}
 
 	// pump data top clients
+	if (this->session_to_client_pump_workers.empty()){
+		this->pump_to_clients(0);
+	}
 	for(auto &sema : this->session_to_client_pump_worker_semas){
 		sema.release();
 	}
