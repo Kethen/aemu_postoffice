@@ -126,7 +126,7 @@ int main(int argc, char **argv){
 				publish_to_http();
 			}
 			auto timespent = std::chrono::high_resolution_clock::now() - begin;
-			int64_t wait_ms = config.target_tick_interval_ms - timespent / std::chrono::milliseconds(1);
+			int64_t wait_ms = interval_ms - timespent / std::chrono::milliseconds(1);
 			if (wait_ms > 0){
 				std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
 			}
@@ -184,7 +184,7 @@ int main(int argc, char **argv){
 					publish_snapshot();
 				}
 				auto timespent = std::chrono::high_resolution_clock::now() - begin;
-				int64_t wait_ms = config.target_tick_interval_ms - timespent / std::chrono::milliseconds(1);
+				int64_t wait_ms = interval_ms - timespent / std::chrono::milliseconds(1);
 				if (wait_ms > 0){
 					std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
 				}
