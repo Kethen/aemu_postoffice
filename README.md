@@ -128,3 +128,8 @@ bash build_windows.sh
 
 - cpp-httplib https://github.com/yhirose/cpp-httplib
 - json https://github.com/nlohmann/json
+- enet https://github.com/zpl-c/enet
+
+##### External softwares used on the client:
+
+- enet https://github.com/zpl-c/enet
