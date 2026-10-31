@@ -24,7 +24,7 @@ struct config {
 	// TCP port to listen to for relay
 	uint16_t port = 27313;
 
-	// number of workers for parallelized workloads
+	// number of workers for parallelized workloads, 0 to do the work on the thread calling pump()
 	int num_threads = 4;
 
 	// time from client creating a tcp socket to sending init data
