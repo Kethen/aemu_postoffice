@@ -157,6 +157,12 @@ void test_pdp(bool enet, bool enet_reliable){
 		exit(1);
 	}
 
+	int next_size = pdp_peek_next_size(pdp_handle_c);
+	if (next_size != AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
+		LOG("%s: next size is not AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK when buffer empty\n", __func__);
+		exit(1);
+	}
+
 	sleep_ms(100);
 
 	for (int i = 0;i < 5;i++){
@@ -194,7 +200,7 @@ void test_pdp(bool enet, bool enet_reliable){
 		int len = 0;
 		int recv_status = 0;
 		for (int j = 0;j < 2;j++){
-			int next_size = pdp_peek_next_size(pdp_handle_b);
+			next_size = pdp_peek_next_size(pdp_handle_b);
 			if (next_size != sizeof(test_data)){
 				LOG("%s: failed peeking pdp size, expected %lu, got %d\n", __func__, sizeof(test_data), next_size);
 				exit(1);
@@ -344,6 +350,40 @@ void test_pdp(bool enet, bool enet_reliable){
 				LOG("%d ", recv_buf[i]);
 			}
 			LOG("\n");
+			exit(1);
+		}
+
+		// test 0 byte packets
+		send_status = pdp_send(pdp_handle_a, (const char *)pdp_mac_b, port_b, NULL, 0, true);
+		if (send_status != 0){
+			LOG("%s: failed sending data of size 0\n", __func__);
+			exit(1);
+		}
+
+		sleep_ms(100);
+		len = sizeof(recv_buf);
+
+		next_size = pdp_peek_next_size(pdp_handle_b);
+		if (next_size != 0){
+			LOG("%s: peeking 0 size packet did not yield 0 size\n", __func__);
+			exit(1);
+		}
+
+		recv_status = pdp_recv(pdp_handle_b, incoming_mac, &incoming_port, recv_buf, &len, true);
+		if (recv_status != 0){
+			LOG("%s: failed receiving 0 byte data\n", __func__);
+			exit(1);
+		}
+		if (len != 0){
+			LOG("%s: 0 byte packet is not 0 in size\n", __func__);
+			exit(1);
+		}
+		if (memcmp(incoming_mac, pdp_mac_a, 6) != 0){
+			LOG("%s: 0 byte packet has bad incoming mac\n", __func__);
+			exit(1);
+		}
+		if (incoming_port != port_a){
+			LOG("%s: 0 byte packet has bad incoming port\n", __func__);
 			exit(1);
 		}
 	}

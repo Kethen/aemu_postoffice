@@ -548,7 +548,7 @@ int pdp_peek_next_size(void *pdp_handle){
 	}
 
 	if (session->recv_ring_buf_used < sizeof(aemu_postoffice_pdp)){
-		return 0;
+		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 	}
 
 	aemu_postoffice_pdp header;
@@ -556,7 +556,7 @@ int pdp_peek_next_size(void *pdp_handle){
 	if (session->buffered_data >= header.size){
 		return header.size;
 	}
-	return 0;
+	return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 }
 
 int pdp_buffered_data_size(void *pdp_handle){
