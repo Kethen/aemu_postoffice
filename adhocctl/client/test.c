@@ -246,7 +246,7 @@ void test_protocol(bool enet){
 bool stop_enet_pumping = false;
 void *enet_pump_func(void *arg){
 	while(!stop_enet_pumping){
-		const static int target_frametime = 1000 / 60;
+		const static int target_frametime = 1;
 		int final_frametime = 0;
 		struct timespec begin;
 		clock_gettime(CLOCK_MONOTONIC, &begin);

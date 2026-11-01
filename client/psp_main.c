@@ -25,7 +25,7 @@ int partition_to_use();
 static bool enet_pump_stop = false;
 static int enet_pump_func(unsigned int arg_size, void *arg){
 	while (!enet_pump_stop){
-		static const int target_frametime_us = 1000000 / 120;
+		static const int target_frametime_us = 1000;
 		uint64_t begin = sceKernelGetSystemTimeWide();
 		int pump_status = pump_enet_aemu_postoffice();
 		if (pump_status == 1){
@@ -70,6 +70,7 @@ int module_start(SceSize args, void *argp){
 	sceKernelCreateLwMutex(&malloc_mutex, "aemu_postoffice malloc mutex", 0, 0, NULL);
 
 	if (has_high_mem()){
+		// TODO before spinning up enet, check a config somewhere
 		static const int heap_size = 1024 * 512;
 		heap_block = sceKernelAllocPartitionMemory(partition_to_use(), "postoffice enet heap", 4 /* high aligned */, heap_size, NULL);
 		if (heap_block < 0){
