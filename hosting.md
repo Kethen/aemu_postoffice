@@ -31,7 +31,9 @@ By default, port `27312/tcp` and `27312/udp` are used for adhocctl, `27313/tcp` 
 - `http_assets` is statically served on http path `/assets`
 - `http_assets/status.html` is served on http path `/` and can be customized/rewritten to your liking
 - http path `/data.json` serves a server status json that is used by PPSSPP and the provided `http_assets/status.html` template
-- a sample `data.json` is provided [here](/server_cpp/data.json.sample)
+- http path `/metadata.json` serves server metadata without full status attached
+- sample `data.json` is provided [here](/server_cpp/data.json.sample)
+- sample `metadata.json` is provided [here](/server_cpp/metadata.json.sample)
 
 #### Adding to crosslink & game name database
 
