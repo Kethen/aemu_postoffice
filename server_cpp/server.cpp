@@ -264,7 +264,7 @@ void Server::pump_to_clients(int set){
 					}
 				}
 
-				DataQueueStatus queue_status = session->queue_send(send.data);
+				queue_status = session->queue_send(send.data);
 				if (queue_status == DataQueueStatus::MAX_DATA_REACHED){
 					sessions_to_remove[set].insert(identifier);
 					break;
