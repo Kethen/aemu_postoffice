@@ -346,6 +346,34 @@ void test_pdp(bool enet, bool enet_reliable){
 			LOG("\n");
 			exit(1);
 		}
+
+		// test 0 byte packets
+		send_status = pdp_send(pdp_handle_a, (const char *)pdp_mac_b, port_b, NULL, 0, true);
+		if (send_status != 0){
+			LOG("%s: failed sending data of size 0\n", __func__);
+			exit(1);
+		}
+
+		sleep_ms(100);
+		len = sizeof(recv_buf);
+
+		recv_status = pdp_recv(pdp_handle_b, incoming_mac, &incoming_port, recv_buf, &len, true);
+		if (recv_status != 0){
+			LOG("%s: failed receiving 0 byte data\n", __func__);
+			exit(1);
+		}
+		if (len != 0){
+			LOG("%s: 0 byte packet is not 0 in size\n", __func__);
+			exit(1);
+		}
+		if (memcmp(incoming_mac, pdp_mac_a, 6) != 0){
+			LOG("%s: 0 byte packet has bad incoming mac\n", __func__);
+			exit(1);
+		}
+		if (incoming_port != port_a){
+			LOG("%s: 0 byte packet has bad incoming port\n", __func__);
+			exit(1);
+		}
 	}
 
 	pdp_delete(pdp_handle_a);
