@@ -44,7 +44,7 @@ void log_ts_default(const char *format, ...){
 	char time_buf[128] = {0};
 	strftime(time_buf, sizeof(time_buf) - 1, "%c", &lt);
 
-	LOG("%s: %s", time_buf, buf);
+	LOG("%s: ADHOCCTL: %s", time_buf, buf);
 }
 
 void (*LOG_TS)(const char *format, ...) = log_ts_default;
