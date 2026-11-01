@@ -80,6 +80,7 @@ class BasicEnetClient{
 		~BasicEnetClient();
 		int listen(const std::string &host, int port, int max_peers, int channels); // returns 0 on success, -1 on error
 		int accept(std::string &peer_addr, int &peer_port, EnetAcceptStatus &status); // returns a peer ref, or -1 on error, only usable in listen mode
+		// TODO this is unused and doesn't work at the moment, as connect requires a connect event before the peer is usable
 		int connect(const std::string &host, int port, int channels); // returns a peer ref, or -1 on error
 		int recv(int peer_ref, char *buf, int buf_len, int channel, EnetRecvStatus &status); // returns buffer used, -1 on error
 		int send(int peer_ref, const char *buf, int buf_len, int channel, bool reliable, EnetSendStatus &status); // returns data queued for sending, or -1 on error
@@ -96,6 +97,7 @@ class BasicEnetClient{
 
 		std::mutex server_mutex;
 		void *server; // let's not cause enet.h to be loaded everywhere, a ENetHost pointer, only enet_host_service loop should be touching this
+		bool server_dead;
 
 		std::unordered_map<void *, struct peer> new_peers; // peers to be used by accept(), a set of struct peer
 		std::list<void *> new_peers_ordered;
