@@ -166,6 +166,7 @@ static void *create_adhocctl_v1_session(const struct adhocctl_addr_v4 *addr4, co
 	enum adhocctl_call_status call_status = login_v1(slot->sock_fd, slot->enet_handle, game_code, nickname, mac);
 	if (call_status != ADHOCCTL_CALL_SUCCESS){
 		LOG("%s: failed sending login packet\n", __func__);
+		close_wrapped(slot->sock_fd, slot->enet_handle);
 		slot->in_use = false;
 		return NULL;
 	}

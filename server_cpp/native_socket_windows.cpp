@@ -121,6 +121,7 @@ int native_tcp_listen(std::string ip, uint16_t port){
 	int bind_result = bind(sock_fd, (const sockaddr *)addr, addr_len);
 	if (bind_result == SOCKET_ERROR){
 		int err = WSAGetLastError();
+		closesocket(sock_fd);
 		LOG_TS("%s: bind failed, 0x%x\n", __func__, err);
 		return -1;
 	}
@@ -128,6 +129,7 @@ int native_tcp_listen(std::string ip, uint16_t port){
 	int listen_result = listen(sock_fd, 1000);
 	if (listen_result == SOCKET_ERROR){
 		int err = WSAGetLastError();
+		closesocket(sock_fd);
 		LOG_TS("%s: listen failed, 0x%x\n", __func__, err);
 		return -1;
 	}
