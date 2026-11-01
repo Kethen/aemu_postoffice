@@ -43,7 +43,7 @@ struct connection{
 	ENetPeer *peer;
 	void *incoming_packets; // list of struct channel
 	bool closed; // closed on this api with disconnect queued into enet
-	bool disconnected; // disconnected on enet
+	bool disconnected; // disconnected by peer, or we ran out of memory during event processing
 	bool connected;
 };
 
@@ -474,17 +474,18 @@ static int _recv_enet(void *handle, char *buf, int buf_size, int channel){
 		return -1;
 	}
 
+	int ret_when_no_data = AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 	if (connection->disconnected){
-		return 0;
+		ret_when_no_data = 0;
 	}
 
 	struct channel *ch = find_channel(connection, channel);
 	if (ch == NULL){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		return ret_when_no_data;
 	}
 
 	if (list_get_size(ch->packet_list) == 0){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		return ret_when_no_data;
 	}
 
 	int copied = 0;
@@ -623,17 +624,18 @@ static int _peek_enet(void *handle, char *buf, int buf_size, int channel){\
 		return -1;
 	}
 
+	int ret_when_no_data = AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
 	if (connection->disconnected){
-		return 0;
+		ret_when_no_data = 0;
 	}
 
 	struct channel *ch = find_channel(connection, channel);
 	if (ch == NULL){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		return ret_when_no_data;
 	}
 
 	if (list_get_size(ch->packet_list) == 0){
-		return AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK;
+		return ret_when_no_data;
 	}
 
 	int copied = 0;

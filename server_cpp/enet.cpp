@@ -55,6 +55,7 @@ BasicEnetClient::BasicEnetClient(){
 	state = BasicEnetClientState::INACTIVE;
 	stopping = false;
 	server = NULL;
+	server_dead = true;
 }
 
 void BasicEnetClient::reset(){
@@ -73,8 +74,9 @@ void BasicEnetClient::reset(){
 		enet_host_destroy((ENetHost *)server);
 		server = NULL;
 	}
-	const shared_lock_guard peer_guard(peer_mutex, false);
+	server_dead = true;
 	const std::lock_guard<std::mutex> guard(server_mutex);
+	const shared_lock_guard peer_guard(peer_mutex, false);
 
 	new_peers.clear();
 	new_peers_ordered.clear();
@@ -91,15 +93,14 @@ WorkerTickStatus BasicEnetClient::worker_in_tick(){
 	ENetEvent event;
 
 	const std::lock_guard<std::mutex> guard(server_mutex);
-	if (server == NULL){
+	if (server_dead){
 		return WorkerTickStatus::ERRORED;
 	}
 	int service_state = enet_host_service((ENetHost *)server, &event, 0);
 
 	if (service_state < 0){
 		LOG_TS("%s: enet host has died..\n", __func__);
-		enet_host_destroy((ENetHost *)server);
-		server = NULL;
+		server_dead = true;
 		return WorkerTickStatus::ERRORED;
 	}
 
@@ -192,13 +193,13 @@ WorkerTickStatus BasicEnetClient::worker_in_tick(){
 }
 
 WorkerTickStatus BasicEnetClient::worker_out_tick(){
-	if (server == NULL){
-		return WorkerTickStatus::ERRORED;
-	}
-
 	// queue peer data for sending
 	// this lock ordering is important to not cause dead locks with the other worker
 	const std::lock_guard<std::mutex> guard(server_mutex);
+	if (server_dead){
+		return WorkerTickStatus::ERRORED;
+	}
+
 	const shared_lock_guard peer_guard(peer_mutex, true);
 	if (peers.size() == 0){
 		return WorkerTickStatus::IDLE;
@@ -265,7 +266,7 @@ bool BasicEnetClient::create_workers(){
 			if (time_used < target_frametime && tick_status == WorkerTickStatus::IDLE){
 				std::this_thread::sleep_for(target_frametime - time_used);
 			}
-			if (server == NULL){
+			if (server_dead){
 				break;
 			}
 		}
@@ -283,7 +284,7 @@ bool BasicEnetClient::create_workers(){
 			if (time_used < final_frametime_target){
 				std::this_thread::sleep_for(final_frametime_target - time_used);
 			}
-			if (server == NULL){
+			if (server_dead){
 				break;
 			}
 		}
@@ -322,6 +323,7 @@ int BasicEnetClient::listen(const std::string &host, int port, int max_peers, in
 	}
 
 	state = BasicEnetClientState::LISTEN;
+	server_dead = false;
 	return 0;
 }
 
@@ -395,6 +397,7 @@ int BasicEnetClient::upgrade_peer(void *peer){
 	return ref;
 }
 
+// TODO this is unused and doesn't work at the moment, as connect requires a connect event before the peer is usable
 int BasicEnetClient::connect(const std::string &host, int port, int channels){
 	const std::lock_guard<std::mutex> guard(server_mutex);
 	if (_enet_initialize() != 0){
@@ -432,6 +435,7 @@ int BasicEnetClient::connect(const std::string &host, int port, int channels){
 	int peer_ref = upgrade_peer(peer);
 
 	state = BasicEnetClientState::CONNECT;
+	server_dead = false;
 
 	return peer_ref;
 }
@@ -444,20 +448,21 @@ int BasicEnetClient::recv(int peer_ref, char *buf, int buf_len, int channel, Ene
 		return -1;
 	}
 
+	EnetRecvStatus status_when_no_data = EnetRecvStatus::WOULD_BLOCK;
+
 	if (peer->second.disconnected){
-		status = EnetRecvStatus::PEER_CLOSED;
-		return -1;
+		status_when_no_data = EnetRecvStatus::PEER_CLOSED;
 	}
 
 	const std::lock_guard<std::mutex> guard(peer->second.recv_buf_mutex);
 	auto channel_buf = peer->second.recv_buf.find(channel);
 	if (channel_buf == peer->second.recv_buf.end()){
-		status = EnetRecvStatus::WOULD_BLOCK;
+		status = status_when_no_data;
 		return -1;
 	}
 
 	if (channel_buf->second.size() == 0){
-		status = EnetRecvStatus::WOULD_BLOCK;
+		status = status_when_no_data;
 		return -1;
 	}
 

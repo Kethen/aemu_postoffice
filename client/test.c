@@ -674,10 +674,58 @@ void test_ptp(bool enet){
 		}
 	}
 
+	// test trail data
+	ptp_send(a_to_b, test_data, sizeof(test_data), false);
+	ptp_send(b_to_a, test_data, sizeof(test_data), false);
+
+	sleep_ms(100);
+
 	ptp_close(a_to_b);
 	ptp_close(b_to_a);
 
 	sleep_ms(100);
+
+	recv_size = sizeof(recv_buf);
+	recv_status = ptp_recv(accept_handle_b, recv_buf, &recv_size, false);
+	if (recv_status != 0){
+		LOG("%s: bad trail data recv status from a to b\n", __func__);
+		exit(1);
+	}
+	if (recv_size != sizeof(recv_buf)){
+		LOG("%s: bad trail recv size from a to b\n", __func__);
+		exit(1);
+	}
+	if (memcmp(recv_buf, test_data, sizeof(recv_buf)) != 0){
+		LOG("%s: bad trail data from a to b\n", __func__);
+		exit(1);
+	}
+	recv_size = sizeof(recv_buf);
+	recv_status = ptp_recv(accept_handle_b, recv_buf, &recv_size, false);
+	if (recv_status != AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
+		LOG("%s: session is not dead after trail data from a to b is received..\n", __func__);
+		exit(1);
+	}
+
+	recv_size = sizeof(recv_buf);
+	recv_status = ptp_recv(accept_handle_a, recv_buf, &recv_size, false);
+	if (recv_status != 0){
+		LOG("%s: bad trail data recv status from b to a\n", __func__);
+		exit(1);
+	}
+	if (recv_size != sizeof(recv_buf)){
+		LOG("%s: bad trail recv size from b to a\n", __func__);
+		exit(1);
+	}
+	if (memcmp(recv_buf, test_data, sizeof(recv_buf)) != 0){
+		LOG("%s: bad trail data from b to a\n", __func__);
+		exit(1);
+	}
+	recv_size = sizeof(recv_buf);
+	recv_status = ptp_recv(accept_handle_a, recv_buf, &recv_size, false);
+	if (recv_status != AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
+		LOG("%s: session is not dead after trail data from b to a is received..\n", __func__);
+		exit(1);
+	}
 
 	ptp_close(accept_handle_a);
 	ptp_close(accept_handle_b);
