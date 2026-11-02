@@ -24,6 +24,7 @@
 	STUB_FUNC  0x10C,ptp_listen_has_request
 	STUB_FUNC  0x10D,ptp_is_dead
 	STUB_FUNC  0x10E,ptp_listen_is_dead
+	STUB_FUNC  0x10F,ptp_peek_block_sizes
 	STUB_END
 
 	STUB_START "adhocctl",0x00090011,0x00170005

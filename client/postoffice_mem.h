@@ -41,6 +41,8 @@ struct ptp_listen_session{
 	bool accepting;
 };
 
+#define AEMU_POSTOFFICE_PTP_RECV_BLOCKS_MAX 64
+
 struct ptp_session{
 	int sock;
 	void *enet_handle;
@@ -50,6 +52,10 @@ struct ptp_session{
 	int recv_ring_buf_start;
 	int recv_ring_buf_used;
 	int bytes_till_next_header;
+	// bytes in recv_ring_buf from each block, as the other side sent them, oldest first
+	int recv_block_sizes[AEMU_POSTOFFICE_PTP_RECV_BLOCKS_MAX];
+	int recv_block_sizes_start;
+	int recv_block_sizes_count;
 	bool recving;
 	bool sending;
 };

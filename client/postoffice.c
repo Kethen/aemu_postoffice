@@ -767,6 +767,8 @@ void *ptp_accept(void *ptp_listen_handle, char *ptp_mac, int *ptp_port, bool non
 	new_session->recv_ring_buf_start = 0;
 	new_session->recv_ring_buf_used = 0;
 	new_session->bytes_till_next_header = 0;
+	new_session->recv_block_sizes_start = 0;
+	new_session->recv_block_sizes_count = 0;
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	*ptp_port = connect_packet.port;
 	memcpy(ptp_mac, connect_packet.addr, 6);
@@ -835,6 +837,8 @@ static void *ptp_connect(const struct aemu_postoffice_sock_addr *addr4, const st
 	new_session->recv_ring_buf_start = 0;
 	new_session->recv_ring_buf_used = 0;
 	new_session->bytes_till_next_header = 0;
+	new_session->recv_block_sizes_start = 0;
+	new_session->recv_block_sizes_count = 0;
 	*state = AEMU_POSTOFFICE_CLIENT_OK;
 	return new_session;
 }
@@ -901,6 +905,38 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 	return AEMU_POSTOFFICE_CLIENT_OK;
 }
 
+// A block that doesn't fit in the queue is counted into the last one, as if they had been sent together.
+static void ptp_recv_blocks_start(struct ptp_session *session){
+	if (session->recv_block_sizes_count < AEMU_POSTOFFICE_PTP_RECV_BLOCKS_MAX){
+		int end = (session->recv_block_sizes_start + session->recv_block_sizes_count) % AEMU_POSTOFFICE_PTP_RECV_BLOCKS_MAX;
+		session->recv_block_sizes[end] = 0;
+		session->recv_block_sizes_count++;
+	}
+}
+
+static void ptp_recv_blocks_append(struct ptp_session *session, int size){
+	int last = (session->recv_block_sizes_start + session->recv_block_sizes_count - 1) % AEMU_POSTOFFICE_PTP_RECV_BLOCKS_MAX;
+	session->recv_block_sizes[last] += size;
+}
+
+static void ptp_recv_blocks_consume(struct ptp_session *session, int size){
+	while (size > 0 && session->recv_block_sizes_count > 0){
+		int *first = &session->recv_block_sizes[session->recv_block_sizes_start];
+		int taken = size < *first ? size : *first;
+		*first -= taken;
+		size -= taken;
+		if (*first != 0){
+			continue;
+		}
+		// The newest block stays while the rest of it is still arriving.
+		if (session->recv_block_sizes_count == 1 && session->bytes_till_next_header != 0){
+			break;
+		}
+		session->recv_block_sizes_start = (session->recv_block_sizes_start + 1) % AEMU_POSTOFFICE_PTP_RECV_BLOCKS_MAX;
+		session->recv_block_sizes_count--;
+	}
+}
+
 static int ptp_drain_blocks_to_ring_buf(struct ptp_session *session){
 	while(true){
 		if (session->bytes_till_next_header == 0){
@@ -946,6 +982,9 @@ static int ptp_drain_blocks_to_ring_buf(struct ptp_session *session){
 			}
 
 			session->bytes_till_next_header = header.size;
+			if (header.size > 0){
+				ptp_recv_blocks_start(session);
+			}
 		}
 
 		int ring_buf_free = sizeof(session->recv_ring_buf) - session->recv_ring_buf_used;
@@ -980,6 +1019,7 @@ static int ptp_drain_blocks_to_ring_buf(struct ptp_session *session){
 		}
 		session->recv_ring_buf_used = session->recv_ring_buf_used + recv_status;
 		session->bytes_till_next_header = session->bytes_till_next_header - recv_status;
+		ptp_recv_blocks_append(session, recv_status);
 	}
 }
 
@@ -1029,6 +1069,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	int ring_buffer_consumed = consume_ring_buf((uint8_t *)buf, *len, (uint8_t *)session->recv_ring_buf, sizeof(session->recv_ring_buf), &session->recv_ring_buf_start, &session->recv_ring_buf_used);
+	ptp_recv_blocks_consume(session, ring_buffer_consumed);
 	*len = ring_buffer_consumed;
 
 	return AEMU_POSTOFFICE_CLIENT_OK;
@@ -1088,6 +1129,28 @@ int ptp_peek_next_size(void *ptp_handle){
 	// AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK
 
 	return session->recv_ring_buf_used;
+}
+
+int ptp_peek_block_sizes(void *ptp_handle, int *sizes, int max_sizes){
+	struct ptp_session *session = ptp_handle;
+
+	if (session->dead || session->abort){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	int drain_result = ptp_drain_blocks_to_ring_buf_locked(session);
+	if (drain_result == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	int count = 0;
+	for (int i = 0;i < session->recv_block_sizes_count && count < max_sizes;i++){
+		int size = session->recv_block_sizes[(session->recv_block_sizes_start + i) % AEMU_POSTOFFICE_PTP_RECV_BLOCKS_MAX];
+		if (size > 0){
+			sizes[count++] = size;
+		}
+	}
+	return count;
 }
 
 bool ptp_is_dead(void *ptp_handle){

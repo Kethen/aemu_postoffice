@@ -69,6 +69,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block); // returns 
 void ptp_close(void *ptp_handle);
 void ptp_listen_close(void *ptp_listen_handle);
 int ptp_peek_next_size(void *ptp_handle); // returns size of buffered data that can be received without returning AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK
+int ptp_peek_block_sizes(void *ptp_handle, int *sizes, int max_sizes); // fills sizes with how much of each block the other side sent is buffered, oldest first (the first may be partly received by ptp_recv, the last may still be arriving), returns how many, AEMU_POSTOFFICE_CLIENT_SESSION_DEAD when a session is disconnected
 int ptp_send_buf_not_full(void *pdp_handle); // returns 1 when send buffer is not full, returns 0 when send buffer is full, AEMU_POSTOFFICE_CLIENT_SESSION_DEAD when a session is disconnected
 int ptp_listen_has_request(void *pdp_listen_handler); // returns 1 when ptp_accept can be called without returning AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK, 0 when there is no incoming connection, < 0 for other errors
 bool ptp_is_dead(void *ptp_handle);
