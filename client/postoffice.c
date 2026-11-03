@@ -1026,8 +1026,9 @@ static int ptp_recv_block_boundary(struct ptp_session *session, char *buf, int *
 		}
 
 		// not really as a ring buffer here
-		int recv_status = recv_wrapped(session->sock, session->enet_handle, session->recv_ring_buf, next_size + sizeof(aemu_postoffice_ptp_data));
-		if (recv_status <= 0){
+		int total_size = next_size + sizeof(aemu_postoffice_ptp_data);
+		int recv_status = recv_wrapped(session->sock, session->enet_handle, session->recv_ring_buf, total_size);
+		if (recv_status != total_size){
 			LOG("%s: socket perished when receiving after peek..\n", __func__);
 			session->dead = true;
 			close_wrapped(session->sock, session->enet_handle);
