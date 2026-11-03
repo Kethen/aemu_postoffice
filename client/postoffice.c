@@ -994,7 +994,7 @@ static int ptp_drain_blocks_to_ring_buf_locked(struct ptp_session *session){
 	return result;
 }
 
-static int ptp_recv_block_boundry(struct ptp_session *session, char *buf, int *len, bool non_block){
+static int ptp_recv_block_boundary(struct ptp_session *session, char *buf, int *len, bool non_block){
 	while (!session->abort){
 		int next_size = ptp_peek_next_size(session);
 		if (next_size == AEMU_POSTOFFICE_CLIENT_SESSION_DEAD){
@@ -1041,7 +1041,7 @@ int ptp_recv(void *ptp_handle, char *buf, int *len, bool non_block){
 	}
 
 	if (session->block_boundary_mode){
-		return ptp_recv_block_boundry(session, buf, len, non_block);
+		return ptp_recv_block_boundary(session, buf, len, non_block);
 	}
 
 	// Data that has already been received before the remote closed is still delivered.
@@ -1116,7 +1116,7 @@ void ptp_listen_close(void *ptp_listen_handle){
 	session->sock = -1;
 }
 
-static int ptp_peek_next_size_block_boundry(struct ptp_session *session){
+static int ptp_peek_next_size_block_boundary(struct ptp_session *session){
 	struct aemu_postoffice_ptp_data header = {0};
 	int peek_status = peek_wrapped(session->sock, session->enet_handle, (char *)&header, sizeof(header));
 
@@ -1168,7 +1168,7 @@ int ptp_peek_next_size(void *ptp_handle){
 	}
 
 	if (session->block_boundary_mode){
-		return ptp_peek_next_size_block_boundry(session);
+		return ptp_peek_next_size_block_boundary(session);
 	}
 
 	int drain_result = ptp_drain_blocks_to_ring_buf_locked(session);
