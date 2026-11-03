@@ -397,6 +397,7 @@ struct connection_accept_task{
 	int expected_port;
 	void *listen_handle;
 	char expected_mac[6];
+	bool block_boundary_mode;
 };
 
 void *accept_ptp_connection(void *arg){
@@ -418,7 +419,7 @@ void *accept_ptp_connection(void *arg){
 		exit(1);
 	}
 
-	void *accept_handle = ptp_accept(task->listen_handle, mac, &port, false, NULL, NULL, &state);
+	void *accept_handle = ptp_accept(task->listen_handle, mac, &port, false, task->block_boundary_mode, NULL, NULL, &state);
 
 	if (port != task->expected_port){
 		LOG("%s: got port %d, expected %d\n", __func__, port, task->expected_port);
@@ -470,7 +471,7 @@ void test_ptp(bool enet){
 
 	int port;
 	char mac[6];
-	ptp_accept(listen_handle_a, mac, &port, true, NULL, NULL, &state);
+	ptp_accept(listen_handle_a, mac, &port, true, false, NULL, NULL, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		LOG("%s: unexpected state %d on non block accept\n", __func__, state);
 		exit(1);
@@ -482,7 +483,7 @@ void test_ptp(bool enet){
 		exit(1);
 	}
 
-	ptp_accept(listen_handle_b, mac, &port, true, NULL, NULL, &state);
+	ptp_accept(listen_handle_b, mac, &port, true, false, NULL, NULL, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_SESSION_WOULD_BLOCK){
 		LOG("%s: unexpected state %d on non block accept\n", __func__, state);
 		exit(1);
@@ -498,18 +499,20 @@ void test_ptp(bool enet){
 	pthread_t accept_thread_b;
 	struct connection_accept_task task_a = {
 		.listen_handle = listen_handle_a,
-		.expected_port = port_b
+		.expected_port = port_b,
+		.block_boundary_mode = false,
 	};
 	memcpy(task_a.expected_mac, ptp_mac_b, 6);
 	struct connection_accept_task task_b = {
 		.listen_handle = listen_handle_b,
-		.expected_port = port_a
+		.expected_port = port_a,
+		.block_boundary_mode = false,
 	};
 	memcpy(task_b.expected_mac, ptp_mac_a, 6);
 
 
 	pthread_create(&accept_thread_b, NULL, accept_ptp_connection, &task_b);
-	void *a_to_b = ptp_connect_v4(&local_addr, (const char *)ptp_mac_a, port_a, (const char *)ptp_mac_b, port_b, enet, NULL, NULL, &state);
+	void *a_to_b = ptp_connect_v4(&local_addr, (const char *)ptp_mac_a, port_a, (const char *)ptp_mac_b, port_b, enet, false, NULL, NULL, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from a to b\n", __func__);
 		exit(1);
@@ -521,7 +524,7 @@ void test_ptp(bool enet){
 	}
 
 	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &task_a);
-	void *b_to_a = ptp_connect_v4(&local_addr, (const char *)ptp_mac_b, port_b, (const char *)ptp_mac_a, port_a, enet, NULL, NULL, &state);
+	void *b_to_a = ptp_connect_v4(&local_addr, (const char *)ptp_mac_b, port_b, (const char *)ptp_mac_a, port_a, enet, false, NULL, NULL, &state);
 	if (state != AEMU_POSTOFFICE_CLIENT_OK){
 		LOG("%s: failed connecting from b to a\n", __func__);
 		exit(1);
@@ -770,6 +773,99 @@ void test_ptp(bool enet){
 	ptp_close(accept_handle_a);
 	ptp_close(accept_handle_b);
 	
+	// test block boundary mode
+	task_a.block_boundary_mode = true;
+	pthread_create(&accept_thread_a, NULL, accept_ptp_connection, &task_a);
+	b_to_a = ptp_connect_v4(&local_addr, (const char *)ptp_mac_b, port_b, (const char *)ptp_mac_a, port_a, enet, true, NULL, NULL, &state);
+	if (state != AEMU_POSTOFFICE_CLIENT_OK){
+		LOG("%s: failed connecting from b to a\n", __func__);
+		exit(1);
+	}
+	pthread_join(accept_thread_a, &accept_handle_a);
+
+	for (int i = 0;i < 5;i++){
+		int send_status = ptp_send(b_to_a, test_data, sizeof(test_data), false);
+		if (send_status != AEMU_POSTOFFICE_CLIENT_OK){
+			LOG("%s: failed sending from b to a under block boundary mode\n", __func__);
+			exit(1);
+		}
+		send_status = ptp_send(accept_handle_a, test_data, sizeof(test_data), false);
+		if (send_status != AEMU_POSTOFFICE_CLIENT_OK){
+			LOG("%s: failed sending from b to a under block boundary mode\n", __func__);
+			exit(1);
+		}
+	}
+	sleep_ms(100);
+
+	recv_size = sizeof(recv_buf) / 2;
+	recv_status = ptp_recv(accept_handle_a, recv_buf, &recv_size, false);
+	if (recv_status != AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC){
+		LOG("%s: expected AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC in ptp block boundary mode with a smaller than block buffer, got %d\n", __func__, recv_status);
+		exit(1);
+	}
+	if (recv_size != sizeof(recv_buf)){
+		LOG("%s: bad AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC data size report in ptp block boundary mode\n", __func__);
+		exit(1);
+	}
+
+	recv_size = sizeof(recv_buf) / 2;
+	recv_status = ptp_recv(b_to_a, recv_buf, &recv_size, false);
+	if (recv_status != AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC){
+		LOG("%s: expected AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC in ptp block boundary mode with a smaller than block buffer, got %d\n", __func__, recv_status);
+		exit(1);
+	}
+	if (recv_size != sizeof(recv_buf)){
+		LOG("%s: bad AEMU_POSTOFFICE_CLIENT_SESSION_DATA_TRUNC data size report in ptp block boundary mode\n", __func__);
+		exit(1);
+	}
+
+	for (int i = 0;i < 5;i++){
+		int next_size = ptp_peek_next_size(accept_handle_a);
+		if (next_size != sizeof(recv_buf)){
+			LOG("%s: bad peek size under block boundary mode b -> a\n", __func__);
+			exit(1);
+		}
+		recv_size = sizeof(recv_buf);
+		memset(recv_buf, 0, sizeof(recv_buf));
+		recv_status = ptp_recv(accept_handle_a, recv_buf, &recv_size, false);
+		if (recv_status != AEMU_POSTOFFICE_CLIENT_OK){
+			LOG("%s: failed receiving from b to a under block boundary mode\n", __func__);
+			exit(1);
+		}
+		if (recv_size != sizeof(recv_buf)){
+			LOG("%s: bad recv size from b to a under block boundary mode\n", __func__);
+			exit(1);
+		}
+		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
+			LOG("%s: recv from b to a under block boundary mode has bad data\n", __func__);
+			exit(1);
+		}
+
+		next_size = ptp_peek_next_size(b_to_a);
+		if (next_size != sizeof(recv_buf)){
+			LOG("%s: bad peek size under block boundary mode a -> b\n", __func__);
+			exit(1);
+		}
+		recv_size = sizeof(recv_buf);
+		memset(recv_buf, 0, sizeof(recv_buf));
+		recv_status = ptp_recv(b_to_a, recv_buf, &recv_size, false);
+		if (recv_status != AEMU_POSTOFFICE_CLIENT_OK){
+			LOG("%s: failed receiving from a to b under block boundary mode\n", __func__);
+			exit(1);
+		}
+		if (recv_size != sizeof(recv_buf)){
+			LOG("%s: bad recv size from a to b under block boundary mode\n", __func__);
+			exit(1);
+		}
+		if (memcmp(recv_buf, test_data, sizeof(test_data)) != 0){
+			LOG("%s: recv from a to b under block boundary mode has bad data\n", __func__);
+			exit(1);
+		}
+	}
+
+	ptp_close(b_to_a);
+	ptp_close(accept_handle_a);
+
 	ptp_listen_close(listen_handle_a);
 	ptp_listen_close(listen_handle_b);
 };
@@ -853,7 +949,7 @@ void adhocctl_init(){
 		exit(1);
 	}
 
-	void *ptp_connect_b_to_a_handle = ptp_connect_v4(&local_addr, (const char *)mac_b, port_b, (const char *)mac_a, port_a, false, NULL, NULL, &state);
+	void *ptp_connect_b_to_a_handle = ptp_connect_v4(&local_addr, (const char *)mac_b, port_b, (const char *)mac_a, port_a, false, false, NULL, NULL, &state);
 	if (ptp_connect_b_to_a_handle != NULL){
 		LOG("%s: ptp connected unexpected, strict mode might not be enabled\n", __func__);
 		exit(1);
