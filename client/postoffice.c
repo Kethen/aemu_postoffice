@@ -864,6 +864,11 @@ int ptp_send(void *ptp_handle, const char *buf, int len, bool non_block){
 		return AEMU_POSTOFFICE_CLIENT_OUT_OF_MEMORY;
 	}
 
+	if (len == 0){
+		LOG("%s: 0 size send not supported\n", __func__);
+		return AEMU_POSTOFFICE_CLIENT_UNKNOWN;
+	}
+
 	struct aemu_postoffice_ptp_data header = {
 		.size = len
 	};
@@ -942,6 +947,13 @@ static int ptp_drain_blocks_to_ring_buf(struct ptp_session *session){
 
 			if (header.size > AEMU_POSTOFFICE_PTP_BLOCK_MAX){
 				LOG("%s: remote sent unexpected amount of data\n", __func__);
+				close_wrapped(session->sock, session->enet_handle);
+				session->dead = true;
+				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+			}
+
+			if (header.size == 0){
+				LOG("%s: remote sent a 0 size PTP header\n", __func__);
 				close_wrapped(session->sock, session->enet_handle);
 				session->dead = true;
 				return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
@@ -1145,6 +1157,13 @@ static int ptp_peek_next_size_block_boundary(struct ptp_session *session){
 
 	if (header.size > AEMU_POSTOFFICE_PTP_BLOCK_MAX){
 		LOG("%s: remote sending unrealistic giant PTP block\n", __func__);
+		session->dead = true;
+		close_wrapped(session->sock, session->enet_handle);
+		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
+	}
+
+	if (header.size == 0){
+		LOG("%s: remote sent a 0 size PTP header\n", __func__);
 		session->dead = true;
 		close_wrapped(session->sock, session->enet_handle);
 		return AEMU_POSTOFFICE_CLIENT_SESSION_DEAD;
