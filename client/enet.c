@@ -242,7 +242,7 @@ static void close_now_enet(struct connection *connection){
 void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct aemu_postoffice_sock6_addr *addr6, int channels, bool (*abort_connection)(void *arg), void *abort_connection_arg){
 	ENetAddress enet_addr = {0};
 	if (addr4 != NULL){
-		#ifdef __PSP__
+		#ifdef ENET_IPV4_ONLY
 		// just v4
 		enet_addr.host.s_addr = addr4->addr;
 		#else
@@ -258,7 +258,7 @@ void *connect_enet(const struct aemu_postoffice_sock_addr *addr4, const struct a
 		#endif
 		enet_addr.port = _ntohs(addr4->port);
 	} else {
-		#ifdef __PSP__
+		#ifdef ENET_IPV4_ONLY
 
 		// no v6 support
 		return NULL;
